@@ -6,7 +6,7 @@ It doesn't run any games right now. The only supported architecture is x86-64.
 ## Building
 
 Cmake version 3.4.3 or higher is required.\
-Visual Studio 2022 (Windows), Visual Studio Code (Linux, optional).\
+Visual Studio 2022 (Windows), Visual Studio Code (Linux, optional).
 
 **On Windows:**
 
