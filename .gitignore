@@ -1,0 +1,9 @@
+# Build folders
+[Bb]uild/
+[Bb]uild-*/
+
+# Visual Studio Cache
+.vs/
+
+# Visual Studio Code Cache
+.vscode/
