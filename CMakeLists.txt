@@ -39,14 +39,19 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY_REL
 endif()
 
 message("Building nxbx")
-include_directories(${NXBX_ROOT_DIR}/import/lib86cpu/include)
+include_directories(${NXBX_ROOT_DIR}/import/lib86cpu/include ${NXBX_ROOT_DIR}/src/hw)
 
 set(HEADERS
+ "${NXBX_ROOT_DIR}/src/kernel.hpp"
  "${NXBX_ROOT_DIR}/src/nxbx.hpp"
+ "${NXBX_ROOT_DIR}/src/pe.hpp"
+ "${NXBX_ROOT_DIR}/src/hw/cpu.hpp"
 )
 
 set(SOURCES
+ "${NXBX_ROOT_DIR}/src/kernel.cpp"
  "${NXBX_ROOT_DIR}/src/main.cpp"
+ "${NXBX_ROOT_DIR}/src/hw/cpu.cpp"
 )
 
 source_group(TREE ${NXBX_ROOT_DIR} PREFIX header FILES ${HEADERS})

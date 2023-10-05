@@ -1,0 +1,46 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// SPDX-FileCopyrightText: 2023 ergo720
+
+#include "kernel.hpp"
+#include <cinttypes>
+
+
+uint32_t
+nboxkrnl_read_handler(addr_t addr, void *opaque)
+{
+	switch (addr)
+	{
+	case SYS_TYPE:
+		// For now, we always want an xbox system. 0: xbox, 1: chihiro, 2: devkit
+		return 0;
+
+	default:
+		std::printf("%s: unexpected I/O read at port 0x%" PRIX16 "\n", __func__, addr);
+	}
+
+	return std::numeric_limits<uint32_t>::max();
+}
+
+void
+nboxkrnl_write_handler(addr_t addr, const uint32_t value, void *opaque)
+{
+	switch (addr)
+	{
+	case DBG_STR: {
+		// The debug strings from nboxkrnl are 512 byte long at most
+		// Also, they might not be contiguous in physical memory, so we use mem_read_block_virt to avoid issues with allocations spanning pages
+		uint8_t buff[512];
+		mem_read_block_virt(static_cast<cpu_t *>(opaque), value, sizeof(buff), buff);
+		std::printf("Received a new debug string from kernel:\n%s\n", buff);
+	}
+	break;
+
+	case ABORT:
+		cpu_exit(static_cast<cpu_t *>(opaque));
+		break;
+
+	default:
+		std::printf("%s: unexpected I/O write at port 0x%" PRIX16 "\n", __func__, addr);
+	}
+}
