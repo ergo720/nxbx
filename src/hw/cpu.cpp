@@ -3,14 +3,13 @@
 // SPDX-FileCopyrightText: 2023 ergo720
 
 #include "cpu.hpp"
+#include "pic.hpp"
 #include "../kernel.hpp"
 #include "../pe.hpp"
 #include <fstream>
 #include <cinttypes>
 #include <cstdarg>
 
-
-static cpu_t *g_cpu = nullptr;
 
 static void
 cpu_logger(log_level lv, const unsigned count, const char *msg, ...)
@@ -119,6 +118,21 @@ cpu_init(const std::string &executable, disas_syntax syntax, uint32_t use_dbg)
 
 	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, KERNEL_IO_BASE, KERNEL_IO_SIZE, true, io_handlers_t{ .fnr32 = nboxkrnl_read_handler, .fnw32 = nboxkrnl_write_handler }, g_cpu))) {
 		std::printf("Failed to initialize host communication I/O ports!\n");
+		return false;
+	}
+
+	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x20, 2, true, io_handlers_t{ .fnr8 = pic_read_handler, .fnw8 = pic_write_handler }, &g_pic[0]))) {
+		std::printf("Failed to initialize master pic I/O ports!\n");
+		return false;
+	}
+
+	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0xA0, 2, true, io_handlers_t{ .fnr8 = pic_read_handler, .fnw8 = pic_write_handler }, &g_pic[1]))) {
+		std::printf("Failed to initialize slave pic I/O ports!\n");
+		return false;
+	}
+
+	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x4D0, 2, true, io_handlers_t{ .fnr8 = pic_elcr_read_handler, .fnw8 = pic_elcr_write_handler }, g_pic))) {
+		std::printf("Failed to initialize elcr I/O ports!\n");
 		return false;
 	}
 
