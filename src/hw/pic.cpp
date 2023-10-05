@@ -85,18 +85,22 @@ static void
 pic_raise_irq(pic_t *pic, uint8_t irq)
 {
 	uint8_t mask = 1 << irq;
-	pic->pin_state |= mask;
 
 	if (pic->elcr & mask) {
 		// level triggered
+		pic->pin_state |= mask;
 		pic->irr |= mask;
 		pic_update_state(pic);
 	}
 	else {
 		// edge triggered
 		if ((pic->pin_state & mask) == 0) {
+			pic->pin_state |= mask;
 			pic->irr |= mask;
 			pic_update_state(pic);
+		}
+		else {
+			pic->pin_state |= mask;
 		}
 	}
 }
