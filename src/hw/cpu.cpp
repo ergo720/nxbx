@@ -4,6 +4,7 @@
 
 #include "cpu.hpp"
 #include "pic.hpp"
+#include "pit.hpp"
 #include "../kernel.hpp"
 #include "../pe.hpp"
 #include <fstream>
@@ -136,6 +137,13 @@ cpu_init(const std::string &executable, disas_syntax syntax, uint32_t use_dbg)
 		return false;
 	}
 
+	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x40, 4, true, io_handlers_t{ .fnw8 = pit_write_handler }, nullptr))) {
+		return false;
+	}
+
+	pic_reset();
+	pit_reset();
+
 	// Load kernel exe into ram
 	uint8_t *ram = get_ram_ptr(g_cpu);
 	std::memcpy(&ram[peHeader->OptionalHeader.ImageBase - CONTIGUOUS_MEMORY_BASE], dosHeader, peHeader->OptionalHeader.SizeOfHeaders);
@@ -196,7 +204,16 @@ cpu_init(const std::string &executable, disas_syntax syntax, uint32_t use_dbg)
 void
 cpu_start()
 {
-	lc86_status	code = cpu_run(g_cpu);
+	timer_init();
+	cpu_sync_state(g_cpu);
+
+	lc86_status code;
+	while (true) {
+		code = cpu_run_until(g_cpu, pit_get_next_irq_time(get_now()));
+		if (code != lc86_status::timeout) [[unlikely]] {
+			break;
+		}
+	}
 
 	std::printf("Emulation terminated with status %" PRId32 ". The error was \"%s\"\n", static_cast<int32_t>(code), get_last_error().c_str());
 	cpu_free(g_cpu);

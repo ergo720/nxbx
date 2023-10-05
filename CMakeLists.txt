@@ -47,6 +47,7 @@ set(HEADERS
  "${NXBX_ROOT_DIR}/src/pe.hpp"
  "${NXBX_ROOT_DIR}/src/hw/cpu.hpp"
  "${NXBX_ROOT_DIR}/src/hw/pic.hpp"
+ "${NXBX_ROOT_DIR}/src/hw/pit.hpp"
 )
 
 set(SOURCES
@@ -54,6 +55,7 @@ set(SOURCES
  "${NXBX_ROOT_DIR}/src/main.cpp"
  "${NXBX_ROOT_DIR}/src/hw/cpu.cpp"
  "${NXBX_ROOT_DIR}/src/hw/pic.cpp"
+ "${NXBX_ROOT_DIR}/src/hw/pit.cpp"
 )
 
 source_group(TREE ${NXBX_ROOT_DIR} PREFIX header FILES ${HEADERS})
