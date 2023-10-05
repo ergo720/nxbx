@@ -98,7 +98,7 @@ cpu_init(const std::string &executable, disas_syntax syntax, uint32_t use_dbg)
 	}
 
 	// Init lib86cpu
-	if (!LC86_SUCCESS(cpu_new(ramsize, g_cpu, nullptr, "nboxkrnl"))) {
+	if (!LC86_SUCCESS(cpu_new(ramsize, g_cpu, pic_get_interrupt, "nboxkrnl"))) {
 		std::printf("Failed to create cpu instance!\n");
 		return false;
 	}
