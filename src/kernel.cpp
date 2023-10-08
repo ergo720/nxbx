@@ -3,8 +3,11 @@
 // SPDX-FileCopyrightText: 2023 ergo720
 
 #include "kernel.hpp"
+#include "pit.hpp"
 #include <cinttypes>
 
+
+static uint64_t curr_time;
 
 uint32_t
 nboxkrnl_read_handler(addr_t addr, void *opaque)
@@ -14,6 +17,17 @@ nboxkrnl_read_handler(addr_t addr, void *opaque)
 	case SYS_TYPE:
 		// For now, we always want an xbox system. 0: xbox, 1: chihiro, 2: devkit
 		return 0;
+
+	case BOOT_TIME_LOW:
+		// These three are read in succession from the clock isr with interrupts disabled, so we can read the boot time only once instead of three times
+		curr_time = get_now();
+		return static_cast<uint32_t>(curr_time / 100);
+
+	case BOOT_TIME_HIGH:
+		return (curr_time / 100) >> 32;
+
+	case BOOT_TIME_MS:
+		return static_cast<uint32_t>(curr_time / 1000);
 
 	default:
 		std::printf("%s: unexpected I/O read at port 0x%" PRIX16 "\n", __func__, addr);
