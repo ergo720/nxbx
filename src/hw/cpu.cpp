@@ -35,15 +35,15 @@ cpu_logger(log_level lv, const unsigned count, const char *msg, ...)
 }
 
 bool
-cpu_init(const std::string &executable, disas_syntax syntax, uint32_t use_dbg)
+cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 {
 	// XXX: xbox memory hard coded to 64 MiB for now
 	uint32_t ramsize = 64 * 1024 * 1024;
 
 	// Load the nboxkrnl exe file
-	std::ifstream ifs(executable.c_str(), std::ios_base::in | std::ios_base::binary);
+	std::ifstream ifs(kernel.c_str(), std::ios_base::in | std::ios_base::binary);
 	if (!ifs.is_open()) {
-		logger(log_lv::error, "Could not open binary file \"%s\"!", executable.c_str());
+		logger(log_lv::error, "Could not open binary file \"%s\"!", kernel.c_str());
 		return false;
 	}
 	ifs.seekg(0, ifs.end);
@@ -52,11 +52,11 @@ cpu_init(const std::string &executable, disas_syntax syntax, uint32_t use_dbg)
 
 	// Sanity checks on the kernel exe size
 	if (length == 0) {
-		logger(log_lv::error, "Size of binary file \"%s\" detected as zero!", executable.c_str());
+		logger(log_lv::error, "Size of binary file \"%s\" detected as zero!", kernel.c_str());
 		return false;
 	}
 	else if (length > ramsize) {
-		logger(log_lv::error, "Binary file \"%s\" doesn't fit inside RAM!", executable.c_str());
+		logger(log_lv::error, "Binary file \"%s\" doesn't fit inside RAM!", kernel.c_str());
 		return false;
 	}
 

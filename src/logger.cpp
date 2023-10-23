@@ -22,7 +22,8 @@ logger(log_lv lv, const char *msg, std::va_list vlist)
 	if ((std::underlying_type_t<log_lv>)(lv) > (std::underlying_type_t<log_lv>)(log_lv::lowest) &&
 		(std::underlying_type_t<log_lv>)(lv) < (std::underlying_type_t<log_lv>)(log_lv::max)) [[likely]] {
 		std::string str(lv_to_str[static_cast<std::underlying_type_t<log_lv>>(lv)]);
-		str += (msg + '\n');
+		str += msg;
+		str += '\n';
 		std::vprintf(str.c_str(), vlist);
 		return;
 	}
@@ -43,7 +44,8 @@ logger(log_lv lv, const char *msg, ...)
 void
 logger(const char *msg, std::va_list vlist)
 {
-	std::string str(msg + '\n');
+	std::string str(msg);
+	str += '\n';
 	std::vprintf(str.c_str(), vlist);
 }
 
