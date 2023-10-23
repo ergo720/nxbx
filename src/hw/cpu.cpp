@@ -5,41 +5,33 @@
 #include "cpu.hpp"
 #include "pic.hpp"
 #include "pit.hpp"
+#include "../logger.hpp"
 #include "../kernel.hpp"
 #include "../pe.hpp"
 #include <fstream>
 #include <cinttypes>
-#include <cstdarg>
+
+
+static consteval bool
+check_cpu_log_lv()
+{
+	return ((std::underlying_type_t<log_level>)(log_level::debug) == (std::underlying_type_t<log_lv>)(log_lv::debug)) &&
+		((std::underlying_type_t<log_level>)(log_level::info) == (std::underlying_type_t<log_lv>)(log_lv::info)) &&
+		((std::underlying_type_t<log_level>)(log_level::warn) == (std::underlying_type_t<log_lv>)(log_lv::warn)) &&
+		((std::underlying_type_t<log_level>)(log_level::error) == (std::underlying_type_t<log_lv>)(log_lv::error));
+}
+
+// Make sure that our log levels are the same used in lib86cpu too
+static_assert(check_cpu_log_lv());
 
 
 static void
 cpu_logger(log_level lv, const unsigned count, const char *msg, ...)
 {
-	static const std::unordered_map<log_level, std::string> lv_to_str = {
-		{log_level::debug, "DBG:   "},
-		{log_level::info,  "INFO:  "},
-		{log_level::warn,  "WARN:  "},
-		{log_level::error, "ERROR: "},
-	};
-
-	std::string str;
-	auto it = lv_to_str.find(lv);
-	if (it == lv_to_str.end()) {
-		str = std::string("UNK: ") + msg + '\n';
-	}
-	else {
-		str = it->second + msg + '\n';
-	}
-
-	if (count > 0) {
-		std::va_list args;
-		va_start(args, msg);
-		std::vprintf(str.c_str(), args);
-		va_end(args);
-	}
-	else {
-		std::printf("%s\n", str.c_str());
-	}
+	std::va_list args;
+	va_start(args, msg);
+	logger(static_cast<log_lv>(lv), msg, args);
+	va_end(args);
 }
 
 bool
@@ -51,7 +43,7 @@ cpu_init(const std::string &executable, disas_syntax syntax, uint32_t use_dbg)
 	// Load the nboxkrnl exe file
 	std::ifstream ifs(executable.c_str(), std::ios_base::in | std::ios_base::binary);
 	if (!ifs.is_open()) {
-		std::printf("Could not open binary file \"%s\"!\n", executable.c_str());
+		logger(log_lv::error, "Could not open binary file \"%s\"!", executable.c_str());
 		return false;
 	}
 	ifs.seekg(0, ifs.end);
@@ -60,17 +52,17 @@ cpu_init(const std::string &executable, disas_syntax syntax, uint32_t use_dbg)
 
 	// Sanity checks on the kernel exe size
 	if (length == 0) {
-		std::printf("Size of binary file \"%s\" detected as zero!\n", executable.c_str());
+		logger(log_lv::error, "Size of binary file \"%s\" detected as zero!", executable.c_str());
 		return false;
 	}
 	else if (length > ramsize) {
-		std::printf("Binary file \"%s\" doesn't fit inside RAM!\n", executable.c_str());
+		logger(log_lv::error, "Binary file \"%s\" doesn't fit inside RAM!", executable.c_str());
 		return false;
 	}
 
 	std::unique_ptr<char[]> krnl_buff{ new char[static_cast<unsigned>(length)] };
 	if (!krnl_buff) {
-		std::printf("Could not allocate kernel buffer!\n");
+		logger(log_lv::error, "Could not allocate kernel buffer!");
 		return false;
 	}
 	ifs.read(krnl_buff.get(), length);
@@ -79,7 +71,7 @@ cpu_init(const std::string &executable, disas_syntax syntax, uint32_t use_dbg)
 	// Sanity checks on the kernel exe file
 	PIMAGE_DOS_HEADER dosHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(krnl_buff.get());
 	if (dosHeader->e_magic != IMAGE_DOS_SIGNATURE) {
-		std::printf("Kernel image has an invalid dos header signature!\n");
+		logger(log_lv::error, "Kernel image has an invalid dos header signature!");
 		return false;
 	}
 
@@ -93,13 +85,13 @@ cpu_init(const std::string &executable, disas_syntax syntax, uint32_t use_dbg)
 	}
 
 	if (peHeader->OptionalHeader.ImageBase != KERNEL_BASE) {
-		std::printf("Kernel image has an incorrect image base address!\n");
+		logger(log_lv::error, "Kernel image has an incorrect image base address!");
 		return false;
 	}
 
 	// Init lib86cpu
 	if (!LC86_SUCCESS(cpu_new(ramsize, g_cpu, pic_get_interrupt, "nboxkrnl"))) {
-		std::printf("Failed to create cpu instance!\n");
+		logger(log_lv::error, "Failed to create cpu instance!");
 		return false;
 	}
 
@@ -108,32 +100,32 @@ cpu_init(const std::string &executable, disas_syntax syntax, uint32_t use_dbg)
 	cpu_set_flags(g_cpu, static_cast<uint32_t>(syntax) | (use_dbg ? CPU_DBG_PRESENT : 0) | CPU_ABORT_ON_HLT);
 
 	if (!LC86_SUCCESS(mem_init_region_ram(g_cpu, 0, ramsize))) {
-		std::printf("Failed to initialize ram memory!\n");
+		logger(log_lv::error, "Failed to initialize ram memory!");
 		return false;
 	}
 
 	if (!LC86_SUCCESS(mem_init_region_alias(g_cpu, CONTIGUOUS_MEMORY_BASE, 0, ramsize))) {
-		std::printf("Failed to initialize contiguous memory!\n");
+		logger(log_lv::error, "Failed to initialize contiguous memory!");
 		return false;
 	}
 
 	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, KERNEL_IO_BASE, KERNEL_IO_SIZE, true, io_handlers_t{ .fnr32 = nboxkrnl_read_handler, .fnw32 = nboxkrnl_write_handler }, g_cpu))) {
-		std::printf("Failed to initialize host communication I/O ports!\n");
+		logger(log_lv::error, "Failed to initialize host communication I/O ports!");
 		return false;
 	}
 
 	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x20, 2, true, io_handlers_t{ .fnr8 = pic_read_handler, .fnw8 = pic_write_handler }, &g_pic[0]))) {
-		std::printf("Failed to initialize master pic I/O ports!\n");
+		logger(log_lv::error, "Failed to initialize master pic I/O ports!");
 		return false;
 	}
 
 	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0xA0, 2, true, io_handlers_t{ .fnr8 = pic_read_handler, .fnw8 = pic_write_handler }, &g_pic[1]))) {
-		std::printf("Failed to initialize slave pic I/O ports!\n");
+		logger(log_lv::error, "Failed to initialize slave pic I/O ports!");
 		return false;
 	}
 
 	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x4D0, 2, true, io_handlers_t{ .fnr8 = pic_elcr_read_handler, .fnw8 = pic_elcr_write_handler }, g_pic))) {
-		std::printf("Failed to initialize elcr I/O ports!\n");
+		logger(log_lv::error, "Failed to initialize elcr I/O ports!");
 		return false;
 	}
 
@@ -215,7 +207,7 @@ cpu_start()
 		}
 	}
 
-	std::printf("Emulation terminated with status %" PRId32 ". The error was \"%s\"\n", static_cast<int32_t>(code), get_last_error().c_str());
+	logger(log_lv::highest, "Emulation terminated with status %" PRId32 ". The error was \"%s\"", static_cast<int32_t>(code), get_last_error().c_str());
 	cpu_free(g_cpu);
 }
 

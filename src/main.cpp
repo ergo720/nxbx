@@ -16,9 +16,9 @@ print_help()
 options: \n\
 -s <num>   Specify assembly syntax (default is AT&T)\n\
 -d         Start with debugger\n\
--h         Print this message\n";
+-h         Print this message";
 
-	std::printf("%s", help);
+	logger("%s", help);
 }
 
 int
@@ -44,7 +44,7 @@ main(int argc, char **argv)
 				{
 				case 's':
 					if (++idx == argc || argv[idx][0] == '-') {
-						std::printf("Missing argument for option \"s\"\n");
+						logger("Missing argument for option \"s\"");
 						return 0;
 					}
 					switch (syntax = static_cast<disas_syntax>(std::stoul(std::string(argv[idx]), nullptr, 0)))
@@ -55,7 +55,7 @@ main(int argc, char **argv)
 						break;
 
 					default:
-						std::printf("Unknown syntax specified by option \"%c\"\n", option);
+						logger("Unknown syntax specified by option \"%c\"", option);
 						return 0;
 					}
 					break;
@@ -69,7 +69,7 @@ main(int argc, char **argv)
 					return 0;
 
 				default:
-					std::printf("Unknown option %s\n", arg_str.c_str());
+					logger("Unknown option %s", arg_str.c_str());
 					print_help();
 					return 0;
 				}
@@ -79,14 +79,14 @@ main(int argc, char **argv)
 				break;
 			}
 			else {
-				std::printf("Unknown option %s\n", arg_str.c_str());
+				logger("Unknown option %s", arg_str.c_str());
 				print_help();
 				return 0;
 			}
 		}
 		/* handle possible exceptions thrown by std::stoul */
 		catch (const std::exception &e) {
-			std::printf("Failed to parse \"%c\" option. The error was: %s\n", option, e.what());
+			logger("Failed to parse \"%c\" option. The error was: %s", option, e.what());
 			return 1;
 		}
 	}

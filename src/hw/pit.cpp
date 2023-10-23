@@ -115,7 +115,7 @@ pit_write_handler(uint32_t port, const uint8_t value, void *opaque)
 		switch (channel)
 		{
 		case 3:
-			std::printf("Read back command is not supported\n");
+			logger(log_lv::error, "Read back command is not supported");
 			cpu_exit(g_cpu);
 			break;
 
@@ -124,12 +124,12 @@ pit_write_handler(uint32_t port, const uint8_t value, void *opaque)
 		case 2: {
 			pit_channel_t *chan = &pit.chan[channel];
 			if (!access) {
-				std::printf("Counter latch command is not supported\n");
+				logger(log_lv::error, "Counter latch command is not supported");
 				cpu_exit(g_cpu);
 			}
 			else {
 				if (bcd) {
-					std::printf("BCD mode not supported\n");
+					logger(log_lv::error, "BCD mode not supported");
 					cpu_exit(g_cpu);
 				}
 
@@ -156,7 +156,7 @@ pit_write_handler(uint32_t port, const uint8_t value, void *opaque)
 		case 0:
 		case 1:
 		case 2:
-			std::printf("Read/Load mode must be LSB first MSB last\n");
+			logger(log_lv::error, "Read/Load mode must be LSB first MSB last");
 			cpu_exit(g_cpu);
 			break;
 

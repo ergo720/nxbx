@@ -43,6 +43,7 @@ include_directories(${NXBX_ROOT_DIR}/import/lib86cpu/include ${NXBX_ROOT_DIR}/sr
 
 set(HEADERS
  "${NXBX_ROOT_DIR}/src/kernel.hpp"
+ "${NXBX_ROOT_DIR}/src/logger.hpp"
  "${NXBX_ROOT_DIR}/src/nxbx.hpp"
  "${NXBX_ROOT_DIR}/src/pe.hpp"
  "${NXBX_ROOT_DIR}/src/hw/cpu.hpp"
@@ -52,6 +53,7 @@ set(HEADERS
 
 set(SOURCES
  "${NXBX_ROOT_DIR}/src/kernel.cpp"
+ "${NXBX_ROOT_DIR}/src/logger.cpp"
  "${NXBX_ROOT_DIR}/src/main.cpp"
  "${NXBX_ROOT_DIR}/src/hw/cpu.cpp"
  "${NXBX_ROOT_DIR}/src/hw/pic.cpp"

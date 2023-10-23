@@ -171,7 +171,7 @@ pic_write_ocw(pic_t *pic, unsigned idx, uint8_t value)
 				}
 			}
 			else {
-				std::printf("Automatic rotation of IRQ priorities is not supported\n");
+				logger(log_lv::error, "Automatic rotation of IRQ priorities is not supported");
 				cpu_exit(g_cpu);
 			}
 		}
@@ -183,7 +183,7 @@ pic_write_ocw(pic_t *pic, unsigned idx, uint8_t value)
 			pic->read_isr = value & 1;
 		}
 		else if (value & 0x44) {
-			std::printf("Unknown feature: %02X\n", value);
+			logger(log_lv::error, "Unknown feature: %02X", value);
 			cpu_exit(g_cpu);
 		}
 	}
@@ -197,11 +197,11 @@ pic_write_icw(pic_t *pic, unsigned idx, uint8_t value)
 	{
 	case 1:
 		if ((value & 1) == 0) {
-			std::printf("Configuration with no icw4 is not supported\n");
+			logger(log_lv::error, "Configuration with no icw4 is not supported");
 			cpu_exit(g_cpu);
 		}
 		else if (value & 2) {
-			std::printf("Single pic configuration is not supported\n");
+			logger(log_lv::error, "Single pic configuration is not supported");
 			cpu_exit(g_cpu);
 		}
 
@@ -224,19 +224,19 @@ pic_write_icw(pic_t *pic, unsigned idx, uint8_t value)
 
 	case 4:
 		if ((value & 1) == 0) {
-			std::printf("MCS-80/85 mode is not supported\n");
+			logger(log_lv::error, "MCS-80/85 mode is not supported");
 			cpu_exit(g_cpu);
 		}
 		else if (value & 2) {
-			std::printf("Auto-eoi mode is not supported\n");
+			logger(log_lv::error, "Auto-eoi mode is not supported");
 			cpu_exit(g_cpu);
 		}
 		else if (value & 8) {
-			std::printf("Buffered mode is not supported\n");
+			logger(log_lv::error, "Buffered mode is not supported");
 			cpu_exit(g_cpu);
 		}
 		else if (value & 16) {
-			std::printf("Special fully nested mode is not supported\n");
+			logger(log_lv::error, "Special fully nested mode is not supported");
 			cpu_exit(g_cpu);
 		}
 
@@ -245,7 +245,7 @@ pic_write_icw(pic_t *pic, unsigned idx, uint8_t value)
 		break;
 
 	default:
-		std::printf("Unknown icw specified, idx was %d\n", idx);
+		logger(log_lv::error, "Unknown icw specified, idx was %d", idx);
 		cpu_exit(g_cpu);
 	}
 }

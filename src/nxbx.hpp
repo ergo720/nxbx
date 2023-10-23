@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include "logger.hpp"
 
 
 enum class disas_syntax : uint32_t {
