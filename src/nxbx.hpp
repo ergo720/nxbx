@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include "logger.hpp"
 
 
@@ -13,3 +14,5 @@ enum class disas_syntax : uint32_t {
 	masm,
 	intel
 };
+
+inline std::string xbe_path;

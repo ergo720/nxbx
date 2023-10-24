@@ -26,7 +26,7 @@ options: \n\
 int
 main(int argc, char **argv)
 {
-	std::string executable, kernel;
+	std::string kernel;
 	disas_syntax syntax = disas_syntax::att;
 	uint32_t use_dbg = 0;
 	char option = ' ';
@@ -85,7 +85,7 @@ main(int argc, char **argv)
 				}
 			}
 			else if ((idx + 1) == argc) {
-				executable = std::move(arg_str);
+				xbe_path = std::move(arg_str);
 				break;
 			}
 			else {
@@ -101,7 +101,7 @@ main(int argc, char **argv)
 		}
 	}
 
-	if (executable.empty()) {
+	if (xbe_path.empty()) {
 		logger("Input file is required");
 		return 1;
 	}
