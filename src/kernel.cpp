@@ -135,10 +135,14 @@ nboxkrnl_write_handler(addr_t addr, const uint32_t value, void *opaque)
 		switch (curr_io_request.type)
 		{
 		case io_request_type::open:
+			io_result.status = success;
+			io_result.info = 0;
 			break;
 
 		case io_request_type::close:
 			xbox_handle_map.erase(curr_io_request.handle);
+			io_result.status = success;
+			io_result.info = 0;
 			break;
 
 		case io_request_type::read:
