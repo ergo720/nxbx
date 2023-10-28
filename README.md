@@ -1,7 +1,9 @@
-# Nxbx
+# Nxbx - XBE launcher
 
-This is currently being used as a testing ground for [nboxkrnl](https://github.com/ergo720/nboxkrnl), a re-implementation of the kernel of the original xbox.
-It doesn't run any games right now. The only supported architecture is x86-64.
+Nxbx is a software to start executing XBE (original xbox executable) programs. To do this, it uses [lib86cpu](https://github.com/ergo720/lib86cpu),
+a cpu emulation library, and [nboxkrnl](https://github.com/ergo720/nboxkrnl), a re-implementation of the kernel of the original xbox.\
+**NOTE: It doesn't run any games right now.**\
+The only supported architecture is x86-64.
 
 ## Building
 
