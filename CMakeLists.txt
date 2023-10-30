@@ -42,6 +42,7 @@ message("Building nxbx")
 include_directories(${NXBX_ROOT_DIR}/import/lib86cpu/include ${NXBX_ROOT_DIR}/src/hw)
 
 set(HEADERS
+ "${NXBX_ROOT_DIR}/src/init.hpp"
  "${NXBX_ROOT_DIR}/src/kernel.hpp"
  "${NXBX_ROOT_DIR}/src/logger.hpp"
  "${NXBX_ROOT_DIR}/src/nxbx.hpp"
@@ -52,6 +53,7 @@ set(HEADERS
 )
 
 set(SOURCES
+ "${NXBX_ROOT_DIR}/src/init.cpp"
  "${NXBX_ROOT_DIR}/src/kernel.cpp"
  "${NXBX_ROOT_DIR}/src/logger.cpp"
  "${NXBX_ROOT_DIR}/src/main.cpp"

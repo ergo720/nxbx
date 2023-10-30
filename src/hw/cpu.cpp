@@ -8,8 +8,11 @@
 #include "../logger.hpp"
 #include "../kernel.hpp"
 #include "../pe.hpp"
+#include "../init.hpp"
 #include <fstream>
 #include <cinttypes>
+
+#define RESET_IDX 0
 
 
 static consteval bool
@@ -32,6 +35,12 @@ cpu_logger(log_level lv, const unsigned count, const char *msg, ...)
 	va_start(args, msg);
 	logger(static_cast<log_lv>(lv), msg, args);
 	va_end(args);
+}
+
+static void
+cpu_reset()
+{
+	// TODO: lib86cpu doesn't support resetting the cpu yet
 }
 
 bool
@@ -133,8 +142,7 @@ cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 		return false;
 	}
 
-	pic_reset();
-	pit_reset();
+	add_reset_func(RESET_IDX, cpu_reset);
 
 	// Load kernel exe into ram
 	uint8_t *ram = get_ram_ptr(g_cpu);
@@ -196,7 +204,6 @@ cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 void
 cpu_start()
 {
-	timer_init();
 	cpu_sync_state(g_cpu);
 
 	lc86_status code;

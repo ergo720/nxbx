@@ -27,4 +27,4 @@ void pic_elcr_write_handler(uint32_t addr, const uint8_t data, void *opaque);
 uint16_t pic_get_interrupt();
 void pic_raise_irq(uint8_t a);
 void pic_lower_irq(uint8_t a);
-void pic_reset();
+void pic_init();

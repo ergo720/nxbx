@@ -3,7 +3,7 @@
 // SPDX-FileCopyrightText: 2023 ergo720
 
 #include "nxbx.hpp"
-#include "hw/cpu.hpp"
+#include "init.hpp"
 #include <cstring>
 #include <cstdio>
 #include <filesystem>
@@ -120,12 +120,7 @@ main(int argc, char **argv)
 		kernel = curr_dir.string();
 	}
 
-	if (cpu_init(kernel, syntax, use_dbg) == false) {
-		cpu_cleanup();
-		return 1;
-	}
-
-	cpu_start();
+	start_system(kernel, syntax, use_dbg);
 
 	return 0;
 }

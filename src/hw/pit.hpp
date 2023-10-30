@@ -20,8 +20,7 @@ struct pit_t {
 
 inline pit_t pit;
 
-void timer_init();
 uint64_t get_now();
 uint64_t pit_get_next_irq_time(uint64_t now);
 void pit_write_handler(uint32_t port, const uint8_t value, void *opaque);
-void pit_reset();
+void pit_init();

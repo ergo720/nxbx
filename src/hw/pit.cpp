@@ -7,12 +7,15 @@
 #include "pit.hpp"
 #include "pic.hpp"
 #include "cpu.hpp"
+#include "../init.hpp"
 #ifdef __linux__
 #include <sys/time.h>
 #elif _WIN64
 #include "Windows.h"
 #undef max
 #endif
+
+#define RESET_IDX 2
 
 
 // NOTE: on the xbox, the pit frequency is 6% lower than the default one, see https://xboxdevwiki.net/Porting_an_Operating_System_to_the_Xbox_HOWTO#Timer_Frequency
@@ -186,10 +189,18 @@ pit_channel_reset(pit_channel_t *chan)
 	chan->timer_running = 0;
 }
 
-void
+static void
 pit_reset()
 {
 	for (pit_channel_t &chan : pit.chan) {
 		pit_channel_reset(&chan);
 	}
+}
+
+void
+pit_init()
+{
+	add_reset_func(RESET_IDX, pit_reset);
+	pit_reset();
+	timer_init();
 }

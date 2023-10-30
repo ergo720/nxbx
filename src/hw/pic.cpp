@@ -6,7 +6,10 @@
 
 #include "pic.hpp"
 #include "cpu.hpp"
+#include "../init.hpp"
 #include <bit>
+
+#define RESET_IDX 1
 
 
 static inline bool
@@ -304,7 +307,7 @@ pic_elcr_read_handler(uint32_t addr, void *opaque)
 	return static_cast<pic_t *>(opaque)[addr & 1].elcr;
 }
 
-void
+static void
 pic_reset()
 {
 	for (auto &pic : g_pic) {
@@ -315,4 +318,11 @@ pic_reset()
 		pic.in_init = 0;
 		pic.read_isr = 0;
 	}
+}
+
+void
+pic_init()
+{
+	add_reset_func(RESET_IDX, pic_reset);
+	pic_reset();
 }
