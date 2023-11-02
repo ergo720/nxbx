@@ -2,7 +2,6 @@
 
 // SPDX-FileCopyrightText: 2023 ergo720
 
-#include "nxbx.hpp"
 #include "init.hpp"
 #include <cstring>
 #include <cstdio>
@@ -26,7 +25,7 @@ options: \n\
 int
 main(int argc, char **argv)
 {
-	std::string kernel;
+	std::string kernel, xbe_path;
 	disas_syntax syntax = disas_syntax::att;
 	uint32_t use_dbg = 0;
 	char option = ' ';
@@ -120,7 +119,7 @@ main(int argc, char **argv)
 		kernel = curr_dir.string();
 	}
 
-	start_system(kernel, syntax, use_dbg);
+	start_system(kernel, syntax, use_dbg, argv[0], xbe_path.c_str());
 
 	return 0;
 }

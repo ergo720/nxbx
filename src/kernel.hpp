@@ -18,16 +18,18 @@ enum KERNEL_IO {
 	BOOT_TIME_LOW,
 	BOOT_TIME_HIGH,
 	BOOT_TIME_MS,
-	IO_REQUEST_TYPE,
-	XE_LOAD_XBE,
-	IO_OFFSET,
-	IO_SIZE,
-	IO_ADDR,
+	IO_START,
+	IO_RETRY,
 	IO_QUERY_STATUS,
 	IO_QUERY_INFO,
+	IO_CHECK_ENQUEUE,
+	IO_SET_ID,
+	XE_DVD_XBE_LENGTH,
+	XE_DVD_XBE_ADDR,
 	KERNEL_IO_END
 };
 constexpr inline size_t KERNEL_IO_SIZE = KERNEL_IO_END - KERNEL_IO_BASE;
+inline std::string xbe_name;
 
 uint32_t nboxkrnl_read_handler(addr_t addr, void *opaque);
 void nboxkrnl_write_handler(addr_t addr, const uint32_t value, void *opaque);

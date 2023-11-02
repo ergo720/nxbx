@@ -4,6 +4,7 @@
 
 
 #include "init.hpp"
+#include "io.hpp"
 #include "hw/cpu.hpp"
 #include "hw/pic.hpp"
 #include "hw/pit.hpp"
@@ -27,15 +28,18 @@ add_reset_func(unsigned idx, hw_reset_f reset_f)
 }
 
 void
-start_system(std::string kernel, disas_syntax syntax, uint32_t use_dbg)
+start_system(std::string kernel, disas_syntax syntax, uint32_t use_dbg, const char *nxbx_path, const char *xbe_path)
 {
-	if (cpu_init(kernel, syntax, use_dbg) == false) {
-		cpu_cleanup();
-		return;
+	if (cpu_init(kernel, syntax, use_dbg)) {
+		if (io_init(nxbx_path, xbe_path)) {
+
+			pic_init();
+			pit_init();
+
+			cpu_start();
+		}
 	}
 
-	pic_init();
-	pit_init();
-
-	cpu_start();
+	io_stop();
+	cpu_cleanup();
 }

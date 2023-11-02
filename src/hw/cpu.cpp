@@ -215,7 +215,6 @@ cpu_start()
 	}
 
 	logger(log_lv::highest, "Emulation terminated with status %" PRId32 ". The error was \"%s\"", static_cast<int32_t>(code), get_last_error().c_str());
-	cpu_free(g_cpu);
 }
 
 void
@@ -223,5 +222,6 @@ cpu_cleanup()
 {
 	if (g_cpu) {
 		cpu_free(g_cpu);
+		g_cpu = nullptr;
 	}
 }

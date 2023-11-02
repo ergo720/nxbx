@@ -11,4 +11,4 @@ using hw_reset_f = void(*)();
 
 void reset_system();
 void add_reset_func(unsigned idx, hw_reset_f reset_f);
-void start_system(std::string kernel, disas_syntax syntax, uint32_t use_dbg);
+void start_system(std::string kernel, disas_syntax syntax, uint32_t use_dbg, const char *nxbx_path, const char *xbe_path);
