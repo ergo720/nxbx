@@ -11,6 +11,6 @@ inline bool pending_packets = false;
 
 bool io_init(const char *nxbx_path, const char *xbe_path);
 void io_stop();
-void enqueue_io_packet(uint32_t addr);
+void submit_io_packet(uint32_t addr);
 void flush_pending_packets();
 uint32_t query_io_packet(uint32_t id, bool query_status);

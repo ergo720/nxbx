@@ -73,7 +73,7 @@ nboxkrnl_write_handler(addr_t addr, const uint32_t value, void *opaque)
 		break;
 
 	case IO_START:
-		enqueue_io_packet(value);
+		submit_io_packet(value);
 		break;
 
 	case IO_RETRY:

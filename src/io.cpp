@@ -6,6 +6,7 @@
 #include "logger.hpp"
 #include "files.hpp"
 #include "cpu.hpp"
+#include "eeprom.hpp"
 #include "kernel.hpp"
 #include <thread>
 #include <deque>
@@ -16,6 +17,7 @@
 #include <cassert>
 
 #define XBE_HANDLE -3
+#define EEPROM_HANDLE -5
 
 #define IO_DIRECTORY 1U
 #define IO_ALWAYS 2U
@@ -104,6 +106,7 @@ static std::atomic_flag io_running;
 
 static std::filesystem::path hdd_path;
 static std::filesystem::path dvd_path;
+static std::filesystem::path eeprom_path;
 
 
 static std::filesystem::path
@@ -120,6 +123,9 @@ io_parse_path(io_request *curr_io_request)
 	std::filesystem::path resolved_path;
 	if (device.compare("CdRom0") == 0) {
 		resolved_path = dvd_path;
+	}
+	else if (device.compare("Eeprom") == 0) {
+		resolved_path = eeprom_path;
 	}
 	else {
 		resolved_path = hdd_path;
@@ -311,8 +317,25 @@ io_thread()
 	}
 }
 
+static void
+enqueue_io_packet(std::unique_ptr<io_request> curr_io_request)
+{
+	// If the I/O thread is currently holding the lock, we won't wait and instead retry the operation later
+	if (queue_mtx.try_lock()) {
+		curr_io_queue.push_back(std::move(curr_io_request));
+		// Signal that there's a new packet to process
+		io_pending.test_and_set();
+		io_pending.notify_one();
+		queue_mtx.unlock();
+	}
+	else {
+		pending_io_vec.push_back(std::move(curr_io_request));
+		pending_packets = true;
+	}
+}
+
 void
-enqueue_io_packet(uint32_t addr)
+submit_io_packet(uint32_t addr)
 {
 	packed_io_request packed_curr_io_request;
 	std::unique_ptr<io_request> curr_io_request = std::make_unique<io_request>();
@@ -330,18 +353,7 @@ enqueue_io_packet(uint32_t addr)
 		curr_io_request->path = path;
 	}
 
-	// If the I/O thread is currently holding the lock, we won't wait and instead retry the operation later
-	if (queue_mtx.try_lock()) {
-		curr_io_queue.push_back(std::move(curr_io_request));
-		// Signal that there's a new packet to process
-		io_pending.test_and_set();
-		io_pending.notify_one();
-		queue_mtx.unlock();
-	}
-	else {
-		pending_io_vec.push_back(std::move(curr_io_request));
-		pending_packets = true;
-	}
+	enqueue_io_packet(std::move(curr_io_request));
 }
 
 void
@@ -391,24 +403,61 @@ io_init(const char *nxbx_path, const char *xbe_path)
 {
 	std::filesystem::path curr_dir = nxbx_path;
 	curr_dir = curr_dir.remove_filename();
-	curr_dir /= "Harddisk/";
-	curr_dir.make_preferred();
-	if (!::create_directory(curr_dir)) {
+	std::filesystem::path hdd_dir = curr_dir;
+	hdd_dir /= "Harddisk/";
+	hdd_dir.make_preferred();
+	if (!::create_directory(hdd_dir)) {
 		return false;
 	}
 	for (unsigned i = 1; i < 8; ++i) {
-		std::filesystem::path curr_partition_dir = curr_dir / ("Partition" + std::to_string(i));
+		std::filesystem::path curr_partition_dir = hdd_dir / ("Partition" + std::to_string(i));
 		curr_partition_dir.make_preferred();
 		if (!::create_directory(curr_partition_dir)) {
 			return false;
 		}
 	}
+	std::filesystem::path eeprom_dir = curr_dir;
+	eeprom_dir /= "eeprom.bin";
+	eeprom_dir.make_preferred();
+	if (!file_exists(eeprom_dir)) {
+		if (auto opt = create_file(eeprom_dir); !opt) {
+			return false;
+		}
+		else {
+			if (!gen_eeprom(std::move(opt.value()))) {
+				return false;
+			}
+		}
+	}
 
-	hdd_path = curr_dir;
+	// Open the eeprom file in the I/O thread
+	std::string eeprom_str("\\Eeprom\\eeprom.bin");
+	std::unique_ptr<io_request> curr_io_request = std::make_unique<io_request>();
+	curr_io_request->id = 0;
+	curr_io_request->type = open;
+	curr_io_request->handle_oc = EEPROM_HANDLE;
+	curr_io_request->offset = 0;
+	curr_io_request->size = (uint32_t)eeprom_str.size() + 1;
+	curr_io_request->path = new char[curr_io_request->size];
+	std::copy(eeprom_str.c_str(), eeprom_str.c_str() + curr_io_request->size, curr_io_request->path);
+	enqueue_io_packet(std::move(curr_io_request));
+
+	hdd_path = hdd_dir;
 	dvd_path = std::filesystem::path(xbe_path).remove_filename();
 	xbe_name = std::filesystem::path(xbe_path).filename().string();
+	eeprom_path = eeprom_dir.remove_filename();
 
 	std::thread(io_thread).detach();
+
+	// Wait until the I/O thread has processed all the initialization packets
+	io_info_block block(pending, 0);
+	while (block.status == pending) {
+		block.status = (io_status)query_io_packet(0, true);
+		block.info = query_io_packet(0, false);
+	}
+	if (block.status != success) {
+		return false;
+	}
 
 	return true;
 }

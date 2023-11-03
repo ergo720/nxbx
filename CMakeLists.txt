@@ -50,6 +50,7 @@ set(HEADERS
  "${NXBX_ROOT_DIR}/src/nxbx.hpp"
  "${NXBX_ROOT_DIR}/src/pe.hpp"
  "${NXBX_ROOT_DIR}/src/hw/cpu.hpp"
+ "${NXBX_ROOT_DIR}/src/hw/eeprom.hpp"
  "${NXBX_ROOT_DIR}/src/hw/pic.hpp"
  "${NXBX_ROOT_DIR}/src/hw/pit.hpp"
 )
@@ -62,6 +63,7 @@ set(SOURCES
  "${NXBX_ROOT_DIR}/src/logger.cpp"
  "${NXBX_ROOT_DIR}/src/main.cpp"
  "${NXBX_ROOT_DIR}/src/hw/cpu.cpp"
+ "${NXBX_ROOT_DIR}/src/hw/eeprom.cpp"
  "${NXBX_ROOT_DIR}/src/hw/pic.cpp"
  "${NXBX_ROOT_DIR}/src/hw/pit.cpp"
 )
