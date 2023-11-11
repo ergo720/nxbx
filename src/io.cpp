@@ -16,8 +16,8 @@
 #include <cinttypes>
 #include <cassert>
 
-#define XBE_HANDLE -3
-#define EEPROM_HANDLE -5
+#define XBE_HANDLE -5
+#define EEPROM_HANDLE -6
 
 #define IO_DIRECTORY 1U
 #define IO_ALWAYS 2U
