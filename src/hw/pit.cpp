@@ -7,13 +7,8 @@
 #include "pit.hpp"
 #include "pic.hpp"
 #include "cpu.hpp"
+#include "../clock.hpp"
 #include "../init.hpp"
-#ifdef __linux__
-#include <sys/time.h>
-#elif _WIN64
-#include "Windows.h"
-#undef max
-#endif
 
 #define RESET_IDX 2
 
@@ -21,51 +16,6 @@
 // NOTE: on the xbox, the pit frequency is 6% lower than the default one, see https://xboxdevwiki.net/Porting_an_Operating_System_to_the_Xbox_HOWTO#Timer_Frequency
 constexpr uint64_t pit_clock_freq = 1125000;
 constexpr uint64_t ticks_per_second = 1000000;
-static uint64_t tot_time, last_time;
-
-#ifdef __linux__
-void
-timer_init()
-{
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-	last_time = static_cast<uint64_t>(tv.tv_sec) * static_cast<uint64_t>(ticks_per_second) + static_cast<uint64_t>(tv.tv_usec);
-}
-#elif _WIN64
-static uint64_t host_freq;
-
-void
-timer_init()
-{
-	LARGE_INTEGER freq, now;
-	QueryPerformanceFrequency(&freq);
-	host_freq = freq.QuadPart;
-	QueryPerformanceCounter(&now);
-	last_time = now.QuadPart;
-}
-#endif
-
-uint64_t
-get_now()
-{
-#ifdef __linux__
-	timeval tv;
-	gettimeofday(&tv, NULL);
-	uint64_t curr_time = static_cast<uint64_t>(tv.tv_sec) * static_cast<uint64_t>(ticks_per_second) + static_cast<uint64_t>(tv.tv_usec);
-	return tot_time += (curr_time - last_time);
-#elif _WIN64
-	LARGE_INTEGER now;
-	QueryPerformanceCounter(&now);
-	uint64_t elapsed_us = static_cast<uint64_t>(now.QuadPart) - last_time;
-	last_time = now.QuadPart;
-	elapsed_us *= 1000000;
-	elapsed_us /= host_freq;
-	tot_time += elapsed_us;
-	return tot_time;
-#else
-#error "don't know how to implement the get_now function on this OS"
-#endif
-}
 
 static inline uint64_t
 pit_counter_to_us()
@@ -202,5 +152,4 @@ pit_init()
 {
 	add_reset_func(RESET_IDX, pit_reset);
 	pit_reset();
-	timer_init();
 }

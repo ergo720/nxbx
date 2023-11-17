@@ -8,6 +8,7 @@
 #include "../logger.hpp"
 #include "../kernel.hpp"
 #include "../pe.hpp"
+#include "../clock.hpp"
 #include "../init.hpp"
 #include <fstream>
 #include <cinttypes>

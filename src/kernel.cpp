@@ -6,6 +6,7 @@
 #include "io.hpp"
 #include "kernel.hpp"
 #include "pit.hpp"
+#include "clock.hpp"
 #include <cinttypes>
 #include <assert.h>
 
@@ -16,6 +17,7 @@ uint32_t
 nboxkrnl_read_handler(addr_t addr, void *opaque)
 {
 	static uint64_t curr_time;
+	static uint64_t acpi_time;
 
 	switch (addr)
 	{
@@ -46,6 +48,14 @@ nboxkrnl_read_handler(addr_t addr, void *opaque)
 
 	case XE_DVD_XBE_LENGTH:
 		return (uint32_t)xbe_name.size();
+
+	case ACPI_TIME_LOW:
+		// These two are read in succession from KeQueryPerformanceCounter with interrupts disabled, so we can read the ACPI time only once instead of two times
+		acpi_time = get_acpi_now();
+		return static_cast<uint32_t>(acpi_time);
+
+	case ACPI_TIME_HIGH:
+		return acpi_time >> 32;
 
 	default:
 		logger(log_lv::warn, "%s: unexpected I/O read at port 0x%" PRIX16, __func__, addr);

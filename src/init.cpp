@@ -8,6 +8,7 @@
 #include "hw/cpu.hpp"
 #include "hw/pic.hpp"
 #include "hw/pit.hpp"
+#include "../clock.hpp"
 #include <array>
 
 
@@ -35,6 +36,8 @@ start_system(std::string kernel, disas_syntax syntax, uint32_t use_dbg, const ch
 
 			pic_init();
 			pit_init();
+
+			timer_init();
 
 			cpu_start();
 		}
