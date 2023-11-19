@@ -15,10 +15,10 @@ file_exists(std::filesystem::path path)
 		return std::filesystem::exists(path);
 	}
 	catch (const std::filesystem::filesystem_error &e) {
-		logger(log_lv::info, "Failed to check existance of path %s, the error was %s", path.string().c_str(), e.what());
+		logger(log_lv::info, "Failed to check existence of path %s, the error was %s", path.string().c_str(), e.what());
 	}
 	catch (const std::bad_alloc &e) {
-		logger(log_lv::info, "Failed to check existance of path %s, the error was %s", path.string().c_str(), e.what());
+		logger(log_lv::info, "Failed to check existence of path %s, the error was %s", path.string().c_str(), e.what());
 	}
 
 	return false;

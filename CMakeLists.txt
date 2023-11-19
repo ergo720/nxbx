@@ -42,6 +42,7 @@ message("Building nxbx")
 include_directories(${NXBX_ROOT_DIR}/import/lib86cpu/include ${NXBX_ROOT_DIR}/src/hw)
 
 set(HEADERS
+ "${NXBX_ROOT_DIR}/src/clock.hpp"
  "${NXBX_ROOT_DIR}/src/files.hpp"
  "${NXBX_ROOT_DIR}/src/init.hpp"
  "${NXBX_ROOT_DIR}/src/io.hpp"
@@ -56,6 +57,7 @@ set(HEADERS
 )
 
 set(SOURCES
+ "${NXBX_ROOT_DIR}/src/clock.cpp"
  "${NXBX_ROOT_DIR}/src/files.cpp"
  "${NXBX_ROOT_DIR}/src/init.cpp"
  "${NXBX_ROOT_DIR}/src/io.cpp"
