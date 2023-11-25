@@ -15,7 +15,6 @@
 
 // NOTE: on the xbox, the pit frequency is 6% lower than the default one, see https://xboxdevwiki.net/Porting_an_Operating_System_to_the_Xbox_HOWTO#Timer_Frequency
 constexpr uint64_t pit_clock_freq = 1125000;
-constexpr uint64_t ticks_per_second = 1000000;
 
 static inline uint64_t
 pit_counter_to_us()
