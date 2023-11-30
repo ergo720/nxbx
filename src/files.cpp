@@ -5,6 +5,7 @@
 
 #include "files.hpp"
 #include "logger.hpp"
+#include "util.hpp"
 #include <fstream>
 
 
@@ -12,6 +13,7 @@ bool
 file_exists(std::filesystem::path path)
 {
 	try {
+		// TODO: this can probably spuriously fail if the OS filesystem doesn't do case-insensitive comparisons
 		return std::filesystem::exists(path);
 	}
 	catch (const std::filesystem::filesystem_error &e) {
@@ -19,6 +21,25 @@ file_exists(std::filesystem::path path)
 	}
 	catch (const std::bad_alloc &e) {
 		logger(log_lv::info, "Failed to check existence of path %s, the error was %s", path.string().c_str(), e.what());
+	}
+
+	return false;
+}
+
+bool
+file_exists(std::filesystem::path path, bool *is_directory)
+{
+	if (file_exists(path)) {
+		try {
+			*is_directory = std::filesystem::is_directory(path);
+			return true;
+		}
+		catch (const std::filesystem::filesystem_error &e) {
+			logger(log_lv::info, "Failed to determine the file type of path %s, the error was %s", path.string().c_str(), e.what());
+		}
+		catch (const std::bad_alloc &e) {
+			logger(log_lv::info, "Failed to determine the file type of path %s, the error was %s", path.string().c_str(), e.what());
+		}
 	}
 
 	return false;

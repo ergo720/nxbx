@@ -11,7 +11,7 @@
 #include <assert.h>
 
 
-static uint32_t io_id;
+static uint64_t io_id;
 
 uint32_t
 nboxkrnl_read_handler(addr_t addr, void *opaque)
@@ -90,9 +90,13 @@ nboxkrnl_write_handler(addr_t addr, const uint32_t value, void *opaque)
 		flush_pending_packets();
 		break;
 
-	case IO_SET_ID:
-		// This is set together with IO_QUERY_STATUS and IO_QUERY_INFO with interrupts disabled
+	case IO_SET_ID_LOW:
+		// This and the following are set together with IO_QUERY_STATUS and IO_QUERY_INFO with interrupts disabled
 		io_id = value;
+		break;
+
+	case IO_SET_ID_HIGH:
+		io_id |= (static_cast<uint64_t>(value) << 32);
 		break;
 
 	case XE_DVD_XBE_ADDR:

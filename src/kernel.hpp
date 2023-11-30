@@ -5,6 +5,7 @@
 #pragma once
 
 #include "lib86cpu.h"
+#include "util.hpp"
 
 #define CONTIGUOUS_MEMORY_BASE 0x80000000
 #define KERNEL_BASE 0x80010000
@@ -23,7 +24,8 @@ enum KERNEL_IO {
 	IO_QUERY_STATUS,
 	IO_QUERY_INFO,
 	IO_CHECK_ENQUEUE,
-	IO_SET_ID,
+	IO_SET_ID_LOW,
+	IO_SET_ID_HIGH,
 	XE_DVD_XBE_LENGTH,
 	XE_DVD_XBE_ADDR,
 	ACPI_TIME_LOW,
@@ -31,7 +33,7 @@ enum KERNEL_IO {
 	KERNEL_IO_END
 };
 constexpr inline size_t KERNEL_IO_SIZE = KERNEL_IO_END - KERNEL_IO_BASE;
-inline std::string xbe_name;
+inline xbox_string xbe_name;
 
 uint32_t nboxkrnl_read_handler(addr_t addr, void *opaque);
 void nboxkrnl_write_handler(addr_t addr, const uint32_t value, void *opaque);

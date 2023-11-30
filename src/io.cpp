@@ -8,6 +8,7 @@
 #include "cpu.hpp"
 #include "eeprom.hpp"
 #include "kernel.hpp"
+#include "util.hpp"
 #include <thread>
 #include <deque>
 #include <unordered_map>
@@ -16,55 +17,77 @@
 #include <cinttypes>
 #include <cassert>
 
-#define XBE_HANDLE -5
-#define EEPROM_HANDLE -6
+// Special internal handles used by the kernel
+#define XBE_HANDLE 0
+#define EEPROM_HANDLE 1
 
-#define IO_DIRECTORY 1U
-#define IO_ALWAYS 2U
-#define IO_TRUNCATE 4U
+// Disposition flags (same as used by NtCreate/OpenFile)
+#define IO_SUPERSEDE    0
+#define IO_OPEN         1
+#define IO_CREATE       2
+#define IO_OPEN_IF      3
+#define IO_OVERWRITE    4
+#define IO_OVERWRITE_IF 5
 
-#define IO_GET_TYPE(type) (io_request_type)(((uint32_t)(type)) & 0xFFFF0000)
-#define IO_GET_DEVICE(type) (io_dev)(((uint32_t)(type)) & 0x0000F000)
-#define IO_IS_DIRECTORY(type) ((uint32_t)(type) & IO_DIRECTORY)
-#define IO_IS_ALWAYS(type) ((uint32_t)(type) & IO_ALWAYS)
-#define IO_IS_TRUNCATE(type) ((uint32_t)(type) & IO_TRUNCATE)
+#define IO_GET_TYPE(type) (io_request_type)((uint32_t)(type) & 0xF0000000)
+#define IO_GET_FLAGS(type) ((uint32_t)(type) & 0x00FFFFF8)
+#define IO_GET_DISPOSITION(type) ((uint32_t)(type) & 0x00000007)
+#define IO_IS_DIRECTORY(type) ((uint32_t)(type) & io_flags::is_directory)
 
 // These definitions are the same used by nboxkrnl to submit I/O request, and should be kept synchronized with those
-enum io_status : uint32_t {
+enum io_status : int32_t {
 	success = 0,
 	pending,
-	error
+	error,
+	failed,
+	is_a_directory,
+	not_a_directory,
+	not_found
 };
 
 enum io_request_type : uint32_t {
-	open = 1 << 16,
-	create = 2 << 16,
-	remove1 = 3 << 16,
-	close = 4 << 16,
-	read = 5 << 16,
-	write = 6 << 16
+	open    = 1 << 28,
+	remove1 = 2 << 28,
+	close   = 3 << 28,
+	read    = 4 << 28,
+	write   = 5 << 28
 };
 
-enum io_dev : uint32_t {
-	dvd = 0 << 12,
-	hdd = 1 << 12
+enum io_flags : uint32_t {
+	is_directory      = 1 << 3,
+	must_be_a_dir     = 1 << 4,
+	must_not_be_a_dir = 1 << 5
 };
+
+enum io_info : uint32_t {
+	no_data = 0,
+	superseded = 0,
+	opened,
+	created,
+	overwritten,
+	exists,
+	not_exists
+};
+
+// Type layout of io_request
+// io_request_type - io_flags - disposition
+// 31 - 28           27 - 3     2 - 0
 
 // Host version of io_request
 struct io_request {
 	~io_request();
-	uint32_t id; // unique id to identify this request
+	uint64_t id; // unique id to identify this request
 	io_request_type type; // type of request and flags
 	int64_t offset; // file offset from which to start the I/O
 	uint32_t size; // bytes to transfer or size of path for open/create requests
 	union {
 		// virtual address of the data to transfer or file handle for open/create requests
-		uint32_t handle_oc;
+		uint64_t handle_oc;
 		uint32_t address;
 	};
 	union {
 		// file handle or file path for open/create requests
-		uint32_t handle;
+		uint64_t handle;
 		char *path;
 	};
 };
@@ -72,23 +95,23 @@ struct io_request {
 // io_request as used in nboxkrnl, also packed to make sure it has the same padding and alignment
 #pragma pack(1)
 struct packed_io_request {
-	uint32_t id;
+	uint64_t id;
 	io_request_type type;
 	int64_t offset;
 	uint32_t size;
-	uint32_t handle_or_address;
-	uint32_t handle_or_path;
+	uint64_t handle_or_address;
+	uint64_t handle_or_path;
 };
 #pragma pack()
 
 struct io_info_block {
 	io_status status;
-	uint32_t info;
+	io_info info;
 };
 
 io_request::~io_request()
 {
-	if ((IO_GET_TYPE(this->type) == open) || (IO_GET_TYPE(this->type) == create)) {
+	if (IO_GET_TYPE(this->type) == open) {
 		delete[] this->path;
 		this->path = nullptr;
 	}
@@ -96,8 +119,8 @@ io_request::~io_request()
 
 static std::deque< std::unique_ptr<io_request>> curr_io_queue;
 static std::vector<std::unique_ptr<io_request>> pending_io_vec;
-static std::unordered_map<uint32_t, std::unique_ptr<io_info_block>> completed_io_info;
-static std::unordered_map<uint32_t, std::pair<std::fstream, std::string>> xbox_handle_map;
+static std::unordered_map<uint64_t, std::unique_ptr<io_info_block>> completed_io_info;
+static std::unordered_map<uint64_t, std::pair<std::fstream, xbox_string>> xbox_handle_map;
 static std::mutex queue_mtx;
 static std::mutex completed_io_mtx;
 static std::vector<char> io_buffer;
@@ -112,14 +135,18 @@ static std::filesystem::path eeprom_path;
 static std::filesystem::path
 io_parse_path(io_request *curr_io_request)
 {
-	// Paths from the kernel should have the form "\<device>\<partition number (optional)>\<file name>"
-	// "device" can be CdRom0, Harddisk0 and "partition number" can be Partition0, Partition1, ...
+	// NOTE1: Paths from the kernel should have the form "\device\<device name>\<partition number (optional)>\<file name>"
+	// "device name" can be CdRom0, Harddisk0 and "partition number" can be Partition0, Partition1, ...
+	// NOTE2: path comparisons are case-insensitive in the xbox kernel, so we need to do the same
+	// TODO: this should also resolve symbolic links
 
-	std::string_view path(curr_io_request->path);
+	xbox_string_view path(curr_io_request->path, curr_io_request->size);
 	assert(path.starts_with('\\'));
-	size_t pos = path.find_first_of('\\', 1);
-	assert(pos != std::string_view::npos);
-	std::string_view device = path.substr(1, pos - 1);
+	size_t dev_pos = path.find_first_of('\\', 1); // discards "device"
+	assert(dev_pos != xbox_string_view::npos);
+	size_t pos = path.find_first_of('\\', dev_pos + 1);
+	assert(pos != xbox_string_view::npos);
+	xbox_string_view device = path.substr(dev_pos + 1, pos - dev_pos - 1);
 	std::filesystem::path resolved_path;
 	if (device.compare("CdRom0") == 0) {
 		resolved_path = dvd_path;
@@ -130,14 +157,14 @@ io_parse_path(io_request *curr_io_request)
 	else {
 		resolved_path = hdd_path;
 		size_t pos2 = path.find_first_of('\\', pos + 1);
-		assert(pos != std::string_view::npos);
-		std::string_view partition = path.substr(pos + 1, pos2);
+		assert(pos != xbox_string_view::npos);
+		xbox_string_view partition = path.substr(pos + 1, pos2);
 		resolved_path /= partition;
-		resolved_path.make_preferred();
 		pos = pos2;
 	}
-	std::string_view name = path.substr(pos + 1);
+	xbox_string_view name = path.substr(pos + 1);
 	resolved_path /= name;
+	resolved_path.make_preferred();
 
 	return resolved_path;
 }
@@ -175,102 +202,127 @@ io_thread()
 		queue_mtx.unlock();
 
 		io_request_type io_type = IO_GET_TYPE(curr_io_request->type);
-		if ((io_type == open) || io_type == create) {
+		if (io_type == open) {
+			// This code opens/creates the file according to the CreateDisposition parameter used by NtCreate/OpenFile
+
 			std::filesystem::path resolved_path = io_parse_path(curr_io_request.get());
-			if (IO_IS_DIRECTORY(io_type)) {
-				if (io_type == open) {
-					// Open directory: nothing to do
-					completed_io_mtx.lock();
-					completed_io_info.emplace(curr_io_request->id, std::make_unique<io_info_block>(success, 0));
-					completed_io_mtx.unlock();
-					continue;
+			std::unique_ptr<io_info_block> io_result = std::make_unique<io_info_block>(error, no_data);
+			uint32_t disposition = IO_GET_DISPOSITION(curr_io_request->type);
+			uint32_t flags = IO_GET_FLAGS(curr_io_request->type);
+			bool host_is_directory, is_directory = IO_IS_DIRECTORY(curr_io_request->type);
+
+			const auto add_to_map = [&curr_io_request, &resolved_path](auto &&opt, std::unique_ptr<io_info_block> *io_result) {
+				auto pair = xbox_handle_map.emplace(curr_io_request->handle_oc, std::make_pair(std::move(*opt),
+					traits_cast<xbox_char_traits, char, std::char_traits<char>>(resolved_path.string())));
+				assert(pair.second == true);
+				io_result->get()->status = success;
+				};
+			const auto check_dir_flags = [flags](bool host_is_directory, std::unique_ptr<io_info_block> *io_result) -> bool {
+				if ((flags & must_be_a_dir) && !host_is_directory) {
+					io_result->get()->status = not_a_directory;
+					return false;
+				}
+				else if ((flags & must_not_be_a_dir) && host_is_directory) {
+					io_result->get()->status = is_a_directory;
+					return false;
 				}
 				else {
-					// Create directory
-					bool created = ::create_directory(resolved_path);
-					completed_io_mtx.lock();
-					completed_io_info.emplace(curr_io_request->id, std::make_unique<io_info_block>(created ? success : error, 0));
-					completed_io_mtx.unlock();
-					continue;
+					return true;
+				}
+				};
+
+			if (file_exists(resolved_path, &host_is_directory)) {
+				io_result->info = exists;
+				if (disposition == IO_CREATE) {
+					// Create if doesn't exist - FILE_CREATE
+					io_result->status = failed;
+					io_result->info = exists;
+				}
+				else if ((disposition == IO_OPEN) || (disposition == IO_OPEN_IF)) {
+					// Open if exists - FILE_OPEN
+					// Open always - FILE_OPEN_IF
+					if (check_dir_flags(host_is_directory, &io_result)) {
+						if (is_directory) {
+							// Open directory: nothing to do
+							io_result->info = opened;
+							add_to_map(std::make_optional<std::fstream>(), &io_result);
+						}
+						else {
+							// Open file
+							if (auto opt = open_file(resolved_path); opt) {
+								io_result->info = opened;
+								add_to_map(opt, &io_result);
+							}
+						}
+					}
+				}
+				else {
+					// Create always - FILE_SUPERSEDE
+					// Truncate if exists - FILE_OVERWRITE
+					// Truncate always - FILE_OVERWRITE_IF
+					if (check_dir_flags(host_is_directory, &io_result)) {
+						if (is_directory) {
+							// Create directory: already exists
+							io_result->info = exists;
+							add_to_map(std::make_optional<std::fstream>(), &io_result);
+						}
+						else {
+							// Create file
+							if (auto opt = create_file(resolved_path); opt) {
+								io_result->info = (disposition == IO_SUPERSEDE) ? superseded : overwritten;
+								add_to_map(opt, &io_result);
+							}
+						}
+					}
 				}
 			}
 			else {
-				// This code opens/creates the file according to the CreateDisposition parameter used by NtCreateFile
-				bool opened = false;
-				const auto add_to_map = [&curr_io_request, &resolved_path](auto &&opt) -> bool {
-					auto pair = xbox_handle_map.emplace(curr_io_request->handle_oc, std::make_pair(std::move(*opt), resolved_path.string()));
-					assert(pair.second == true);
-					return true;
-					};
-				if (io_type == open) {
-					if (IO_IS_TRUNCATE(curr_io_request->type)) {
-						if (IO_IS_ALWAYS(curr_io_request->type)) {
-							// Truncate always - FILE_OVERWRITE_IF
-							if (auto opt = create_file(resolved_path); opt) {
-								opened = add_to_map(opt);
-							}
-						}
-						else {
-							// Truncate if exists - FILE_OVERWRITE
-							if (file_exists(resolved_path)) {
-								if (auto opt = create_file(resolved_path); opt) {
-									opened = add_to_map(opt);
-								}
-							}
+				io_result->info = not_exists;
+				if ((disposition == IO_CREATE) || (disposition == IO_SUPERSEDE) || (disposition == IO_OPEN_IF) || (disposition == IO_OVERWRITE_IF)) {
+					// Create if doesn't exist - FILE_CREATE
+					// Create always - FILE_SUPERSEDE
+					// Open always - FILE_OPEN_IF
+					// Truncate always - FILE_OVERWRITE_IF
+					if (is_directory) {
+						// Create directory
+						if (::create_directory(resolved_path)) {
+							io_result->info = created;
+							add_to_map(std::make_optional<std::fstream>(), &io_result);
 						}
 					}
 					else {
-						if (IO_IS_ALWAYS(curr_io_request->type)) {
-							// Open always - FILE_OPEN_IF
-							if (file_exists(resolved_path)) {
-								if (auto opt = open_file(resolved_path); opt) {
-									opened = add_to_map(opt);
-								}
-							}
-						}
-						else {
-							// Open if exists - FILE_OPEN
-							if (auto opt = open_file(resolved_path); opt) {
-								opened = add_to_map(opt);
-							}
+						// Create file
+						if (auto opt = create_file(resolved_path); opt) {
+							io_result->info = created;
+							add_to_map(opt, &io_result);
 						}
 					}
 				}
 				else {
-					if (IO_IS_ALWAYS(curr_io_request->type)) {
-						// Create always - FILE_SUPERSEDE
-						if (auto opt = create_file(resolved_path); opt) {
-							opened = add_to_map(opt);
-						}
-					}
-					else {
-						// Create if doesn't exist - FILE_CREATE
-						if (!file_exists(resolved_path)) {
-							if (auto opt = create_file(resolved_path); opt) {
-								opened = add_to_map(opt);
-							}
-						}
-					}
+					// Open if exists - FILE_OPEN
+					// Truncate if exists - FILE_OVERWRITE
+					io_result->status = not_found;
+					io_result->info = not_exists;
 				}
-
-				completed_io_mtx.lock();
-				completed_io_info.emplace(curr_io_request->id, std::make_unique<io_info_block>(opened ? success : error, 0));
-				completed_io_mtx.unlock();
-				continue;
 			}
+
+			completed_io_mtx.lock();
+			completed_io_info.emplace(curr_io_request->id, std::move(io_result));
+			completed_io_mtx.unlock();
+			continue;
 		}
 
 		auto it = xbox_handle_map.find((uint32_t)curr_io_request->handle);
 		if (it == xbox_handle_map.end()) [[unlikely]] {
-			logger(log_lv::warn, "Xbox handle %" PRIu32 " not found"); // this should not happen...
+			logger(log_lv::warn, "Xbox handle %" PRIu32 " not found", it->first); // this should not happen...
 			completed_io_mtx.lock();
-			completed_io_info.emplace(curr_io_request->id, std::make_unique<io_info_block>(error, 0));
+			completed_io_info.emplace(curr_io_request->id, std::make_unique<io_info_block>(error, no_data));
 			completed_io_mtx.unlock();
 			continue;
 		}
 
 		std::fstream *fs = &it->second.first;
-		std::unique_ptr<io_info_block> io_result = std::make_unique<io_info_block>(success, 0);
+		std::unique_ptr<io_info_block> io_result = std::make_unique<io_info_block>(success, no_data);
 		switch (curr_io_request->type)
 		{
 		case io_request_type::close:
@@ -278,13 +330,20 @@ io_thread()
 			break;
 
 		case io_request_type::read:
+			if (!fs->is_open()) [[unlikely]] {
+				// Read operation on a directory (this should not happen...)
+				logger(log_lv::warn, "Read operation to directory handle %" PRIu32 " with path %s", it->first, it->second.second.c_str());
+				io_result->status = error;
+				io_result->info = no_data;
+				break;
+			}
 			fs->seekg(curr_io_request->offset, fs->beg);
 			if (io_buffer.size() < curr_io_request->size) {
 				io_buffer.resize(curr_io_request->size);
 			}
 			fs->read(io_buffer.data(), curr_io_request->size);
 			if (fs->rdstate() == std::ios_base::goodbit) {
-				io_result->info = static_cast<uint32_t>(fs->gcount());
+				io_result->info = static_cast<io_info>(fs->gcount());
 				mem_write_block_virt(g_cpu, curr_io_request->address, curr_io_request->size, io_buffer.data());
 			}
 			else {
@@ -294,6 +353,13 @@ io_thread()
 			break;
 
 		case io_request_type::write:
+			if (!fs->is_open()) [[unlikely]] {
+				// Write operation on a directory (this should not happen...)
+				logger(log_lv::warn, "Write operation to directory handle %" PRIu32 " with path %s", it->first, it->second.second.c_str());
+				io_result->status = error;
+				io_result->info = no_data;
+				break;
+			}
 			fs->seekg(curr_io_request->offset, fs->beg);
 			if (io_buffer.size() < curr_io_request->size) {
 				io_buffer.resize(curr_io_request->size);
@@ -342,14 +408,14 @@ submit_io_packet(uint32_t addr)
 	mem_read_block_virt(g_cpu, addr, sizeof(packed_io_request), (uint8_t *)&packed_curr_io_request);
 	curr_io_request->id = packed_curr_io_request.id;
 	curr_io_request->type = packed_curr_io_request.type;
-	curr_io_request->address = packed_curr_io_request.handle_or_address;
+	curr_io_request->handle_oc = packed_curr_io_request.handle_or_address;
 	curr_io_request->offset = packed_curr_io_request.offset;
 	curr_io_request->size = packed_curr_io_request.size;
 	curr_io_request->handle = packed_curr_io_request.handle_or_path;
 
-	if ((IO_GET_TYPE(curr_io_request->type) == open) || (IO_GET_TYPE(curr_io_request->type) == create)) {
+	if (IO_GET_TYPE(curr_io_request->type) == open) {
 		char *path = new char[curr_io_request->size];
-		mem_read_block_virt(g_cpu, curr_io_request->handle, curr_io_request->size, (uint8_t *)path);
+		mem_read_block_virt(g_cpu, (addr_t)curr_io_request->handle, curr_io_request->size, (uint8_t *)path);
 		curr_io_request->path = path;
 	}
 
@@ -376,7 +442,7 @@ flush_pending_packets()
 }
 
 uint32_t
-query_io_packet(uint32_t id, bool query_status)
+query_io_packet(uint64_t id, bool query_status)
 {
 	static io_info_block block;
 
@@ -431,32 +497,37 @@ io_init(const char *nxbx_path, const char *xbe_path)
 	}
 
 	// Open the eeprom file in the I/O thread
-	std::string eeprom_str("\\Eeprom\\eeprom.bin");
+	std::vector<uint64_t> init_packet_ids;
+	xbox_string eeprom_str("\\Device\\Eeprom\\eeprom.bin");
 	std::unique_ptr<io_request> curr_io_request = std::make_unique<io_request>();
 	curr_io_request->id = 0;
-	curr_io_request->type = open;
+	curr_io_request->type = static_cast<io_request_type>(open | IO_OPEN);
 	curr_io_request->handle_oc = EEPROM_HANDLE;
 	curr_io_request->offset = 0;
-	curr_io_request->size = (uint32_t)eeprom_str.size() + 1;
+	curr_io_request->size = (uint32_t)eeprom_str.size();
 	curr_io_request->path = new char[curr_io_request->size];
 	std::copy(eeprom_str.c_str(), eeprom_str.c_str() + curr_io_request->size, curr_io_request->path);
+	init_packet_ids.push_back(0);
 	enqueue_io_packet(std::move(curr_io_request));
 
+	std::filesystem::path local_xbe_path = std::filesystem::path(xbe_path).make_preferred();
+	xbe_name = traits_cast<xbox_char_traits, char, std::char_traits<char>>(local_xbe_path.filename().string());
 	hdd_path = hdd_dir;
-	dvd_path = std::filesystem::path(xbe_path).remove_filename();
-	xbe_name = std::filesystem::path(xbe_path).filename().string();
+	dvd_path = local_xbe_path.remove_filename();
 	eeprom_path = eeprom_dir.remove_filename();
 
 	std::thread(io_thread).detach();
 
 	// Wait until the I/O thread has processed all the initialization packets
-	io_info_block block(pending, 0);
-	while (block.status == pending) {
-		block.status = (io_status)query_io_packet(0, true);
-		block.info = query_io_packet(0, false);
-	}
-	if (block.status != success) {
-		return false;
+	io_info_block block;
+	while (!init_packet_ids.empty()) {
+		block.status = (io_status)query_io_packet(init_packet_ids.front(), true);
+		if (block.status != pending) {
+			if (block.status != success) {
+				return false;
+			}
+			init_packet_ids.erase(init_packet_ids.begin());
+		}
 	}
 
 	return true;
