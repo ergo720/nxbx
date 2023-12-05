@@ -107,7 +107,7 @@ cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 
 	register_log_func(cpu_logger);
 
-	cpu_set_flags(g_cpu, static_cast<uint32_t>(syntax) | (use_dbg ? CPU_DBG_PRESENT : 0) | CPU_ABORT_ON_HLT);
+	cpu_set_flags(g_cpu, static_cast<uint32_t>(syntax) | (use_dbg ? CPU_DBG_PRESENT : 0));
 
 	if (!LC86_SUCCESS(mem_init_region_ram(g_cpu, 0, ramsize))) {
 		logger(log_lv::error, "Failed to initialize ram memory!");
