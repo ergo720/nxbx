@@ -475,7 +475,7 @@ io_init(const char *nxbx_path, const char *xbe_path)
 	if (!::create_directory(hdd_dir)) {
 		return false;
 	}
-	for (unsigned i = 1; i < 8; ++i) {
+	for (unsigned i = 1; i < 6; ++i) {
 		std::filesystem::path curr_partition_dir = hdd_dir / ("Partition" + std::to_string(i));
 		curr_partition_dir.make_preferred();
 		if (!::create_directory(curr_partition_dir)) {
