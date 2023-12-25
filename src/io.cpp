@@ -4,11 +4,11 @@
 
 #include "io.hpp"
 #include "logger.hpp"
-#include "files.hpp"
 #include "cpu.hpp"
 #include "eeprom.hpp"
 #include "kernel.hpp"
 #include "util.hpp"
+#include "xpartition.hpp"
 #include <thread>
 #include <deque>
 #include <unordered_map>
@@ -20,6 +20,14 @@
 // Special internal handles used by the kernel
 #define XBE_HANDLE 0
 #define EEPROM_HANDLE 1
+#define PARTITION0_HANDLE 2
+#define PARTITION1_HANDLE 3
+#define PARTITION2_HANDLE 4
+#define PARTITION3_HANDLE 5
+#define PARTITION4_HANDLE 6
+#define PARTITION5_HANDLE 7
+#define PARTITION6_HANDLE 8 // non-standard
+#define PARTITION7_HANDLE 9 // non-standard
 
 // Disposition flags (same as used by NtCreate/OpenFile)
 #define IO_SUPERSEDE    0
@@ -132,6 +140,36 @@ static std::filesystem::path dvd_path;
 static std::filesystem::path eeprom_path;
 
 
+static bool
+io_open_special_files()
+{
+	const auto &lambda = [](std::filesystem::path resolved_path, uint64_t handle) -> bool {
+		if (auto opt = open_file(resolved_path); !opt) {
+			return false;
+		}
+		else {
+			auto pair = xbox_handle_map.emplace(handle, std::make_pair(std::move(*opt),
+				traits_cast<xbox_char_traits, char, std::char_traits<char>>(resolved_path.string())));
+			assert(pair.second == true);
+			return true;
+		}
+		};
+
+	if (!lambda((eeprom_path / "eeprom.bin").make_preferred(), EEPROM_HANDLE)) {
+		return false;
+	}
+
+	for (unsigned i = 0; i < XBOX_NUM_OF_PARTITIONS; ++i) {
+		std::filesystem::path curr_partition_dir = hdd_path / ("Partition" + std::to_string(i) + ".bin");
+		curr_partition_dir.make_preferred();
+		if (!lambda(curr_partition_dir, PARTITION0_HANDLE + i)) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
 static std::filesystem::path
 io_parse_path(io_request *curr_io_request)
 {
@@ -150,9 +188,6 @@ io_parse_path(io_request *curr_io_request)
 	std::filesystem::path resolved_path;
 	if (device.compare("CdRom0") == 0) {
 		resolved_path = dvd_path;
-	}
-	else if (device.compare("Eeprom") == 0) {
-		resolved_path = eeprom_path;
 	}
 	else {
 		resolved_path = hdd_path;
@@ -475,10 +510,15 @@ io_init(const char *nxbx_path, const char *xbe_path)
 	if (!::create_directory(hdd_dir)) {
 		return false;
 	}
-	for (unsigned i = 1; i < 6; ++i) {
+	for (unsigned i = 0; i < XBOX_NUM_OF_PARTITIONS; ++i) {
 		std::filesystem::path curr_partition_dir = hdd_dir / ("Partition" + std::to_string(i));
 		curr_partition_dir.make_preferred();
-		if (!::create_directory(curr_partition_dir)) {
+		if (i) {
+			if (!::create_directory(curr_partition_dir)) {
+				return false;
+			}
+		}
+		if (!create_partition_metadata_file(curr_partition_dir, i)) {
 			return false;
 		}
 	}
@@ -496,39 +536,17 @@ io_init(const char *nxbx_path, const char *xbe_path)
 		}
 	}
 
-	// Open the eeprom file in the I/O thread
-	std::vector<uint64_t> init_packet_ids;
-	xbox_string eeprom_str("\\Device\\Eeprom\\eeprom.bin");
-	std::unique_ptr<io_request> curr_io_request = std::make_unique<io_request>();
-	curr_io_request->id = 0;
-	curr_io_request->type = static_cast<io_request_type>(open | IO_OPEN);
-	curr_io_request->handle_oc = EEPROM_HANDLE;
-	curr_io_request->offset = 0;
-	curr_io_request->size = (uint32_t)eeprom_str.size();
-	curr_io_request->path = new char[curr_io_request->size];
-	std::copy(eeprom_str.c_str(), eeprom_str.c_str() + curr_io_request->size, curr_io_request->path);
-	init_packet_ids.push_back(0);
-	enqueue_io_packet(std::move(curr_io_request));
-
 	std::filesystem::path local_xbe_path = std::filesystem::path(xbe_path).make_preferred();
 	xbe_name = traits_cast<xbox_char_traits, char, std::char_traits<char>>(local_xbe_path.filename().string());
 	hdd_path = hdd_dir;
 	dvd_path = local_xbe_path.remove_filename();
 	eeprom_path = eeprom_dir.remove_filename();
 
-	std::thread(io_thread).detach();
-
-	// Wait until the I/O thread has processed all the initialization packets
-	io_info_block block;
-	while (!init_packet_ids.empty()) {
-		block.status = (io_status)query_io_packet(init_packet_ids.front(), true);
-		if (block.status != pending) {
-			if (block.status != success) {
-				return false;
-			}
-			init_packet_ids.erase(init_packet_ids.begin());
-		}
+	if (!io_open_special_files()) {
+		return false;
 	}
+
+	std::thread(io_thread).detach();
 
 	return true;
 }
