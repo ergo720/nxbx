@@ -9,8 +9,6 @@
 #include "../init.hpp"
 #include <bit>
 
-#define RESET_IDX 1
-
 
 static inline bool
 pic_is_master(pic_t *pic)
@@ -323,6 +321,6 @@ pic_reset()
 void
 pic_init()
 {
-	add_reset_func(RESET_IDX, pic_reset);
+	add_reset_func(pic_reset);
 	pic_reset();
 }

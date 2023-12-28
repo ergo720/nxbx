@@ -8,24 +8,24 @@
 #include "hw/cpu.hpp"
 #include "hw/pic.hpp"
 #include "hw/pit.hpp"
+#include "hw/cmos.hpp"
 #include "../clock.hpp"
-#include <array>
 
 
-static std::array<hw_reset_f, 3> reset_hw_arr;
+static std::vector<hw_reset_f> reset_hw_vec;
 
 void
 reset_system()
 {
-	for (const auto f : reset_hw_arr) {
+	for (const auto f : reset_hw_vec) {
 		f();
 	}
 }
 
 void
-add_reset_func(unsigned idx, hw_reset_f reset_f)
+add_reset_func(hw_reset_f reset_f)
 {
-	reset_hw_arr[idx] = reset_f;
+	reset_hw_vec.push_back(reset_f);
 }
 
 void
@@ -34,10 +34,11 @@ start_system(std::string kernel, disas_syntax syntax, uint32_t use_dbg, const ch
 	if (cpu_init(kernel, syntax, use_dbg)) {
 		if (io_init(nxbx_path, xbe_path)) {
 
+			timer_init();
+
 			pic_init();
 			pit_init();
-
-			timer_init();
+			cmos_init();
 
 			cpu_start();
 		}

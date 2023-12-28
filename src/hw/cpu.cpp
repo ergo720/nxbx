@@ -5,6 +5,7 @@
 #include "cpu.hpp"
 #include "pic.hpp"
 #include "pit.hpp"
+#include "cmos.hpp"
 #include "../logger.hpp"
 #include "../kernel.hpp"
 #include "../pe.hpp"
@@ -12,8 +13,7 @@
 #include "../init.hpp"
 #include <fstream>
 #include <cinttypes>
-
-#define RESET_IDX 0
+#include <array>
 
 
 static consteval bool
@@ -129,6 +129,11 @@ cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 		return false;
 	}
 
+	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x70, 2, true, io_handlers_t{ .fnr8 = cmos_read_handler, .fnw8 = cmos_write_handler }, nullptr))) {
+		logger(log_lv::error, "Failed to initialize master pic I/O ports!");
+		return false;
+	}
+
 	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0xA0, 2, true, io_handlers_t{ .fnr8 = pic_read_handler, .fnw8 = pic_write_handler }, &g_pic[1]))) {
 		logger(log_lv::error, "Failed to initialize slave pic I/O ports!");
 		return false;
@@ -143,7 +148,7 @@ cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 		return false;
 	}
 
-	add_reset_func(RESET_IDX, cpu_reset);
+	add_reset_func(cpu_reset);
 
 	// Load kernel exe into ram
 	uint8_t *ram = get_ram_ptr(g_cpu);
@@ -202,6 +207,17 @@ cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 	return true;
 }
 
+static uint64_t
+cpu_check_periodic_events()
+{
+	std::array<uint64_t, 2> dev_timeout;
+	uint64_t now = get_now();
+	dev_timeout[0] = pit_get_next_irq_time(now);
+	dev_timeout[1] = cmos_get_next_update_time(now);
+
+	return *std::min_element(dev_timeout.begin(), dev_timeout.end());
+}
+
 void
 cpu_start()
 {
@@ -209,7 +225,7 @@ cpu_start()
 
 	lc86_status code;
 	while (true) {
-		code = cpu_run_until(g_cpu, pit_get_next_irq_time(get_now()));
+		code = cpu_run_until(g_cpu, cpu_check_periodic_events());
 		if (code != lc86_status::timeout) [[unlikely]] {
 			break;
 		}

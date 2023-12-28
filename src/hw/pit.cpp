@@ -10,8 +10,6 @@
 #include "../clock.hpp"
 #include "../init.hpp"
 
-#define RESET_IDX 2
-
 
 // NOTE: on the xbox, the pit frequency is 6% lower than the default one, see https://xboxdevwiki.net/Porting_an_Operating_System_to_the_Xbox_HOWTO#Timer_Frequency
 constexpr uint64_t pit_clock_freq = 1125000;
@@ -149,6 +147,6 @@ pit_reset()
 void
 pit_init()
 {
-	add_reset_func(RESET_IDX, pit_reset);
+	add_reset_func(pit_reset);
 	pit_reset();
 }
