@@ -108,7 +108,7 @@ cmos_read_handler(uint32_t port, void *opaque)
 				return to_bcd(local_time.tm_year % 100);
 
 			case 0x7F:
-				return to_bcd(g_cmos.ram[0x7F]);
+				return to_bcd((local_time.tm_year + 1900) / 100);
 			}
 
 			assert(0);
