@@ -51,6 +51,8 @@ struct FATX_SUPERBLOCK {
 using PFATX_SUPERBLOCK = FATX_SUPERBLOCK *;
 #pragma pack()
 
+static_assert(sizeof(FATX_SUPERBLOCK) == 4096);
+
 /*
 Drive Letter  Description  Offset (bytes)  Size (bytes)  Filesystem       Device Object
 N/A           Config Area  0x00000000      0x00080000    Fixed Structure  \Device\Harddisk0\Partition0
@@ -100,7 +102,8 @@ create_partition_metadata_file(std::filesystem::path partition_dir, unsigned par
 				std::fstream &fs = opt.value();
 				fs.seekg(0, fs.beg);
 				fs.write(partition0_buffer.get(), XBOX_HDD_SECTOR_SIZE * XBOX_SWAPPART1_LBA_START);
-				if (fs.rdstate() != std::ios_base::goodbit) {
+				if (!fs.good()) {
+					fs.clear();
 					return false;
 				}
 			}
@@ -114,7 +117,8 @@ create_partition_metadata_file(std::filesystem::path partition_dir, unsigned par
 				std::fstream &fs = opt.value();
 				fs.seekg(0, fs.beg);
 				fs.write((char *)&superblock, sizeof(FATX_SUPERBLOCK));
-				if (fs.rdstate() != std::ios_base::goodbit) {
+				if (!fs.good()) {
+					fs.clear();
 					return false;
 				}
 			}

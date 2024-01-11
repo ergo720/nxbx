@@ -16,18 +16,33 @@
 #include <filesystem>
 #include <cinttypes>
 #include <cassert>
+#include <array>
+
+// Device number
+#define DEV_CDROM      0
+#define DEV_EEPROM     1
+#define DEV_PARTITION0 2
+#define DEV_PARTITION1 3
+#define DEV_PARTITION2 4
+#define DEV_PARTITION3 5
+#define DEV_PARTITION4 6
+#define DEV_PARTITION5 7
+#define DEV_PARTITION6 8 // non-standard
+#define DEV_PARTITION7 9 // non-standard
+#define NUM_OF_DEVS    10
 
 // Special internal handles used by the kernel
-#define XBE_HANDLE 0
-#define EEPROM_HANDLE 1
-#define PARTITION0_HANDLE 2
-#define PARTITION1_HANDLE 3
-#define PARTITION2_HANDLE 4
-#define PARTITION3_HANDLE 5
-#define PARTITION4_HANDLE 6
-#define PARTITION5_HANDLE 7
-#define PARTITION6_HANDLE 8 // non-standard
-#define PARTITION7_HANDLE 9 // non-standard
+#define XBE_HANDLE        DEV_CDROM
+#define EEPROM_HANDLE     DEV_EEPROM
+#define PARTITION0_HANDLE DEV_PARTITION0
+#define PARTITION1_HANDLE DEV_PARTITION1
+#define PARTITION2_HANDLE DEV_PARTITION2
+#define PARTITION3_HANDLE DEV_PARTITION3
+#define PARTITION4_HANDLE DEV_PARTITION4
+#define PARTITION5_HANDLE DEV_PARTITION5
+#define PARTITION6_HANDLE DEV_PARTITION6 // non-standard
+#define PARTITION7_HANDLE DEV_PARTITION7 // non-standard
+#define FIRST_FREE_HANDLE NUM_OF_DEVS
 
 // Disposition flags (same as used by NtCreate/OpenFile)
 #define IO_SUPERSEDE    0
@@ -38,9 +53,9 @@
 #define IO_OVERWRITE_IF 5
 
 #define IO_GET_TYPE(type) (io_request_type)((uint32_t)(type) & 0xF0000000)
-#define IO_GET_FLAGS(type) ((uint32_t)(type) & 0x00FFFFF8)
+#define IO_GET_FLAGS(type) ((uint32_t)(type) & 0x007FFFF8)
 #define IO_GET_DISPOSITION(type) ((uint32_t)(type) & 0x00000007)
-#define IO_IS_DIRECTORY(type) ((uint32_t)(type) & io_flags::is_directory)
+#define IO_GET_DEV(type) (((uint32_t)(type) >> 23) & 0x0000001F)
 
 // These definitions are the same used by nboxkrnl to submit I/O request, and should be kept synchronized with those
 enum io_status : int32_t {
@@ -78,8 +93,8 @@ enum io_info : uint32_t {
 };
 
 // Type layout of io_request
-// io_request_type - io_flags - disposition
-// 31 - 28           27 - 3     2 - 0
+// io_request_type - dev_type - io_flags - disposition
+// 31 - 28           27 - 23    22 - 3     2 - 0
 
 // Host version of io_request
 struct io_request {
@@ -128,7 +143,7 @@ io_request::~io_request()
 static std::deque< std::unique_ptr<io_request>> curr_io_queue;
 static std::vector<std::unique_ptr<io_request>> pending_io_vec;
 static std::unordered_map<uint64_t, std::unique_ptr<io_info_block>> completed_io_info;
-static std::unordered_map<uint64_t, std::pair<std::fstream, xbox_string>> xbox_handle_map;
+static std::array<std::unordered_map<uint64_t, std::pair<std::fstream, xbox_string>>, NUM_OF_DEVS> xbox_handle_map;
 static std::mutex queue_mtx;
 static std::mutex completed_io_mtx;
 static std::vector<char> io_buffer;
@@ -148,7 +163,7 @@ io_open_special_files()
 			return false;
 		}
 		else {
-			auto pair = xbox_handle_map.emplace(handle, std::make_pair(std::move(*opt),
+			auto pair = xbox_handle_map[handle].emplace(handle, std::make_pair(std::move(*opt),
 				traits_cast<xbox_char_traits, char, std::char_traits<char>>(resolved_path.string())));
 			assert(pair.second == true);
 			return true;
@@ -219,7 +234,9 @@ io_thread()
 			pending_packets = false;
 			curr_io_queue.clear();
 			completed_io_info.clear();
-			xbox_handle_map.clear();
+			for (auto &handle_map : xbox_handle_map) {
+				handle_map.clear();
+			}
 			pending_io_vec.clear();
 			io_running.test_and_set();
 			io_running.notify_one();
@@ -237,6 +254,7 @@ io_thread()
 		queue_mtx.unlock();
 
 		io_request_type io_type = IO_GET_TYPE(curr_io_request->type);
+		uint32_t dev = IO_GET_DEV(curr_io_request->type);
 		if (io_type == open) {
 			// This code opens/creates the file according to the CreateDisposition parameter used by NtCreate/OpenFile
 
@@ -244,10 +262,10 @@ io_thread()
 			std::unique_ptr<io_info_block> io_result = std::make_unique<io_info_block>(error, no_data);
 			uint32_t disposition = IO_GET_DISPOSITION(curr_io_request->type);
 			uint32_t flags = IO_GET_FLAGS(curr_io_request->type);
-			bool host_is_directory, is_directory = IO_IS_DIRECTORY(curr_io_request->type);
+			bool host_is_directory, is_directory = flags & io_flags::is_directory;
 
-			const auto add_to_map = [&curr_io_request, &resolved_path](auto &&opt, std::unique_ptr<io_info_block> *io_result) {
-				auto pair = xbox_handle_map.emplace(curr_io_request->handle_oc, std::make_pair(std::move(*opt),
+			const auto add_to_map = [&curr_io_request, &resolved_path, dev](auto &&opt, std::unique_ptr<io_info_block> *io_result) {
+				auto pair = xbox_handle_map[dev].emplace(curr_io_request->handle_oc, std::make_pair(std::move(*opt),
 					traits_cast<xbox_char_traits, char, std::char_traits<char>>(resolved_path.string())));
 				assert(pair.second == true);
 				io_result->get()->status = success;
@@ -347,8 +365,8 @@ io_thread()
 			continue;
 		}
 
-		auto it = xbox_handle_map.find((uint32_t)curr_io_request->handle);
-		if (it == xbox_handle_map.end()) [[unlikely]] {
+		auto it = xbox_handle_map[dev].find(curr_io_request->handle);
+		if (it == xbox_handle_map[dev].end()) [[unlikely]] {
 			logger(log_lv::warn, "Xbox handle %" PRIu32 " not found", it->first); // this should not happen...
 			completed_io_mtx.lock();
 			completed_io_info.emplace(curr_io_request->id, std::make_unique<io_info_block>(error, no_data));
@@ -358,10 +376,10 @@ io_thread()
 
 		std::fstream *fs = &it->second.first;
 		std::unique_ptr<io_info_block> io_result = std::make_unique<io_info_block>(success, no_data);
-		switch (curr_io_request->type)
+		switch (io_type)
 		{
 		case io_request_type::close:
-			xbox_handle_map.erase(curr_io_request->handle);
+			xbox_handle_map[dev].erase(curr_io_request->handle);
 			break;
 
 		case io_request_type::read:
@@ -377,7 +395,7 @@ io_thread()
 				io_buffer.resize(curr_io_request->size);
 			}
 			fs->read(io_buffer.data(), curr_io_request->size);
-			if (fs->rdstate() == std::ios_base::goodbit) {
+			if (fs->good()) {
 				io_result->info = static_cast<io_info>(fs->gcount());
 				mem_write_block_virt(g_cpu, curr_io_request->address, curr_io_request->size, io_buffer.data());
 			}
@@ -401,7 +419,7 @@ io_thread()
 			}
 			mem_read_block_virt(g_cpu, curr_io_request->address, curr_io_request->size, reinterpret_cast<uint8_t *>(io_buffer.data()));
 			fs->write(io_buffer.data(), curr_io_request->size);
-			if (fs->rdstate() != std::ios_base::goodbit) {
+			if (fs->good()) {
 				io_result->status = error;
 				fs->clear();
 			}
