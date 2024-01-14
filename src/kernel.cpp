@@ -61,7 +61,7 @@ nboxkrnl_read_handler(addr_t addr, void *opaque)
 		return query_io_packet(io_id, false);
 
 	case XE_DVD_XBE_LENGTH:
-		return (uint32_t)xbe_name.size();
+		return (uint32_t)xbox_xbe_path.size();
 
 	case ACPI_TIME_LOW:
 		// These two are read in succession from KeQueryPerformanceCounter with interrupts disabled, so we can read the ACPI time only once instead of two times
@@ -114,7 +114,7 @@ nboxkrnl_write_handler(addr_t addr, const uint32_t value, void *opaque)
 		break;
 
 	case XE_DVD_XBE_ADDR:
-		mem_write_block_virt(static_cast<cpu_t *>(opaque), value, (uint32_t)xbe_name.size(), xbe_name.c_str());
+		mem_write_block_virt(static_cast<cpu_t *>(opaque), value, (uint32_t)xbox_xbe_path.size(), xbox_xbe_path.c_str());
 		break;
 
 	default:

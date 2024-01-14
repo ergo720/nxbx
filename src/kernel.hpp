@@ -34,6 +34,7 @@ enum KERNEL_IO {
 };
 constexpr inline size_t KERNEL_IO_SIZE = KERNEL_IO_END - KERNEL_IO_BASE;
 inline xbox_string xbe_name;
+inline xbox_string xbox_xbe_path;
 
 uint32_t nboxkrnl_read_handler(addr_t addr, void *opaque);
 void nboxkrnl_write_handler(addr_t addr, const uint32_t value, void *opaque);

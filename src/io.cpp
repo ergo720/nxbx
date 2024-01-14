@@ -208,7 +208,7 @@ io_parse_path(io_request *curr_io_request)
 		resolved_path = hdd_path;
 		size_t pos2 = path.find_first_of('\\', pos + 1);
 		assert(pos != xbox_string_view::npos);
-		xbox_string_view partition = path.substr(pos + 1, pos2);
+		xbox_string_view partition = path.substr(pos + 1, pos2 - pos - 1);
 		resolved_path /= partition;
 		pos = pos2;
 	}
@@ -559,6 +559,25 @@ io_init(const char *nxbx_path, const char *xbe_path)
 	hdd_path = hdd_dir;
 	dvd_path = local_xbe_path.remove_filename();
 	eeprom_path = eeprom_dir.remove_filename();
+	xbox_xbe_path = "\\Device\\CdRom0\\" + xbe_name;
+	if (dvd_path.string().starts_with(hdd_path.string())) {
+		// XBE is installed inside a HDD partition, so set the dvd drive to be empty by setting th dvd path to an invalid directory
+		// TODO: this should also set the SMC tray state to have no media
+		size_t partition_num_off = hdd_path.string().size() + 9;
+		std::string xbox_hdd_dir = "\\Device\\Harddisk0\\Partition" + std::to_string(dvd_path.string()[partition_num_off] - '0');
+		std::string xbox_remaining_hdd_dir = dvd_path.string().substr(partition_num_off + 1);
+		for (size_t pos = 0; pos < xbox_remaining_hdd_dir.size(); ++pos) {
+			if (xbox_remaining_hdd_dir[pos] == '/') {
+				xbox_remaining_hdd_dir[pos] = '\\'; // convert to xbox path separator
+			}
+		}
+		xbox_xbe_path = traits_cast<xbox_char_traits, char, std::char_traits<char>>(xbox_hdd_dir + xbox_remaining_hdd_dir + xbe_name.c_str());
+		std::error_code ec;
+		dvd_path = std::filesystem::temp_directory_path(ec);
+		if (dvd_path.string() == "") {
+			dvd_path = &std::filesystem::path::preferred_separator;
+		}
+	}
 
 	if (!io_open_special_files()) {
 		return false;
