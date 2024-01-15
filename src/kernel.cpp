@@ -88,7 +88,7 @@ nboxkrnl_write_handler(addr_t addr, const uint32_t value, void *opaque)
 		// Also, they might not be contiguous in physical memory, so we use mem_read_block_virt to avoid issues with allocations spanning pages
 		uint8_t buff[512];
 		mem_read_block_virt(static_cast<cpu_t *>(opaque), value, sizeof(buff), buff);
-		logger(log_lv::info, "Received a new debug string from kernel:\n%s", buff);
+		logger(log_lv::info, "Kernel says: %s", buff);
 	}
 	break;
 
