@@ -379,7 +379,7 @@ io_thread()
 		switch (io_type)
 		{
 		case io_request_type::close:
-			xbox_handle_map[dev].erase(curr_io_request->handle);
+			xbox_handle_map[dev].erase(it);
 			break;
 
 		case io_request_type::read:
@@ -425,7 +425,14 @@ io_thread()
 			}
 			break;
 
-		case io_request_type::remove1: // TODO
+		case io_request_type::remove1: {
+			xbox_string file_path(it->second.second);
+			xbox_handle_map[dev].erase(it);
+			std::error_code ec;
+			std::filesystem::remove(file_path, ec);
+		}
+		break;
+
 		default:
 			logger(log_lv::warn, "Unknown I/O request of type %" PRId32, curr_io_request->type);
 		}
