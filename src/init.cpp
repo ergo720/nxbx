@@ -29,7 +29,7 @@ add_reset_func(hw_reset_f reset_f)
 }
 
 void
-start_system(std::string kernel, disas_syntax syntax, uint32_t use_dbg, const char *nxbx_path, const char *xbe_path)
+start_system(std::string kernel, disas_syntax syntax, uint32_t use_dbg, std::string nxbx_path, std::string xbe_path)
 {
 	if (cpu_init(kernel, syntax, use_dbg)) {
 		if (io_init(nxbx_path, xbe_path)) {

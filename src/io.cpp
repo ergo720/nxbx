@@ -525,7 +525,7 @@ query_io_packet(uint64_t id, bool query_status)
 }
 
 bool
-io_init(const char *nxbx_path, const char *xbe_path)
+io_init(std::string nxbx_path, std::string xbe_path)
 {
 	std::filesystem::path curr_dir = nxbx_path;
 	curr_dir = curr_dir.remove_filename();

@@ -7,6 +7,11 @@
 #include "logger.hpp"
 #include "util.hpp"
 #include <fstream>
+#if defined(_WIN64)
+#include "Windows.h"
+#elif defined(__linux__)
+#include <unistd.h>
+#endif
 
 
 bool
@@ -89,4 +94,40 @@ open_file(std::filesystem::path path)
 {
 	std::fstream fs(path, std::ios_base::in | std::ios_base::out | std::ios_base::binary);
 	return fs.is_open() ? std::make_optional<std::fstream>(std::move(fs)) : std::nullopt;
+}
+
+std::string
+get_nxbx_path()
+{
+	// NOTE: Using argv[0] is unreliable, since it might or might not have the full path of the program
+
+	std::unique_ptr<char[]> path_buff(new char[260]);
+
+#if defined(_WIN64)
+	DWORD ret, size = 260;
+	while (true) {
+		ret = GetModuleFileName(NULL, path_buff.get(), size - 1);
+		if ((ret == 0) || (GetLastError() == ERROR_INSUFFICIENT_BUFFER)) {
+			size *= 2;
+			path_buff = std::unique_ptr<char[]>(new char[size]);
+			continue;
+		}
+		path_buff[size] = '\0';
+		return path_buff.get();
+	}
+#elif defined(__linux__)
+	size_t size = 260;
+	while (true) {
+		ssize_t ret = readlink("/proc/self/exe", path_buff.get(), size - 1);
+		if ((ret == -1) || (ret == size)) {
+			size *= 2;
+			path_buff = std::unique_ptr<char[]>(new char[size]);
+			continue;
+		}
+		path_buff[size] = '\0';
+		return path_buff.get();
+	}
+#else
+#error "Don't know how to retrieve the path of nxbx on this platform"
+#endif
 }

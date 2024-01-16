@@ -5,11 +5,12 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 
 inline bool pending_packets = false;
 
-bool io_init(const char *nxbx_path, const char *xbe_path);
+bool io_init(std::string nxbx_path, std::string xbe_path);
 void io_stop();
 void submit_io_packet(uint32_t addr);
 void flush_pending_packets();

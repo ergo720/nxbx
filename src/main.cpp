@@ -3,6 +3,7 @@
 // SPDX-FileCopyrightText: 2023 ergo720
 
 #include "init.hpp"
+#include "files.hpp"
 #include <cstring>
 #include <cstdio>
 #include <filesystem>
@@ -105,9 +106,10 @@ main(int argc, char **argv)
 		return 1;
 	}
 
+	std::string nxbx_path = get_nxbx_path();
 	if (kernel.empty()) {
 		// Attempt to find nboxkrnl in the current directory of nxbx
-		std::filesystem::path curr_dir = argv[0];
+		std::filesystem::path curr_dir = nxbx_path;
 		curr_dir = curr_dir.remove_filename();
 		curr_dir /= "nboxkrnl.exe";
 		std::error_code ec;
@@ -119,7 +121,7 @@ main(int argc, char **argv)
 		kernel = curr_dir.string();
 	}
 
-	start_system(kernel, syntax, use_dbg, argv[0], xbe_path.c_str());
+	start_system(kernel, syntax, use_dbg, nxbx_path, xbe_path);
 
 	return 0;
 }
