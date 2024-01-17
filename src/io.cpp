@@ -510,17 +510,20 @@ submit_io_packet(uint32_t addr)
 
 	io_request_type io_type = IO_GET_TYPE(curr_io_request->type);
 	if (io_type == open) {
-		char *path = new char[curr_io_request->size];
+		char *path = new char[curr_io_request->size + 1];
 		mem_read_block_virt(g_cpu, (addr_t)curr_io_request->handle, curr_io_request->size, (uint8_t *)path);
 		curr_io_request->path = path;
+		curr_io_request->path[curr_io_request->size] = '\0';
 	}
 	else if (io_type == create_link) {
-		char *path = new char[curr_io_request->size];
+		char *path = new char[curr_io_request->size + 1];
 		mem_read_block_virt(g_cpu, (addr_t)curr_io_request->handle, curr_io_request->size, (uint8_t *)path);
 		curr_io_request->path = path;
-		char *sym_path = new char[curr_io_request->offset];
+		curr_io_request->path[curr_io_request->size] = '\0';
+		char *sym_path = new char[curr_io_request->offset + 1];
 		mem_read_block_virt(g_cpu, (addr_t)curr_io_request->handle_oc, (uint32_t)curr_io_request->offset, (uint8_t *)sym_path);
 		curr_io_request->sym_path = sym_path;
+		curr_io_request->sym_path[curr_io_request->offset] = '\0';
 	}
 
 	enqueue_io_packet(std::move(curr_io_request));
