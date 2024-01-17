@@ -69,11 +69,12 @@ enum io_status : int32_t {
 };
 
 enum io_request_type : uint32_t {
-	open    = 1 << 28,
-	remove1 = 2 << 28,
-	close   = 3 << 28,
-	read    = 4 << 28,
-	write   = 5 << 28
+	open        = 1 << 28,
+	remove1     = 2 << 28,
+	close       = 3 << 28,
+	read        = 4 << 28,
+	write       = 5 << 28,
+	create_link = 6 << 28
 };
 
 enum io_flags : uint32_t {
@@ -104,12 +105,13 @@ struct io_request {
 	int64_t offset; // file offset from which to start the I/O
 	uint32_t size; // bytes to transfer or size of path for open/create requests
 	union {
-		// virtual address of the data to transfer or file handle for open/create requests
+		// virtual address of the data to transfer, file handle for open/create requests or symbolic link path for create_link requests
 		uint64_t handle_oc;
 		uint32_t address;
+		char *sym_path;
 	};
 	union {
-		// file handle or file path for open/create requests
+		// file handle or file path for open/create/create_link requests
 		uint64_t handle;
 		char *path;
 	};
@@ -134,14 +136,22 @@ struct io_info_block {
 
 io_request::~io_request()
 {
-	if (IO_GET_TYPE(this->type) == open) {
+	io_request_type io_type = IO_GET_TYPE(this->type);
+	if (io_type == open) {
 		delete[] this->path;
 		this->path = nullptr;
+	}
+	else if (io_type == create_link) {
+		delete[] this->path;
+		this->path = nullptr;
+		delete[] this->sym_path;
+		this->sym_path = nullptr;
 	}
 }
 
 static std::deque< std::unique_ptr<io_request>> curr_io_queue;
 static std::vector<std::unique_ptr<io_request>> pending_io_vec;
+static std::vector<std::pair<xbox_string, xbox_string>> sym_links;
 static std::unordered_map<uint64_t, std::unique_ptr<io_info_block>> completed_io_info;
 static std::array<std::unordered_map<uint64_t, std::pair<std::fstream, xbox_string>>, NUM_OF_DEVS> xbox_handle_map;
 static std::mutex queue_mtx;
@@ -189,34 +199,45 @@ static std::filesystem::path
 io_parse_path(io_request *curr_io_request)
 {
 	// NOTE1: Paths from the kernel should have the form "\device\<device name>\<partition number (optional)>\<file name>"
-	// "device name" can be CdRom0, Harddisk0 and "partition number" can be Partition0, Partition1, ...
+	// "device name" can be CdRom0, Harddisk0 and "partition number" can be Partition0, Partition1, ... If they don't start with "Device",
+	// then there must be a symbolic link in the the path
 	// NOTE2: path comparisons are case-insensitive in the xbox kernel, so we need to do the same
-	// TODO: this should also resolve symbolic links
 
 	xbox_string_view path(curr_io_request->path, curr_io_request->size);
-	assert(path.starts_with('\\'));
-	size_t dev_pos = path.find_first_of('\\', 1); // discards "device"
-	assert(dev_pos != xbox_string_view::npos);
-	size_t pos = path.find_first_of('\\', dev_pos + 1);
-	assert(pos != xbox_string_view::npos);
-	xbox_string_view device = path.substr(dev_pos + 1, pos - dev_pos - 1);
-	std::filesystem::path resolved_path;
-	if (device.compare("CdRom0") == 0) {
-		resolved_path = dvd_path;
+	if (!path.starts_with("\\Device")) {
+		for (const auto &[sym, value] : sym_links) {
+			if (path.starts_with(sym)) {
+				std::filesystem::path resolved_path = value + xbox_string(path.substr(sym.size()));
+				resolved_path.make_preferred();
+				return resolved_path;
+			}
+		}
+		return "";
 	}
 	else {
-		resolved_path = hdd_path;
-		size_t pos2 = path.find_first_of('\\', pos + 1);
+		size_t dev_pos = path.find_first_of('\\', 1); // discards "device"
+		assert(dev_pos != xbox_string_view::npos);
+		size_t pos = path.find_first_of('\\', dev_pos + 1);
 		assert(pos != xbox_string_view::npos);
-		xbox_string_view partition = path.substr(pos + 1, pos2 - pos - 1);
-		resolved_path /= partition;
-		pos = pos2;
-	}
-	xbox_string_view name = path.substr(pos + 1);
-	resolved_path /= name;
-	resolved_path.make_preferred();
+		xbox_string_view device = path.substr(dev_pos + 1, pos - dev_pos - 1);
+		std::filesystem::path resolved_path;
+		if (device.compare("CdRom0") == 0) {
+			resolved_path = dvd_path;
+		}
+		else {
+			resolved_path = hdd_path;
+			size_t pos2 = path.find_first_of('\\', pos + 1);
+			assert(pos != xbox_string_view::npos);
+			xbox_string_view partition = path.substr(pos + 1, pos2 - pos - 1);
+			resolved_path /= partition;
+			pos = pos2;
+		}
+		xbox_string_view name = path.substr(pos + 1);
+		resolved_path /= name;
+		resolved_path.make_preferred();
 
-	return resolved_path;
+		return resolved_path;
+	}
 }
 
 static void
@@ -231,6 +252,7 @@ io_thread()
 
 		// Check to see if we need to terminate this thread
 		if (io_running.test() == false) [[unlikely]] {
+			sym_links.clear();
 			pending_packets = false;
 			curr_io_queue.clear();
 			completed_io_info.clear();
@@ -364,6 +386,19 @@ io_thread()
 			completed_io_mtx.unlock();
 			continue;
 		}
+		else if (io_type == create_link) {
+			// Skip the dos device prefix if there is one
+			unsigned offset = 0;
+			if (xbox_string_view(curr_io_request->sym_path).starts_with("\\??")) [[likely]] {
+				offset = 3;
+			}
+			sym_links.push_back(std::make_pair(curr_io_request->sym_path + offset, curr_io_request->path));
+
+			completed_io_mtx.lock();
+			completed_io_info.emplace(curr_io_request->id, std::make_unique<io_info_block>(success, no_data));
+			completed_io_mtx.unlock();
+			continue;
+		}
 
 		auto it = xbox_handle_map[dev].find(curr_io_request->handle);
 		if (it == xbox_handle_map[dev].end()) [[unlikely]] {
@@ -473,10 +508,19 @@ submit_io_packet(uint32_t addr)
 	curr_io_request->size = packed_curr_io_request.size;
 	curr_io_request->handle = packed_curr_io_request.handle_or_path;
 
-	if (IO_GET_TYPE(curr_io_request->type) == open) {
+	io_request_type io_type = IO_GET_TYPE(curr_io_request->type);
+	if (io_type == open) {
 		char *path = new char[curr_io_request->size];
 		mem_read_block_virt(g_cpu, (addr_t)curr_io_request->handle, curr_io_request->size, (uint8_t *)path);
 		curr_io_request->path = path;
+	}
+	else if (io_type == create_link) {
+		char *path = new char[curr_io_request->size];
+		mem_read_block_virt(g_cpu, (addr_t)curr_io_request->handle, curr_io_request->size, (uint8_t *)path);
+		curr_io_request->path = path;
+		char *sym_path = new char[curr_io_request->offset];
+		mem_read_block_virt(g_cpu, (addr_t)curr_io_request->handle_oc, (uint32_t)curr_io_request->offset, (uint8_t *)sym_path);
+		curr_io_request->sym_path = sym_path;
 	}
 
 	enqueue_io_packet(std::move(curr_io_request));

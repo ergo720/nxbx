@@ -112,7 +112,7 @@ get_nxbx_path()
 			path_buff = std::unique_ptr<char[]>(new char[size]);
 			continue;
 		}
-		path_buff[size] = '\0';
+		path_buff[ret] = '\0';
 		return path_buff.get();
 	}
 #elif defined(__linux__)
@@ -124,7 +124,7 @@ get_nxbx_path()
 			path_buff = std::unique_ptr<char[]>(new char[size]);
 			continue;
 		}
-		path_buff[size] = '\0';
+		path_buff[ret] = '\0';
 		return path_buff.get();
 	}
 #else
