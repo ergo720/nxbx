@@ -203,18 +203,7 @@ io_parse_path(io_request *curr_io_request)
 	// then there must be a symbolic link in the the path
 	// NOTE2: path comparisons are case-insensitive in the xbox kernel, so we need to do the same
 
-	xbox_string_view path(curr_io_request->path, curr_io_request->size);
-	if (!path.starts_with("\\Device")) {
-		for (const auto &[sym, value] : sym_links) {
-			if (path.starts_with(sym)) {
-				std::filesystem::path resolved_path = value + xbox_string(path.substr(sym.size()));
-				resolved_path.make_preferred();
-				return resolved_path;
-			}
-		}
-		return "";
-	}
-	else {
+	const auto &resolve_path = [](xbox_string_view path) {
 		size_t dev_pos = path.find_first_of('\\', 1); // discards "device"
 		assert(dev_pos != xbox_string_view::npos);
 		size_t pos = path.find_first_of('\\', dev_pos + 1);
@@ -237,6 +226,24 @@ io_parse_path(io_request *curr_io_request)
 		resolved_path.make_preferred();
 
 		return resolved_path;
+		};
+
+	xbox_string_view path(curr_io_request->path, curr_io_request->size);
+	if (!path.starts_with("\\Device")) {
+		for (const auto &[sym, value] : sym_links) {
+			if (path.starts_with(sym)) {
+				unsigned offset = 0;
+				if ((value[value.size() - 1] == '\\') && (path[sym.size()] == '\\')) {
+					offset = 1;
+				}
+				xbox_string full_path = value + xbox_string(path.substr(sym.size() + offset));
+				return resolve_path(full_path);
+			}
+		}
+		return "";
+	}
+	else {
+		return resolve_path(path);
 	}
 }
 
@@ -390,7 +397,7 @@ io_thread()
 			// Skip the dos device prefix if there is one
 			unsigned offset = 0;
 			if (xbox_string_view(curr_io_request->sym_path).starts_with("\\??")) [[likely]] {
-				offset = 3;
+				offset = 4;
 			}
 			sym_links.push_back(std::make_pair(curr_io_request->sym_path + offset, curr_io_request->path));
 
