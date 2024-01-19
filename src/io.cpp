@@ -633,11 +633,7 @@ io_init(std::string nxbx_path, std::string xbe_path)
 			}
 		}
 		xbox_xbe_path = traits_cast<xbox_char_traits, char, std::char_traits<char>>(xbox_hdd_dir + xbox_remaining_hdd_dir + xbe_name.c_str());
-		std::error_code ec;
-		dvd_path = std::filesystem::temp_directory_path(ec);
-		if (dvd_path.string() == "") {
-			dvd_path = &std::filesystem::path::preferred_separator;
-		}
+		dvd_path = "";
 	}
 
 	if (!io_open_special_files()) {
