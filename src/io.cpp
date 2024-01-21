@@ -102,7 +102,10 @@ struct io_request {
 	~io_request();
 	uint64_t id; // unique id to identify this request
 	io_request_type type; // type of request and flags
-	int64_t offset; // file offset from which to start the I/O
+	union {
+		int64_t offset; // file offset from which to start the I/O
+		uint32_t initial_size; // initial file size for create requests only
+	};
 	uint32_t size; // bytes to transfer or size of path for open/create requests
 	union {
 		// virtual address of the data to transfer, file handle for open/create requests or symbolic link path for create_link requests
@@ -122,17 +125,19 @@ struct io_request {
 struct packed_io_request {
 	uint64_t id;
 	io_request_type type;
-	int64_t offset;
+	int64_t offset_or_size;
 	uint32_t size;
 	uint64_t handle_or_address;
 	uint64_t handle_or_path;
 };
-#pragma pack()
 
 struct io_info_block {
 	io_status status;
 	io_info info;
+	uint64_t info2_or_id; // extra info or id of the io request to query
+	uint32_t ready; // set to 0 by the guest, then set to 1 by the host when the io request is complete
 };
+#pragma pack()
 
 io_request::~io_request()
 {
@@ -288,7 +293,7 @@ io_thread()
 			// This code opens/creates the file according to the CreateDisposition parameter used by NtCreate/OpenFile
 
 			std::filesystem::path resolved_path = io_parse_path(curr_io_request.get());
-			std::unique_ptr<io_info_block> io_result = std::make_unique<io_info_block>(error, no_data);
+			std::unique_ptr<io_info_block> io_result = std::make_unique<io_info_block>(error, no_data, 0);
 			uint32_t disposition = IO_GET_DISPOSITION(curr_io_request->type);
 			uint32_t flags = IO_GET_FLAGS(curr_io_request->type);
 			bool host_is_directory, is_directory = flags & io_flags::is_directory;
@@ -331,7 +336,7 @@ io_thread()
 						}
 						else {
 							// Open file
-							if (auto opt = open_file(resolved_path); opt) {
+							if (auto opt = open_file(resolved_path, &io_result->info2_or_id); opt) {
 								io_result->info = opened;
 								add_to_map(opt, &io_result);
 							}
@@ -350,7 +355,7 @@ io_thread()
 						}
 						else {
 							// Create file
-							if (auto opt = create_file(resolved_path); opt) {
+							if (auto opt = create_file(resolved_path, curr_io_request->initial_size); opt) {
 								io_result->info = (disposition == IO_SUPERSEDE) ? superseded : overwritten;
 								add_to_map(opt, &io_result);
 							}
@@ -374,7 +379,7 @@ io_thread()
 					}
 					else {
 						// Create file
-						if (auto opt = create_file(resolved_path); opt) {
+						if (auto opt = create_file(resolved_path, curr_io_request->initial_size); opt) {
 							io_result->info = created;
 							add_to_map(opt, &io_result);
 						}
@@ -461,9 +466,13 @@ io_thread()
 			}
 			mem_read_block_virt(g_cpu, curr_io_request->address, curr_io_request->size, reinterpret_cast<uint8_t *>(io_buffer.data()));
 			fs->write(io_buffer.data(), curr_io_request->size);
-			if (fs->good()) {
+			if (!fs->good()) {
 				io_result->status = error;
+				io_result->info = no_data;
 				fs->clear();
+			}
+			else {
+				io_result->info = static_cast<io_info>(curr_io_request->size);
 			}
 			break;
 
@@ -511,7 +520,7 @@ submit_io_packet(uint32_t addr)
 	curr_io_request->id = packed_curr_io_request.id;
 	curr_io_request->type = packed_curr_io_request.type;
 	curr_io_request->handle_oc = packed_curr_io_request.handle_or_address;
-	curr_io_request->offset = packed_curr_io_request.offset;
+	curr_io_request->offset = packed_curr_io_request.offset_or_size;
 	curr_io_request->size = packed_curr_io_request.size;
 	curr_io_request->handle = packed_curr_io_request.handle_or_path;
 
@@ -555,27 +564,21 @@ flush_pending_packets()
 	}
 }
 
-uint32_t
-query_io_packet(uint64_t id, bool query_status)
+void
+query_io_packet(uint32_t addr)
 {
-	static io_info_block block;
-
-	if (query_status) {
-		block.status = pending;
-		if (completed_io_mtx.try_lock()) { // don't wait if the I/O thread is currently using the map
-			auto it = completed_io_info.find(id);
-			if (it != completed_io_info.end()) {
-				block.status = it->second->status;
-				block.info = it->second->info;
-				completed_io_info.erase(it);
-			}
-			completed_io_mtx.unlock();
+	if (completed_io_mtx.try_lock()) { // don't wait if the I/O thread is currently using the map
+		io_info_block block;
+		mem_read_block_virt(g_cpu, addr, sizeof(io_info_block), (uint8_t *)&block);
+		auto it = completed_io_info.find(block.info2_or_id);
+		if (it != completed_io_info.end()) {
+			block = *it->second.get();
+			block.ready = 1;
+			mem_write_block_virt(g_cpu, addr, sizeof(io_info_block), (uint8_t *)&block);
+			completed_io_info.erase(it);
 		}
-
-		return block.status;
+		completed_io_mtx.unlock();
 	}
-
-	return block.info;
 }
 
 bool

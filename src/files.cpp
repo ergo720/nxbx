@@ -90,10 +90,50 @@ create_file(std::filesystem::path path)
 }
 
 std::optional<std::fstream>
+create_file(std::filesystem::path path, uint64_t initial_size)
+{
+	if (auto opt = create_file(path)) {
+		if (initial_size) {
+			try {
+				std::filesystem::resize_file(path, initial_size);
+			}
+			catch (const std::filesystem::filesystem_error &e) {
+				logger(log_lv::info, "Failed to set the initial file size of path %s, the error was %s", path.string().c_str(), e.what());
+			}
+			catch (const std::bad_alloc &e) {
+				logger(log_lv::info, "Failed to set the initial file size of path %s, the error was %s", path.string().c_str(), e.what());
+			}
+		}
+		return opt;
+	}
+	return std::nullopt;
+}
+
+std::optional<std::fstream>
 open_file(std::filesystem::path path)
 {
 	std::fstream fs(path, std::ios_base::in | std::ios_base::out | std::ios_base::binary);
 	return fs.is_open() ? std::make_optional<std::fstream>(std::move(fs)) : std::nullopt;
+}
+
+std::optional<std::fstream>
+open_file(std::filesystem::path path, std::uintmax_t *size)
+{
+	if (auto opt = open_file(path)) {
+		try {
+			*size = std::filesystem::file_size(path);
+		}
+		catch (const std::filesystem::filesystem_error &e) {
+			*size = 0;
+			logger(log_lv::info, "Failed to determine the file size of path %s, the error was %s", path.string().c_str(), e.what());
+		}
+		catch (const std::bad_alloc &e) {
+			*size = 0;
+			logger(log_lv::info, "Failed to determine the file size of path %s, the error was %s", path.string().c_str(), e.what());
+		}
+		return opt;
+	}
+	return std::nullopt;
 }
 
 std::string

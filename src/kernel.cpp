@@ -11,7 +11,7 @@
 #include <assert.h>
 
 
-static uint64_t io_id, lost_clock_increment, last_us, curr_us;
+static uint64_t lost_clock_increment, last_us, curr_us;
 
 static uint64_t
 calculate_kernel_clock_increment()
@@ -52,13 +52,6 @@ nboxkrnl_read_handler(addr_t addr, void *opaque)
 
 	case IO_CHECK_ENQUEUE:
 		return pending_packets;
-
-	case IO_QUERY_STATUS:
-		// The following two are read in succession with interrupts disabled
-		return query_io_packet(io_id, true);
-
-	case IO_QUERY_INFO:
-		return query_io_packet(io_id, false);
 
 	case XE_DVD_XBE_LENGTH:
 		return (uint32_t)xbox_xbe_path.size();
@@ -104,13 +97,8 @@ nboxkrnl_write_handler(addr_t addr, const uint32_t value, void *opaque)
 		flush_pending_packets();
 		break;
 
-	case IO_SET_ID_LOW:
-		// This and the following are set together with IO_QUERY_STATUS and IO_QUERY_INFO with interrupts disabled
-		io_id = value;
-		break;
-
-	case IO_SET_ID_HIGH:
-		io_id |= (static_cast<uint64_t>(value) << 32);
+	case IO_QUERY:
+		query_io_packet(value);
 		break;
 
 	case XE_DVD_XBE_ADDR:

@@ -14,4 +14,4 @@ bool io_init(std::string nxbx_path, std::string xbe_path);
 void io_stop();
 void submit_io_packet(uint32_t addr);
 void flush_pending_packets();
-uint32_t query_io_packet(uint64_t id, bool query_status);
+void query_io_packet(uint32_t addr);
