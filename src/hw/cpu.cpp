@@ -130,7 +130,7 @@ cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 	}
 
 	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x70, 2, true, io_handlers_t{ .fnr8 = cmos_read_handler, .fnw8 = cmos_write_handler }, nullptr))) {
-		logger(log_lv::error, "Failed to initialize master pic I/O ports!");
+		logger(log_lv::error, "Failed to initialize cmos I/O ports!");
 		return false;
 	}
 
