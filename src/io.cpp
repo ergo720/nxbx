@@ -32,7 +32,7 @@
 #define NUM_OF_DEVS    10
 
 // Special internal handles used by the kernel
-#define XBE_HANDLE        DEV_CDROM
+#define UNUSED_HANDLE
 #define EEPROM_HANDLE     DEV_EEPROM
 #define PARTITION0_HANDLE DEV_PARTITION0
 #define PARTITION1_HANDLE DEV_PARTITION1
