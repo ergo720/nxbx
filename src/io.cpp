@@ -271,9 +271,10 @@ io_thread()
 			bool host_is_directory, is_directory = flags & io_flags::is_directory;
 
 			const auto add_to_map = [&curr_io_request, &resolved_path, dev](auto &&opt, io_info_block *io_result) {
+				// NOTE: this insertion will fail when the guest creates a new handle to the same file. This, because it will pass the same host handle, and std::unordered_map
+				// doesn't allow duplicated keys. This is ok though, because we can reuse the same std::fstream for the same file and it will have the same xbox_string path too
 				auto pair = xbox_handle_map[dev].emplace(curr_io_request->handle_oc, std::make_pair(std::move(*opt),
 					traits_cast<xbox_char_traits, char, std::char_traits<char>>(resolved_path.string())));
-				assert(pair.second == true);
 				io_result->status = success;
 				};
 			const auto check_dir_flags = [flags](bool host_is_directory, io_info_block *io_result) -> bool {
@@ -375,7 +376,7 @@ io_thread()
 		io_info_block io_result(success, no_data);
 		auto it = xbox_handle_map[dev].find(curr_io_request->handle);
 		if (it == xbox_handle_map[dev].end()) [[unlikely]] {
-			logger(log_lv::warn, "Xbox handle %" PRIu32 " not found", it->first); // this should not happen...
+			logger(log_lv::warn, "Xbox handle %" PRIu32 " not found", curr_io_request->handle); // this should not happen...
 			io_result.status = error;
 			completed_io_mtx.lock();
 			completed_io_info.emplace(curr_io_request->id, std::move(curr_io_request));
