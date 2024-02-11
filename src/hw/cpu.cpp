@@ -6,6 +6,7 @@
 #include "pic.hpp"
 #include "pit.hpp"
 #include "cmos.hpp"
+#include "pci.hpp"
 #include "../logger.hpp"
 #include "../kernel.hpp"
 #include "../pe.hpp"
@@ -145,6 +146,11 @@ cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 	}
 
 	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x40, 4, true, io_handlers_t{ .fnw8 = pit_write_handler }, nullptr))) {
+		return false;
+	}
+
+	io_handlers_t pci_handlers{ .fnr8 = pci_read, .fnr16 = pci_read16, .fnr32 = pci_read32, .fnw8 = pci_write, .fnw16 = pci_write16, .fnw32 = pci_write32 };
+	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0xCF8, 8, true, pci_handlers, nullptr))) {
 		return false;
 	}
 

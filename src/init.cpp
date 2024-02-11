@@ -9,6 +9,7 @@
 #include "hw/pic.hpp"
 #include "hw/pit.hpp"
 #include "hw/cmos.hpp"
+#include "hw/pci.hpp"
 #include "../clock.hpp"
 
 
@@ -39,6 +40,7 @@ start_system(std::string kernel, disas_syntax syntax, uint32_t use_dbg, std::str
 			pic_init();
 			pit_init();
 			cmos_init();
+			pci_init();
 
 			cpu_start();
 		}
@@ -46,4 +48,5 @@ start_system(std::string kernel, disas_syntax syntax, uint32_t use_dbg, std::str
 
 	io_stop();
 	cpu_cleanup();
+	pci_cleanup();
 }

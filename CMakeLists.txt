@@ -55,6 +55,7 @@ set(HEADERS
  "${NXBX_ROOT_DIR}/src/hw/cmos.hpp"
  "${NXBX_ROOT_DIR}/src/hw/cpu.hpp"
  "${NXBX_ROOT_DIR}/src/hw/eeprom.hpp"
+ "${NXBX_ROOT_DIR}/src/hw/pci.hpp"
  "${NXBX_ROOT_DIR}/src/hw/pic.hpp"
  "${NXBX_ROOT_DIR}/src/hw/pit.hpp"
 )
@@ -72,6 +73,7 @@ set(SOURCES
  "${NXBX_ROOT_DIR}/src/hw/cmos.cpp"
  "${NXBX_ROOT_DIR}/src/hw/cpu.cpp"
  "${NXBX_ROOT_DIR}/src/hw/eeprom.cpp"
+ "${NXBX_ROOT_DIR}/src/hw/pci.cpp"
  "${NXBX_ROOT_DIR}/src/hw/pic.cpp"
  "${NXBX_ROOT_DIR}/src/hw/pit.cpp"
 )
