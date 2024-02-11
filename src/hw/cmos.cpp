@@ -279,6 +279,10 @@ cmos_reset()
 void
 cmos_init()
 {
+	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x70, 2, true, io_handlers_t{ .fnr8 = cmos_read_handler, .fnw8 = cmos_write_handler }, nullptr))) {
+		throw nxbx_exp_abort("Failed to initialize cmos I/O ports!");
+	}
+
 	g_cmos.ram[0x0A] = 0x26;
 	g_cmos.ram[0x0B] = 0x02;
 	g_cmos.ram[0x0C] = 0x00;

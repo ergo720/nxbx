@@ -545,18 +545,18 @@ io_init(std::string nxbx_path, std::string xbe_path)
 	hdd_dir /= "Harddisk/";
 	hdd_dir.make_preferred();
 	if (!::create_directory(hdd_dir)) {
-		return false;
+		throw nxbx_exp_abort("");
 	}
 	for (unsigned i = 0; i < XBOX_NUM_OF_PARTITIONS; ++i) {
 		std::filesystem::path curr_partition_dir = hdd_dir / ("Partition" + std::to_string(i));
 		curr_partition_dir.make_preferred();
 		if (i) {
 			if (!::create_directory(curr_partition_dir)) {
-				return false;
+				throw nxbx_exp_abort("");
 			}
 		}
 		if (!create_partition_metadata_file(curr_partition_dir, i)) {
-			return false;
+			throw nxbx_exp_abort("Failed to create partition metadata bin files");
 		}
 	}
 	std::filesystem::path eeprom_dir = curr_dir;
@@ -564,11 +564,11 @@ io_init(std::string nxbx_path, std::string xbe_path)
 	eeprom_dir.make_preferred();
 	if (!file_exists(eeprom_dir)) {
 		if (auto opt = create_file(eeprom_dir); !opt) {
-			return false;
+			throw nxbx_exp_abort("Failed to create eeprom file");
 		}
 		else {
 			if (!gen_eeprom(std::move(opt.value()))) {
-				return false;
+				throw nxbx_exp_abort("Failed to update eeprom file");
 			}
 		}
 	}
@@ -595,7 +595,7 @@ io_init(std::string nxbx_path, std::string xbe_path)
 	}
 
 	if (!io_open_special_files()) {
-		return false;
+		throw nxbx_exp_abort("Failed to open partition metadata bin files");
 	}
 
 	std::thread(io_thread).detach();

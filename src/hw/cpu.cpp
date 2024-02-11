@@ -6,7 +6,6 @@
 #include "pic.hpp"
 #include "pit.hpp"
 #include "cmos.hpp"
-#include "pci.hpp"
 #include "../logger.hpp"
 #include "../kernel.hpp"
 #include "../pe.hpp"
@@ -45,7 +44,7 @@ cpu_reset()
 	// TODO: lib86cpu doesn't support resetting the cpu yet
 }
 
-bool
+void
 cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 {
 	// XXX: xbox memory hard coded to 64 MiB for now
@@ -54,8 +53,7 @@ cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 	// Load the nboxkrnl exe file
 	std::ifstream ifs(kernel.c_str(), std::ios_base::in | std::ios_base::binary);
 	if (!ifs.is_open()) {
-		logger(log_lv::error, "Could not open binary file \"%s\"!", kernel.c_str());
-		return false;
+		throw nxbx_exp_abort("Could not open kernel file");
 	}
 	ifs.seekg(0, ifs.end);
 	std::streampos length = ifs.tellg();
@@ -63,18 +61,15 @@ cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 
 	// Sanity checks on the kernel exe size
 	if (length == 0) {
-		logger(log_lv::error, "Size of binary file \"%s\" detected as zero!", kernel.c_str());
-		return false;
+		throw nxbx_exp_abort("Size of kernel file detected as zero");
 	}
 	else if (length > ramsize) {
-		logger(log_lv::error, "Binary file \"%s\" doesn't fit inside RAM!", kernel.c_str());
-		return false;
+		throw nxbx_exp_abort("Kernel file doesn't fit inside RAM");
 	}
 
 	std::unique_ptr<char[]> krnl_buff{ new char[static_cast<unsigned>(length)] };
 	if (!krnl_buff) {
-		logger(log_lv::error, "Could not allocate kernel buffer!");
-		return false;
+		throw nxbx_exp_abort("Could not allocate kernel buffer");
 	}
 	ifs.read(krnl_buff.get(), length);
 	ifs.close();
@@ -82,8 +77,7 @@ cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 	// Sanity checks on the kernel exe file
 	PIMAGE_DOS_HEADER dosHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(krnl_buff.get());
 	if (dosHeader->e_magic != IMAGE_DOS_SIGNATURE) {
-		logger(log_lv::error, "Kernel image has an invalid dos header signature!");
-		return false;
+		throw nxbx_exp_abort("Kernel image has an invalid dos header signature");
 	}
 
 	PIMAGE_NT_HEADERS32 peHeader = reinterpret_cast<PIMAGE_NT_HEADERS32>(reinterpret_cast<uint8_t *>(dosHeader) + dosHeader->e_lfanew);
@@ -91,19 +85,16 @@ cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 		peHeader->FileHeader.Machine != IMAGE_FILE_MACHINE_I386 ||
 		peHeader->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR32_MAGIC ||
 		peHeader->OptionalHeader.Subsystem != IMAGE_SUBSYSTEM_NATIVE) {
-		std::printf("Kernel image has an invalid nt header signature!\n");
-		return false;
+		throw nxbx_exp_abort("Kernel image has an invalid nt header signature");
 	}
 
 	if (peHeader->OptionalHeader.ImageBase != KERNEL_BASE) {
-		logger(log_lv::error, "Kernel image has an incorrect image base address!");
-		return false;
+		throw nxbx_exp_abort("Kernel image has an incorrect image base address");
 	}
 
 	// Init lib86cpu
 	if (!LC86_SUCCESS(cpu_new(ramsize, g_cpu, pic_get_interrupt, "nboxkrnl"))) {
-		logger(log_lv::error, "Failed to create cpu instance!");
-		return false;
+		throw nxbx_exp_abort("Failed to create cpu instance");
 	}
 
 	register_log_func(cpu_logger);
@@ -111,47 +102,15 @@ cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 	cpu_set_flags(g_cpu, static_cast<uint32_t>(syntax) | (use_dbg ? CPU_DBG_PRESENT : 0));
 
 	if (!LC86_SUCCESS(mem_init_region_ram(g_cpu, 0, ramsize))) {
-		logger(log_lv::error, "Failed to initialize ram memory!");
-		return false;
+		throw nxbx_exp_abort("Failed to initialize ram memory");
 	}
 
 	if (!LC86_SUCCESS(mem_init_region_alias(g_cpu, CONTIGUOUS_MEMORY_BASE, 0, ramsize))) {
-		logger(log_lv::error, "Failed to initialize contiguous memory!");
-		return false;
+		throw nxbx_exp_abort("Failed to initialize contiguous memory");
 	}
 
 	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, KERNEL_IO_BASE, KERNEL_IO_SIZE, true, io_handlers_t{ .fnr32 = nboxkrnl_read_handler, .fnw32 = nboxkrnl_write_handler }, g_cpu))) {
-		logger(log_lv::error, "Failed to initialize host communication I/O ports!");
-		return false;
-	}
-
-	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x20, 2, true, io_handlers_t{ .fnr8 = pic_read_handler, .fnw8 = pic_write_handler }, &g_pic[0]))) {
-		logger(log_lv::error, "Failed to initialize master pic I/O ports!");
-		return false;
-	}
-
-	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x70, 2, true, io_handlers_t{ .fnr8 = cmos_read_handler, .fnw8 = cmos_write_handler }, nullptr))) {
-		logger(log_lv::error, "Failed to initialize cmos I/O ports!");
-		return false;
-	}
-
-	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0xA0, 2, true, io_handlers_t{ .fnr8 = pic_read_handler, .fnw8 = pic_write_handler }, &g_pic[1]))) {
-		logger(log_lv::error, "Failed to initialize slave pic I/O ports!");
-		return false;
-	}
-
-	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x4D0, 2, true, io_handlers_t{ .fnr8 = pic_elcr_read_handler, .fnw8 = pic_elcr_write_handler }, g_pic))) {
-		logger(log_lv::error, "Failed to initialize elcr I/O ports!");
-		return false;
-	}
-
-	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x40, 4, true, io_handlers_t{ .fnw8 = pit_write_handler }, nullptr))) {
-		return false;
-	}
-
-	io_handlers_t pci_handlers{ .fnr8 = pci_read, .fnr16 = pci_read16, .fnr32 = pci_read32, .fnw8 = pci_write, .fnw16 = pci_write16, .fnw32 = pci_write32 };
-	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0xCF8, 8, true, pci_handlers, nullptr))) {
-		return false;
+		throw nxbx_exp_abort("Failed to initialize kernel communication I/O ports");
 	}
 
 	add_reset_func(cpu_reset);
@@ -209,8 +168,6 @@ cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 
 	// Pass eeprom and certificate keys on the stack (we use dummy all-zero keys)
 	mem_fill_block_virt(g_cpu, 0x80400000, 16 * 2, 0);
-
-	return true;
 }
 
 static uint64_t

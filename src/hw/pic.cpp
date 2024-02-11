@@ -312,6 +312,18 @@ pic_reset()
 void
 pic_init()
 {
+	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x20, 2, true, io_handlers_t{ .fnr8 = pic_read_handler, .fnw8 = pic_write_handler }, &g_pic[0]))) {
+		throw nxbx_exp_abort("Failed to initialize master pic I/O ports");
+	}
+
+	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0xA0, 2, true, io_handlers_t{ .fnr8 = pic_read_handler, .fnw8 = pic_write_handler }, &g_pic[1]))) {
+		throw nxbx_exp_abort("Failed to initialize slave pic I/O ports");
+	}
+
+	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x4D0, 2, true, io_handlers_t{ .fnr8 = pic_elcr_read_handler, .fnw8 = pic_elcr_write_handler }, g_pic))) {
+		throw nxbx_exp_abort("Failed to initialize elcr I/O ports");
+	}
+
 	add_reset_func(pic_reset);
 	pic_reset();
 }

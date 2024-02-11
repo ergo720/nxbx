@@ -32,18 +32,25 @@ add_reset_func(hw_reset_f reset_f)
 void
 start_system(std::string kernel, disas_syntax syntax, uint32_t use_dbg, std::string nxbx_path, std::string xbe_path)
 {
-	if (cpu_init(kernel, syntax, use_dbg)) {
-		if (io_init(nxbx_path, xbe_path)) {
+	try {
+		cpu_init(kernel, syntax, use_dbg);
+		io_init(nxbx_path, xbe_path);
+		timer_init();
+		pic_init();
+		pit_init();
+		cmos_init();
+		pci_init();
 
-			timer_init();
-
-			pic_init();
-			pit_init();
-			cmos_init();
-			pci_init();
-
-			cpu_start();
+		cpu_start();
+	}
+	catch (nxbx_exp_abort exp) {
+		if (exp.has_extra_info()) {
+			logger(log_lv::highest, "Failed to initialize the system, the error was: \"%s\"", exp.what());
 		}
+		else {
+			logger(log_lv::highest, "Failed to initialize the system, terminating the emulation");
+		}
+		return;
 	}
 
 	io_stop();

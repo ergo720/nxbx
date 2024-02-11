@@ -143,6 +143,10 @@ pit_reset()
 void
 pit_init()
 {
+	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x40, 4, true, io_handlers_t{ .fnw8 = pit_write_handler }, nullptr))) {
+		throw nxbx_exp_abort("Failed to initialize pit I/O ports");
+	}
+
 	add_reset_func(pit_reset);
 	pit_reset();
 }

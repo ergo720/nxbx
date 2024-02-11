@@ -219,6 +219,11 @@ pci_reset()
 void
 pci_init()
 {
+	io_handlers_t pci_handlers{ .fnr8 = pci_read, .fnr16 = pci_read16, .fnr32 = pci_read32, .fnw8 = pci_write, .fnw16 = pci_write16, .fnw32 = pci_write32 };
+	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0xCF8, 8, true, pci_handlers, nullptr))) {
+		throw nxbx_exp_abort("Failed to initialize pci I/O ports");
+	}
+
 	add_reset_func(pci_reset);
 	pci_reset();
 }
