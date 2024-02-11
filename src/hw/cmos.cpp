@@ -55,14 +55,12 @@ cmos_read_handler(uint32_t port, void *opaque)
 			tm local_time;
 #ifdef _WIN32
 			if (localtime_s(&local_time, &g_cmos.sys_time)) {
-				logger("Failed to read CMOS time");
-				cpu_exit(g_cpu);
+				nxbx_fatal("Failed to read CMOS time");
 				return 0xFF;
 			}
 #else
 			if (localtime_s(&g_cmos.sys_time, &local_time) == nullptr) {
-				logger("Failed to read CMOS time");
-				cpu_exit(g_cpu);
+				nxbx_fatal("Failed to read CMOS time");
 				return 0xFF;
 			}
 #endif
@@ -144,14 +142,12 @@ cmos_write_handler(uint32_t port, const uint8_t data, void *opaque)
 			tm local_time;
 #ifdef _WIN32
 			if (localtime_s(&local_time, &g_cmos.sys_time)) {
-				logger("Failed to update CMOS time");
-				cpu_exit(g_cpu);
+				nxbx_fatal("Failed to update CMOS time");
 				return;
 			}
 #else
 			if (localtime_s(&g_cmos.sys_time, &local_time) == nullptr) {
-				logger("Failed to update CMOS time");
-				cpu_exit(g_cpu);
+				nxbx_fatal("Failed to update CMOS time");
 				return;
 			}
 #endif
@@ -214,8 +210,7 @@ cmos_write_handler(uint32_t port, const uint8_t data, void *opaque)
 
 			g_cmos.sys_time = std::mktime(&local_time);
 			if (g_cmos.sys_time == -1) {
-				logger("Failed to update CMOS time");
-				cpu_exit(g_cpu);
+				nxbx_fatal("Failed to update CMOS time");
 				return;
 			}
 		}
@@ -228,8 +223,7 @@ cmos_write_handler(uint32_t port, const uint8_t data, void *opaque)
 
 			case 0xB:
 				if (data1 & 0x78) {
-					logger(log_lv::error, "CMOS interrupts and square wave outputs are not supported");
-					cpu_exit(g_cpu);
+					nxbx_fatal("CMOS interrupts and square wave outputs are not supported");
 				}
 				else if (data1 & 0x80) {
 					g_cmos.ram[0xA] &= ~0x80; // clears UIP

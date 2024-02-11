@@ -14,3 +14,6 @@ enum class disas_syntax : uint32_t {
 	masm,
 	intel
 };
+
+
+void nxbx_fatal(const char *msg, ...);

@@ -172,8 +172,7 @@ pic_write_ocw(pic_t *pic, unsigned idx, uint8_t value)
 				}
 			}
 			else {
-				logger(log_lv::error, "Automatic rotation of IRQ priorities is not supported");
-				cpu_exit(g_cpu);
+				nxbx_fatal("Automatic rotation of IRQ priorities is not supported");
 			}
 		}
 	}
@@ -184,8 +183,7 @@ pic_write_ocw(pic_t *pic, unsigned idx, uint8_t value)
 			pic->read_isr = value & 1;
 		}
 		else if (value & 0x44) {
-			logger(log_lv::error, "Unknown feature: %02X", value);
-			cpu_exit(g_cpu);
+			nxbx_fatal("Unknown feature: %02X", value);
 		}
 	}
 	}
@@ -198,12 +196,10 @@ pic_write_icw(pic_t *pic, unsigned idx, uint8_t value)
 	{
 	case 1:
 		if ((value & 1) == 0) {
-			logger(log_lv::error, "Configuration with no icw4 is not supported");
-			cpu_exit(g_cpu);
+			nxbx_fatal("Configuration with no icw4 is not supported");
 		}
 		else if (value & 2) {
-			logger(log_lv::error, "Single pic configuration is not supported");
-			cpu_exit(g_cpu);
+			nxbx_fatal("Single pic configuration is not supported");
 		}
 
 		pic->in_init = 1;
@@ -225,20 +221,16 @@ pic_write_icw(pic_t *pic, unsigned idx, uint8_t value)
 
 	case 4:
 		if ((value & 1) == 0) {
-			logger(log_lv::error, "MCS-80/85 mode is not supported");
-			cpu_exit(g_cpu);
+			nxbx_fatal("MCS-80/85 mode is not supported");
 		}
 		else if (value & 2) {
-			logger(log_lv::error, "Auto-eoi mode is not supported");
-			cpu_exit(g_cpu);
+			nxbx_fatal("Auto-eoi mode is not supported");
 		}
 		else if (value & 8) {
-			logger(log_lv::error, "Buffered mode is not supported");
-			cpu_exit(g_cpu);
+			nxbx_fatal("Buffered mode is not supported");
 		}
 		else if (value & 16) {
-			logger(log_lv::error, "Special fully nested mode is not supported");
-			cpu_exit(g_cpu);
+			nxbx_fatal("Special fully nested mode is not supported");
 		}
 
 		pic->in_init = 0;
@@ -246,8 +238,7 @@ pic_write_icw(pic_t *pic, unsigned idx, uint8_t value)
 		break;
 
 	default:
-		logger(log_lv::error, "Unknown icw specified, idx was %d", idx);
-		cpu_exit(g_cpu);
+		nxbx_fatal("Unknown icw specified, idx was %d", idx);
 	}
 }
 

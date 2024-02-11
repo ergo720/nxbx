@@ -67,6 +67,7 @@ set(SOURCES
  "${NXBX_ROOT_DIR}/src/io.cpp"
  "${NXBX_ROOT_DIR}/src/kernel.cpp"
  "${NXBX_ROOT_DIR}/src/logger.cpp"
+ "${NXBX_ROOT_DIR}/src/nxbx.cpp"
  "${NXBX_ROOT_DIR}/src/main.cpp"
  "${NXBX_ROOT_DIR}/src/util.cpp"
  "${NXBX_ROOT_DIR}/src/xpartition.cpp"
