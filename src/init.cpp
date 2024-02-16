@@ -10,6 +10,7 @@
 #include "hw/pit.hpp"
 #include "hw/cmos.hpp"
 #include "hw/pci.hpp"
+#include "hw/video/gpu/nv2a.hpp"
 #include "../clock.hpp"
 
 
@@ -40,6 +41,7 @@ start_system(std::string kernel, disas_syntax syntax, uint32_t use_dbg, std::str
 		pit_init();
 		cmos_init();
 		pci_init();
+		nv2a_init();
 
 		cpu_start();
 	}

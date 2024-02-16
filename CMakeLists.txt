@@ -58,6 +58,7 @@ set(HEADERS
  "${NXBX_ROOT_DIR}/src/hw/pci.hpp"
  "${NXBX_ROOT_DIR}/src/hw/pic.hpp"
  "${NXBX_ROOT_DIR}/src/hw/pit.hpp"
+ "${NXBX_ROOT_DIR}/src/hw/video/gpu/nv2a.hpp"
 )
 
 set(SOURCES
@@ -77,6 +78,7 @@ set(SOURCES
  "${NXBX_ROOT_DIR}/src/hw/pci.cpp"
  "${NXBX_ROOT_DIR}/src/hw/pic.cpp"
  "${NXBX_ROOT_DIR}/src/hw/pit.cpp"
+ "${NXBX_ROOT_DIR}/src/hw/video/gpu/nv2a.cpp"
 )
 
 source_group(TREE ${NXBX_ROOT_DIR} PREFIX header FILES ${HEADERS})
