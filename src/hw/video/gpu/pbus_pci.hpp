@@ -4,7 +4,5 @@
 
 #pragma once
 
-#define NV2A_REGISTER_BASE 0xFD000000
 
-
-void nv2a_init();
+void pbus_pci_init();
