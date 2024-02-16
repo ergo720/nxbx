@@ -4,11 +4,13 @@
 
 #include "pbus_pci.hpp"
 #include "pfb.hpp"
+#include "pmc.hpp"
 
 
 void
 nv2a_init()
 {
+	pmc_init();
 	pbus_pci_init();
 	pfb_init();
 }
