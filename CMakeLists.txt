@@ -60,6 +60,7 @@ set(HEADERS
  "${NXBX_ROOT_DIR}/src/hw/pit.hpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/nv2a.hpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/pbus_pci.hpp"
+ "${NXBX_ROOT_DIR}/src/hw/video/gpu/pcrtc.hpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/pfb.hpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/pmc.hpp"
 )
@@ -83,6 +84,7 @@ set(SOURCES
  "${NXBX_ROOT_DIR}/src/hw/pit.cpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/nv2a.cpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/pbus_pci.cpp"
+ "${NXBX_ROOT_DIR}/src/hw/video/gpu/pcrtc.cpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/pfb.cpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/pmc.cpp"
 )

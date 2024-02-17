@@ -7,13 +7,11 @@
 #include <cstdint>
 
 
-struct pmc_t {
-	uint32_t endianness;
-	// Pending interrupts of all engines
+struct pcrtc_t {
+	// Pending vblank interrupt. Writing a 0 has no effect, and writing a 1 clears the interrupt
 	uint32_t int_status;
-	// Enable/disable hw/sw interrupts
+	// Enable/disable vblank interrupt
 	uint32_t int_enabled;
 };
 
-void pmc_init();
-void pmc_update_irq();
+void pcrtc_init();
