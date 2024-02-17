@@ -10,9 +10,9 @@
 #define NV_PMC_BASE (NV2A_REGISTER_BASE + NV_PMC)
 #define NV_PMC_SIZE 0x1000
 
-#define NV_PMC_BOOT_0 0x00000000
+#define NV_PMC_BOOT_0 (NV2A_REGISTER_BASE + 0x00000000)
 #define NV_PMC_BOOT_0_ID_NV2A_A3_DEVID0 0x02A000A3
-#define NV_PMC_BOOT_1 0x00000004
+#define NV_PMC_BOOT_1 (NV2A_REGISTER_BASE + 0x00000004)
 #define NV_PMC_BOOT_1_ENDIAN00_LITTLE 0x00000000
 #define NV_PMC_BOOT_1_ENDIAN00_BIG 0x00000001
 #define NV_PMC_BOOT_1_ENDIAN24_LITTLE 0x00000000
@@ -21,13 +21,13 @@
 #define NV_PMC_BOOT_1_ENDIAN0_BIG_MASK (0x00000001 << 0)
 #define NV_PMC_BOOT_1_ENDIAN24_LITTLE_MASK (0x00000000 << 24)
 #define NV_PMC_BOOT_1_ENDIAN24_BIG_MASK (0x00000001 << 24)
-#define NV_PMC_INTR_0 0x00000100
+#define NV_PMC_INTR_0 (NV2A_REGISTER_BASE + 0x00000100)
 #define NV_PMC_INTR_0_PCRTC 24
 #define NV_PMC_INTR_0_SOFTWARE 31
 #define NV_PMC_INTR_0_NOT_PENDING 0x00000000
 #define NV_PMC_INTR_0_HARDWARE_MASK (~(1 << NV_PMC_INTR_0_SOFTWARE))
 #define NV_PMC_INTR_0_SOFTWARE_MASK (1 << NV_PMC_INTR_0_SOFTWARE)
-#define NV_PMC_INTR_EN_0 0x00000140
+#define NV_PMC_INTR_EN_0 (NV2A_REGISTER_BASE + 0x00000140)
 #define NV_PMC_INTR_EN_0_INTA_DISABLED 0x00000000
 #define NV_PMC_INTR_EN_0_INTA_HARDWARE 0x00000001
 #define NV_PMC_INTR_EN_0_INTA_SOFTWARE 0x00000002
@@ -36,8 +36,6 @@
 static void
 pmc_write(uint32_t addr, const uint32_t data, void *opaque)
 {
-	addr -= NV2A_REGISTER_BASE;
-
 	switch (addr)
 	{
 	case NV_PMC_BOOT_0:
@@ -75,7 +73,6 @@ pmc_write(uint32_t addr, const uint32_t data, void *opaque)
 static uint32_t
 pmc_read(uint32_t addr, void *opaque)
 {
-	addr -= NV2A_REGISTER_BASE;
 	uint32_t value = std::numeric_limits<uint32_t>::max();
 
 	switch (addr)

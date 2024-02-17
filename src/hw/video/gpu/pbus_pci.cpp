@@ -7,8 +7,8 @@
 #include "nv2a.hpp"
 #include <assert.h>
 
-#define NV_PBUS_PCI_NV_0 0x00001800
-#define NV_PBUS_PCI_BASE (NV2A_REGISTER_BASE + NV_PBUS_PCI_NV_0)
+#define NV_PBUS_PCI_NV_0 (NV2A_REGISTER_BASE + 0x00001800)
+#define NV_PBUS_PCI_BASE NV_PBUS_PCI_NV_0
 
 
 // Values dumped from a Retail 1.0 xbox

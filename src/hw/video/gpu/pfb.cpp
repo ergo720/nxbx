@@ -9,14 +9,12 @@
 #define NV_PFB_BASE (NV2A_REGISTER_BASE + NV_PFB)
 #define NV_PFB_SIZE 0x1000
 
-#define NV_PFB_CSTATUS 0x0010020C
+#define NV_PFB_CSTATUS (NV2A_REGISTER_BASE + 0x0010020C)
 
 
 static void
 pfb_write(uint32_t addr, const uint32_t data, void *opaque)
 {
-	addr -= NV2A_REGISTER_BASE;
-
 	switch (addr)
 	{
 	case NV_PFB_CSTATUS:
@@ -31,7 +29,6 @@ pfb_write(uint32_t addr, const uint32_t data, void *opaque)
 static uint32_t
 pfb_read(uint32_t addr, void *opaque)
 {
-	addr -= NV2A_REGISTER_BASE;
 	uint32_t value = std::numeric_limits<uint32_t>::max();
 
 	switch (addr)

@@ -9,17 +9,15 @@
 #define NV_PCRTC_BASE (NV2A_REGISTER_BASE + NV_PCRTC)
 #define NV_PCRTC_SIZE 0x1000
 
-#define NV_PCRTC_INTR_0 0x00600100
+#define NV_PCRTC_INTR_0 (NV2A_REGISTER_BASE + 0x00600100)
 #define NV_PCRTC_INTR_0_VBLANK_NOT_PENDING 0x00000000
-#define NV_PCRTC_INTR_EN_0 0x00600140
+#define NV_PCRTC_INTR_EN_0 (NV2A_REGISTER_BASE + 0x00600140)
 #define NV_PCRTC_INTR_EN_0_VBLANK_DISABLED 0x00000000
 
 
 static void
 pcrtc_write(uint32_t addr, const uint32_t data, void *opaque)
 {
-	addr -= NV2A_REGISTER_BASE;
-
 	switch (addr)
 	{
 	case NV_PCRTC_INTR_0:
@@ -40,7 +38,6 @@ pcrtc_write(uint32_t addr, const uint32_t data, void *opaque)
 static uint32_t
 pcrtc_read(uint32_t addr, void *opaque)
 {
-	addr -= NV2A_REGISTER_BASE;
 	uint32_t value = std::numeric_limits<uint32_t>::max();
 
 	switch (addr)
