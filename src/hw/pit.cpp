@@ -48,7 +48,7 @@ pit_start_timer(pit_channel_t *chan)
 {
 	chan->last_irq_time = get_now();
 	chan->timer_running = 1;
-	cpu_set_timeout(g_cpu, pit_get_next_irq_time(chan->last_irq_time));
+	cpu_set_timeout(g_cpu, cpu_check_periodic_events(chan->last_irq_time));
 }
 
 void

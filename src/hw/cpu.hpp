@@ -14,3 +14,4 @@ inline cpu_t *g_cpu = nullptr;
 void cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg);
 void cpu_start();
 void cpu_cleanup();
+uint64_t cpu_check_periodic_events(uint64_t now);

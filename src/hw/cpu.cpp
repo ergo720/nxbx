@@ -170,15 +170,20 @@ cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 	mem_fill_block_virt(g_cpu, 0x80400000, 16 * 2, 0);
 }
 
-static uint64_t
-cpu_check_periodic_events()
+uint64_t
+cpu_check_periodic_events(uint64_t now)
 {
 	std::array<uint64_t, 2> dev_timeout;
-	uint64_t now = get_now();
 	dev_timeout[0] = pit_get_next_irq_time(now);
 	dev_timeout[1] = cmos_get_next_update_time(now);
 
 	return *std::min_element(dev_timeout.begin(), dev_timeout.end());
+}
+
+static uint64_t
+cpu_check_periodic_events()
+{
+	return cpu_check_periodic_events(get_now());
 }
 
 void
