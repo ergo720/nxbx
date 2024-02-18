@@ -66,7 +66,7 @@ pci_write(uint32_t addr, const uint8_t data, void *opaque)
 		break;
 
 	default:
-		nxbx_fatal("Write to unknown register - %x", addr);
+		nxbx_fatal("Write to unknown register - 0x%" PRIX32, addr);
 	}
 }
 
@@ -103,7 +103,7 @@ pci_read(uint32_t addr, void *opaque)
 	}
 
 	default:
-		nxbx_fatal("Read from unknown register - %x", addr);
+		nxbx_fatal("Read from unknown register - 0x%" PRIX32, addr);
 		return 0xFF;
 	}
 }
@@ -149,20 +149,20 @@ void *
 pci_create_device(uint32_t bus, uint32_t device, uint32_t function, pci_conf_write_cb cb)
 {
 	if (bus > 1) {
-		nxbx_fatal("Unsupported bus id=%d", bus);
+		nxbx_fatal("Unsupported bus id=%" PRIu32, bus);
 		return nullptr;
 	}
 	if (device > 31) {
-		nxbx_fatal("Unsupported device id=%d", device);
+		nxbx_fatal("Unsupported device id=%" PRIu32, device);
 		return nullptr;
 	}
 	if (function > 7) {
-		nxbx_fatal("Unsupported function id=%d", function);
+		nxbx_fatal("Unsupported function id=%" PRIu32, function);
 		return nullptr;
 	}
 
 	g_pci.configuration_modification[(bus << 8) | (device << 3) | function] = cb;
-	logger(log_lv::info, "Registering device at bus=0 device=%d function=%d", device, function);
+	logger(log_lv::info, "Registering device at bus=%" PRIu32 " device=%" PRIu32 " function=%" PRIu32, bus, device, function);
 
 	return g_pci.configuration_address_spaces[(bus << 8) | (device << 3) | function] = new uint8_t[256]();
 }
@@ -177,15 +177,15 @@ void *
 pci_get_configuration_ptr(uint32_t bus, uint32_t device, uint32_t function)
 {
 	if (bus > 1) {
-		nxbx_fatal("Unsupported bus id=%d\n", bus);
+		nxbx_fatal("Unsupported bus id=%" PRIu32, bus);
 		return nullptr;
 	}
 	if (device > 31) {
-		nxbx_fatal("Unsupported device id=%d", device);
+		nxbx_fatal("Unsupported device id=%" PRIu32, device);
 		return nullptr;
 	}
 	if (function > 7) {
-		nxbx_fatal("Unsupported function id=%d", function);
+		nxbx_fatal("Unsupported function id=%" PRIu32, function);
 		return nullptr;
 	}
 
