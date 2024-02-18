@@ -7,6 +7,8 @@
 #include <cstdint>
 #include <string>
 #include <stdexcept>
+#include <cinttypes>
+#include <assert.h>
 #include "logger.hpp"
 
 

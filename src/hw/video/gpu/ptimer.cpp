@@ -93,12 +93,12 @@ ptimer_write(uint32_t addr, const uint32_t data, void *opaque)
 
 	case NV_PTIMER_TIME_0:
 		// Ignored
-		logger(log_lv::info, "%s: ignoring write to NV_PTIMER_TIME_0 (value was 0x%X)", __func__, data);
+		logger(log_lv::info, "%s: ignoring write to NV_PTIMER_TIME_0 (value was 0x%" PRIX32 ")", __func__, data);
 		break;
 
 	case NV_PTIMER_TIME_1:
 		// Ignored
-		logger(log_lv::info, "%s: ignoring write to NV_PTIMER_TIME_1 (value was 0x%X)", __func__, data);
+		logger(log_lv::info, "%s: ignoring write to NV_PTIMER_TIME_1 (value was 0x%" PRIX32 ")", __func__, data);
 		break;
 
 	case NV_PTIMER_ALARM_0:
@@ -110,7 +110,7 @@ ptimer_write(uint32_t addr, const uint32_t data, void *opaque)
 		break;
 
 	default:
-		nxbx_fatal("Unhandled PTIMER write at address 0x%X with value 0x%X", addr, data);
+		nxbx_fatal("Unhandled PTIMER write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
 	}
 }
 
@@ -154,7 +154,7 @@ ptimer_read(uint32_t addr, void *opaque)
 		break;
 
 	default:
-		nxbx_fatal("Unhandled PTIMER read at address 0x%X", addr);
+		nxbx_fatal("Unhandled PTIMER read at address 0x%" PRIX32, addr);
 	}
 
 	return value;

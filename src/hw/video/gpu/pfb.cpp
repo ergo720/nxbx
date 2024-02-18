@@ -22,7 +22,7 @@ pfb_write(uint32_t addr, const uint32_t data, void *opaque)
 		break;
 
 	default:
-		nxbx_fatal("Unhandled PFB write at address 0x%X with value 0x%X", addr, data);
+		nxbx_fatal("Unhandled PFB write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
 	}
 }
 
@@ -39,7 +39,7 @@ pfb_read(uint32_t addr, void *opaque)
 		break;
 
 	default:
-		nxbx_fatal("Unhandled PFB read at address 0x%X", addr);
+		nxbx_fatal("Unhandled PFB read at address 0x%" PRIX32, addr);
 	}
 
 	return value;
