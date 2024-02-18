@@ -12,4 +12,11 @@ nv2a_init()
 	pbus_pci_init();
 	pfb_init();
 	pcrtc_init();
+	ptimer_init();
+}
+
+uint64_t
+nv2a_get_next_update_time(uint64_t now)
+{
+	return ptimer_get_next_alarm_time(now);
 }

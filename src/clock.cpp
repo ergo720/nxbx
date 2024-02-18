@@ -56,15 +56,21 @@ get_now()
 }
 
 uint64_t
-get_acpi_now()
+get_dev_now(uint64_t dev_freq)
 {
 #ifdef _WIN64
 	// NOTE: inlined get_now() to avoid having to use muldiv128_ twice
 	LARGE_INTEGER now;
 	QueryPerformanceCounter(&now);
 	uint64_t elapsed_us = static_cast<uint64_t>(now.QuadPart) - last_time;
-	return muldiv128_(elapsed_us, host_freq, xbox_acpi_freq);
+	return muldiv128_(elapsed_us, host_freq, dev_freq);
 #else
-	return muldiv128_(get_now(), xbox_acpi_freq, ticks_per_second);
+	return muldiv128_(get_now(), dev_freq, ticks_per_second);
 #endif
+}
+
+uint64_t
+get_acpi_now()
+{
+	return get_dev_now(xbox_acpi_freq);
 }

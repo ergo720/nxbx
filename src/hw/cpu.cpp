@@ -6,6 +6,7 @@
 #include "pic.hpp"
 #include "pit.hpp"
 #include "cmos.hpp"
+#include "video/gpu/nv2a.hpp"
 #include "../logger.hpp"
 #include "../kernel.hpp"
 #include "../pe.hpp"
@@ -173,9 +174,10 @@ cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 uint64_t
 cpu_check_periodic_events(uint64_t now)
 {
-	std::array<uint64_t, 2> dev_timeout;
+	std::array<uint64_t, 3> dev_timeout;
 	dev_timeout[0] = pit_get_next_irq_time(now);
 	dev_timeout[1] = cmos_get_next_update_time(now);
+	dev_timeout[2] = nv2a_get_next_update_time(now);
 
 	return *std::min_element(dev_timeout.begin(), dev_timeout.end());
 }

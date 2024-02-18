@@ -22,6 +22,7 @@
 #define NV_PMC_BOOT_1_ENDIAN24_LITTLE_MASK (0x00000000 << 24)
 #define NV_PMC_BOOT_1_ENDIAN24_BIG_MASK (0x00000001 << 24)
 #define NV_PMC_INTR_0 (NV2A_REGISTER_BASE + 0x00000100)
+#define NV_PMC_INTR_0_PTIMER 20
 #define NV_PMC_INTR_0_PCRTC 24
 #define NV_PMC_INTR_0_SOFTWARE 31
 #define NV_PMC_INTR_0_NOT_PENDING 0x00000000
@@ -111,6 +112,14 @@ pmc_update_irq()
 	}
 	else {
 		g_nv2a.pmc.int_status &= ~(1 << NV_PMC_INTR_0_PCRTC);
+	}
+
+	// Check for pending PTIMER interrupts
+	if (g_nv2a.ptimer.int_status & g_nv2a.ptimer.int_enabled) {
+		g_nv2a.pmc.int_status |= (1 << NV_PMC_INTR_0_PTIMER);
+	}
+	else {
+		g_nv2a.pmc.int_status &= ~(1 << NV_PMC_INTR_0_PTIMER);
 	}
 
 	switch (g_nv2a.pmc.int_enabled)
