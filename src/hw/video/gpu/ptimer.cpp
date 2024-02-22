@@ -91,14 +91,13 @@ ptimer_write(uint32_t addr, const uint32_t data, void *opaque)
 		}
 		break;
 
+		// Tested on a Retail 1.0 xbox: writing to the NV_PTIMER_TIME_0/1 registers causes the timer to start counting from the written value
 	case NV_PTIMER_TIME_0:
-		// Ignored
-		logger(log_lv::info, "%s: ignoring write to NV_PTIMER_TIME_0 (value was 0x%" PRIX32 ")", __func__, data);
+		g_nv2a.ptimer.counter_offset = (g_nv2a.ptimer.counter_offset & (0xFFFFFFFFULL << 32)) | data;
 		break;
 
 	case NV_PTIMER_TIME_1:
-		// Ignored
-		logger(log_lv::info, "%s: ignoring write to NV_PTIMER_TIME_1 (value was 0x%" PRIX32 ")", __func__, data);
+		g_nv2a.ptimer.counter_offset = (g_nv2a.ptimer.counter_offset & 0xFFFFFFFFULL) | ((uint64_t)data << 32);
 		break;
 
 	case NV_PTIMER_ALARM_0:
@@ -140,13 +139,13 @@ ptimer_read(uint32_t addr, void *opaque)
 	case NV_PTIMER_TIME_0:
 		// Returns the low 27 bits of the 56 bit counter
 		// FIXME: instead of hardcoding the gpu frequency, it should be read from PRAMDAC, since it can be changed from the NV_PRAMDAC_NVPLL_COEFF register
-		value = (get_dev_now(NV2A_CLOCK_FREQ) & 0x7FFFFFF) << 5;
+		value = uint32_t(g_nv2a.ptimer.counter_offset + ((get_dev_now(NV2A_CLOCK_FREQ) & 0x7FFFFFF) << 5));
 		break;
 
 	case NV_PTIMER_TIME_1:
 		// Returns the high 29 bits of the 56 bit counter
 		// FIXME: instead of hardcoding the gpu frequency, it should be read from PRAMDAC, since it can be changed from the NV_PRAMDAC_NVPLL_COEFF register
-		value = (get_dev_now(NV2A_CLOCK_FREQ) >> 27) & 0x1FFFFFFF;
+		value = uint32_t(g_nv2a.ptimer.counter_offset + ((get_dev_now(NV2A_CLOCK_FREQ) >> 27) & 0x1FFFFFFF));
 		break;
 
 	case NV_PTIMER_ALARM_0:
@@ -170,6 +169,7 @@ ptimer_reset()
 	g_nv2a.ptimer.alarm = 0;
 	g_nv2a.ptimer.counter_period = 0;
 	g_nv2a.ptimer.counter_active = 0;
+	g_nv2a.ptimer.counter_offset = 0;
 }
 
 void

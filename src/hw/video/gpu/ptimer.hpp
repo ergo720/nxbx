@@ -22,6 +22,8 @@ struct ptimer_t {
 	uint64_t counter_period;
 	// Counter is running if 1
 	uint8_t counter_active;
+	// offset added to counter
+	uint64_t counter_offset;
 };
 
 void ptimer_init();
