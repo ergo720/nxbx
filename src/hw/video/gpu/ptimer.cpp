@@ -28,8 +28,7 @@
 static inline uint64_t
 ptimer_counter_to_us()
 {
-	// FIXME: instead of hardcoding the gpu frequency, it should be read from PRAMDAC, since it can be changed from the NV_PRAMDAC_NVPLL_COEFF register
-	return muldiv128_(muldiv128_(g_nv2a.ptimer.alarm >> 5, ticks_per_second, NV2A_CLOCK_FREQ),
+	return muldiv128_(muldiv128_(g_nv2a.ptimer.alarm >> 5, ticks_per_second, g_nv2a.pramdac.core_freq),
 		g_nv2a.ptimer.divider & NV_PTIMER_DENOMINATOR_MASK, g_nv2a.ptimer.multiplier & NV_PTIMER_NUMERATOR_MASK);
 }
 
@@ -138,14 +137,12 @@ ptimer_read(uint32_t addr, void *opaque)
 
 	case NV_PTIMER_TIME_0:
 		// Returns the low 27 bits of the 56 bit counter
-		// FIXME: instead of hardcoding the gpu frequency, it should be read from PRAMDAC, since it can be changed from the NV_PRAMDAC_NVPLL_COEFF register
-		value = uint32_t(g_nv2a.ptimer.counter_offset + ((get_dev_now(NV2A_CLOCK_FREQ) & 0x7FFFFFF) << 5));
+		value = uint32_t(g_nv2a.ptimer.counter_offset + ((get_dev_now(g_nv2a.pramdac.core_freq) & 0x7FFFFFF) << 5));
 		break;
 
 	case NV_PTIMER_TIME_1:
 		// Returns the high 29 bits of the 56 bit counter
-		// FIXME: instead of hardcoding the gpu frequency, it should be read from PRAMDAC, since it can be changed from the NV_PRAMDAC_NVPLL_COEFF register
-		value = uint32_t(g_nv2a.ptimer.counter_offset + ((get_dev_now(NV2A_CLOCK_FREQ) >> 27) & 0x1FFFFFFF));
+		value = uint32_t(g_nv2a.ptimer.counter_offset + ((get_dev_now(g_nv2a.pramdac.core_freq) >> 27) & 0x1FFFFFFF));
 		break;
 
 	case NV_PTIMER_ALARM_0:

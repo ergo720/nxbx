@@ -63,6 +63,7 @@ set(HEADERS
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/pcrtc.hpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/pfb.hpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/pmc.hpp"
+ "${NXBX_ROOT_DIR}/src/hw/video/gpu/pramdac.hpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/ptimer.hpp"
 )
 
@@ -88,6 +89,7 @@ set(SOURCES
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/pcrtc.cpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/pfb.cpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/pmc.cpp"
+ "${NXBX_ROOT_DIR}/src/hw/video/gpu/pramdac.cpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/ptimer.cpp"
 )
 
