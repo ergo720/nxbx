@@ -159,7 +159,7 @@ ptimer_read(uint32_t addr, void *opaque)
 	return value;
 }
 
-static void
+void
 ptimer_reset()
 {
 	g_nv2a.ptimer.int_status = NV_PTIMER_INTR_0_ALARM_NOT_PENDING;

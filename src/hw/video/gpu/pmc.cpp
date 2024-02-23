@@ -32,6 +32,9 @@
 #define NV_PMC_INTR_EN_0_INTA_DISABLED 0x00000000
 #define NV_PMC_INTR_EN_0_INTA_HARDWARE 0x00000001
 #define NV_PMC_INTR_EN_0_INTA_SOFTWARE 0x00000002
+#define NV_PMC_ENABLE (NV2A_REGISTER_BASE + 0x00000200)
+#define NV_PMC_ENABLE_PTIMER (1 << 16)
+#define NV_PMC_ENABLE_PCRTC (1 << 24)
 
 
 static void
@@ -66,6 +69,23 @@ pmc_write(uint32_t addr, const uint32_t data, void *opaque)
 		pmc_update_irq();
 		break;
 
+	case NV_PMC_ENABLE: {
+		bool has_int_state_changed = false;
+		g_nv2a.pmc.engine_enabled = data;
+		if ((data & NV_PMC_ENABLE_PTIMER) == 0) {
+			ptimer_reset();
+			has_int_state_changed = true;
+		}
+		if ((data & NV_PMC_ENABLE_PCRTC) == 0) {
+			pcrtc_reset();
+			has_int_state_changed = true;
+		}
+		if (has_int_state_changed) {
+			pmc_update_irq();
+		}
+	}
+	break;
+
 	default:
 		nxbx_fatal("Unhandled PMC write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
 	}
@@ -94,6 +114,10 @@ pmc_read(uint32_t addr, void *opaque)
 
 	case NV_PMC_INTR_EN_0:
 		value = g_nv2a.pmc.int_enabled;
+		break;
+
+	case NV_PMC_ENABLE:
+		value = g_nv2a.pmc.engine_enabled;
 		break;
 
 	default:
@@ -155,6 +179,7 @@ pmc_reset()
 	g_nv2a.pmc.endianness = NV_PMC_BOOT_1_ENDIAN0_LITTLE_MASK | NV_PMC_BOOT_1_ENDIAN24_LITTLE_MASK;
 	g_nv2a.pmc.int_status = NV_PMC_INTR_0_NOT_PENDING;
 	g_nv2a.pmc.int_enabled = NV_PMC_INTR_EN_0_INTA_DISABLED;
+	g_nv2a.pmc.engine_enabled = 0;
 }
 
 void

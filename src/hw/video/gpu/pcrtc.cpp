@@ -57,7 +57,7 @@ pcrtc_read(uint32_t addr, void *opaque)
 	return value;
 }
 
-static void
+void
 pcrtc_reset()
 {
 	g_nv2a.pcrtc.int_status = NV_PCRTC_INTR_0_VBLANK_NOT_PENDING;

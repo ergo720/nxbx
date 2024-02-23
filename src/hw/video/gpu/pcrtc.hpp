@@ -15,3 +15,4 @@ struct pcrtc_t {
 };
 
 void pcrtc_init();
+void pcrtc_reset();

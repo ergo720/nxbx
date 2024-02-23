@@ -27,4 +27,5 @@ struct ptimer_t {
 };
 
 void ptimer_init();
+void ptimer_reset();
 uint64_t ptimer_get_next_alarm_time(uint64_t now);
