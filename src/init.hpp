@@ -9,6 +9,16 @@
 
 using hw_reset_f = void(*)();
 
+class init_info_t {
+public:
+	std::string m_kernel;
+	std::string m_nxbx_path;
+	std::string m_xbe_path;
+	disas_syntax m_syntax;
+	uint32_t m_use_dbg;
+};
+
+
 void reset_system();
 void add_reset_func(hw_reset_f reset_f);
-void start_system(std::string kernel, disas_syntax syntax, uint32_t use_dbg, std::string nxbx_path, std::string xbe_path);
+void start_system(init_info_t init_info);

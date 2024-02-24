@@ -26,9 +26,9 @@ options: \n\
 int
 main(int argc, char **argv)
 {
-	std::string kernel, xbe_path;
-	disas_syntax syntax = disas_syntax::att;
-	uint32_t use_dbg = 0;
+	init_info_t init_info;
+	init_info.m_syntax = disas_syntax::att;
+	init_info.m_use_dbg = 0;
 	char option = ' ';
 
 	/* parameter parsing */
@@ -49,7 +49,7 @@ main(int argc, char **argv)
 						logger("Missing argument for option \"%c\"", option);
 						return 0;
 					}
-					kernel = argv[idx];
+					init_info.m_kernel = argv[idx];
 					break;
 
 				case 's':
@@ -57,7 +57,7 @@ main(int argc, char **argv)
 						logger("Missing argument for option \"s\"");
 						return 0;
 					}
-					switch (syntax = static_cast<disas_syntax>(std::stoul(std::string(argv[idx]), nullptr, 0)))
+					switch (init_info.m_syntax = static_cast<disas_syntax>(std::stoul(std::string(argv[idx]), nullptr, 0)))
 					{
 					case disas_syntax::att:
 					case disas_syntax::masm:
@@ -71,7 +71,7 @@ main(int argc, char **argv)
 					break;
 
 				case 'd':
-					use_dbg = 1;
+					init_info.m_use_dbg = 1;
 					break;
 
 				case 'h':
@@ -85,7 +85,7 @@ main(int argc, char **argv)
 				}
 			}
 			else if ((idx + 1) == argc) {
-				xbe_path = std::move(arg_str);
+				init_info.m_xbe_path = std::move(arg_str);
 				break;
 			}
 			else {
@@ -101,15 +101,15 @@ main(int argc, char **argv)
 		}
 	}
 
-	if (xbe_path.empty()) {
+	if (init_info.m_xbe_path.empty()) {
 		logger("Input file is required");
 		return 1;
 	}
 
-	std::string nxbx_path = get_nxbx_path();
-	if (kernel.empty()) {
+	init_info.m_nxbx_path = get_nxbx_path();
+	if (init_info.m_kernel.empty()) {
 		// Attempt to find nboxkrnl in the current directory of nxbx
-		std::filesystem::path curr_dir = nxbx_path;
+		std::filesystem::path curr_dir = init_info.m_nxbx_path;
 		curr_dir = curr_dir.remove_filename();
 		curr_dir /= "nboxkrnl.exe";
 		std::error_code ec;
@@ -118,10 +118,10 @@ main(int argc, char **argv)
 			logger("Unable to find \"nboxkrnl.exe\" in the current working directory");
 			return 1;
 		}
-		kernel = curr_dir.string();
+		init_info.m_kernel = curr_dir.string();
 	}
 
-	start_system(kernel, syntax, use_dbg, nxbx_path, xbe_path);
+	start_system(init_info);
 
 	return 0;
 }

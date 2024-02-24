@@ -31,11 +31,11 @@ add_reset_func(hw_reset_f reset_f)
 }
 
 void
-start_system(std::string kernel, disas_syntax syntax, uint32_t use_dbg, std::string nxbx_path, std::string xbe_path)
+start_system(init_info_t init_info)
 {
 	try {
-		cpu_init(kernel, syntax, use_dbg);
-		io_init(nxbx_path, xbe_path);
+		cpu_init(init_info.m_kernel, init_info.m_syntax, init_info.m_use_dbg);
+		io_init(init_info.m_nxbx_path, init_info.m_xbe_path);
 		timer_init();
 		pic_init();
 		pit_init();
