@@ -2,6 +2,7 @@
 
 // SPDX-FileCopyrightText: 2024 ergo720
 
+#include "../../../clock.hpp"
 #include "../../cpu.hpp"
 #include "nv2a.hpp"
 
@@ -29,6 +30,10 @@ pramdac_write32(uint32_t addr, const uint32_t data, void *opaque)
 		uint64_t n = (data & NV_PRAMDAC_NVPLL_COEFF_NDIV_MASK) >> 8;
 		uint64_t p = (data & NV_PRAMDAC_NVPLL_COEFF_PDIV_MASK) >> 16;
 		g_nv2a.pramdac.core_freq = m ? ((NV2A_CRYSTAL_FREQ * n) / (1ULL << p) / m) : 0;
+		if (g_nv2a.ptimer.counter_active) {
+			g_nv2a.ptimer.counter_period = ptimer_counter_to_us();
+			cpu_set_timeout(g_cpu, cpu_check_periodic_events(get_now()));
+		}
 	}
 	break;
 

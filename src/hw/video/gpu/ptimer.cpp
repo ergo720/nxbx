@@ -25,7 +25,7 @@
 #define NV_PTIMER_ALARM_0 (NV2A_REGISTER_BASE + 0x00009420)
 
 
-static inline uint64_t
+uint64_t
 ptimer_counter_to_us()
 {
 	return muldiv128_(muldiv128_(g_nv2a.ptimer.alarm >> 5, ticks_per_second, g_nv2a.pramdac.core_freq),
