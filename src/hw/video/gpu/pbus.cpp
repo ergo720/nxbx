@@ -6,6 +6,12 @@
 #include "../../cpu.hpp"
 #include "nv2a.hpp"
 
+#define NV_PBUS 0x00001000
+#define NV_PBUS_BASE (NV2A_REGISTER_BASE + NV_PBUS)
+#define NV_PBUS_SIZE 0x1000
+#define NV_PBUS_FBIO_RAM (NV2A_REGISTER_BASE + 0x00001218)
+#define NV_PBUS_FBIO_RAM_TYPE_DDR (0x00000000 << 8)
+#define NV_PBUS_FBIO_RAM_TYPE_SDR (0x00000001 << 8)
 #define NV_PBUS_PCI_NV_0 (NV2A_REGISTER_BASE + 0x00001800)
 #define NV_PBUS_PCI_BASE NV_PBUS_PCI_NV_0
 
@@ -85,6 +91,38 @@ nv2a_pci_write(uint8_t *ptr, uint8_t addr, uint8_t data)
 }
 
 static void
+pbus_write(uint32_t addr, const uint32_t data, void *opaque)
+{
+	switch (addr)
+	{
+	case NV_PBUS_FBIO_RAM:
+		g_nv2a.pbus.fbio_ram = data;
+		break;
+
+	default:
+		nxbx_fatal("Unhandled PFB write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
+	}
+}
+
+static uint32_t
+pbus_read(uint32_t addr, void *opaque)
+{
+	uint32_t value = std::numeric_limits<uint32_t>::max();
+
+	switch (addr)
+	{
+	case NV_PBUS_FBIO_RAM:
+		value = g_nv2a.pbus.fbio_ram;
+		break;
+
+	default:
+		nxbx_fatal("Unhandled PFB read at address 0x%" PRIX32, addr);
+	}
+
+	return value;
+}
+
+static void
 pbus_pci_write(uint32_t addr, const uint32_t data, void *opaque)
 {
 	uint32_t *pci_conf = (uint32_t *)opaque;
@@ -98,7 +136,7 @@ pbus_pci_read(uint32_t addr, void *opaque)
 	return pci_conf[(addr - NV_PBUS_PCI_BASE) / 4];
 }
 
-void
+static void
 pbus_pci_init()
 {
 	void *pci_conf = pci_create_device(1, 0, 0, nv2a_pci_write);
@@ -109,4 +147,22 @@ pbus_pci_init()
 		{ .fnr32 = pbus_pci_read, .fnw32 = pbus_pci_write }, pci_conf))) {
 		throw nxbx_exp_abort("Failed to initialize pbus pci MMIO range");
 	}
+}
+
+static void
+pbus_reset()
+{
+	// Values dumped from a Retail 1.0 xbox
+	g_nv2a.pbus.fbio_ram = 0x00010000 | NV_PBUS_FBIO_RAM_TYPE_DDR; // ddr even though is should be sdram?
+}
+
+void
+pbus_init()
+{
+	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, NV_PBUS_BASE, NV_PBUS_SIZE, false, { .fnr32 = pbus_read, .fnw32 = pbus_write }, nullptr))) {
+		throw nxbx_exp_abort("Failed to initialize pbus MMIO range");
+	}
+
+	pbus_reset();
+	pbus_pci_init();
 }

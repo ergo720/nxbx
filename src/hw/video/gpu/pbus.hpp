@@ -7,10 +7,9 @@
 #include <cstdint>
 
 
-struct pfb_t {
-	// Appear to contain info about the ram modules
-	uint32_t cfg0, cfg1;
+struct pbus_t {
+	// Contains the ram type, among other unknown info about the ram modules
+	uint32_t fbio_ram;
 };
 
-void pfb_init();
-void pfb_reset();
+void pbus_init();

@@ -10,7 +10,7 @@ nv2a_init()
 {
 	pmc_init();
 	pramdac_init();
-	pbus_pci_init();
+	pbus_init();
 	pfb_init();
 	pcrtc_init();
 	ptimer_init();

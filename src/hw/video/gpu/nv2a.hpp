@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "pbus_pci.hpp"
+#include "pbus.hpp"
 #include "pfb.hpp"
 #include "pmc.hpp"
 #include "pcrtc.hpp"
@@ -23,6 +23,8 @@ struct nv2a_t {
 	pcrtc_t pcrtc;
 	pramdac_t pramdac;
 	ptimer_t ptimer;
+	pfb_t pfb;
+	pbus_t pbus;
 };
 
 inline nv2a_t g_nv2a;

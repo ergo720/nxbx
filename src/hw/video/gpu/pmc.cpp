@@ -34,6 +34,7 @@
 #define NV_PMC_INTR_EN_0_INTA_SOFTWARE 0x00000002
 #define NV_PMC_ENABLE (NV2A_REGISTER_BASE + 0x00000200)
 #define NV_PMC_ENABLE_PTIMER (1 << 16)
+#define NV_PMC_ENABLE_PFB (1 << 20)
 #define NV_PMC_ENABLE_PCRTC (1 << 24)
 
 
@@ -75,6 +76,9 @@ pmc_write(uint32_t addr, const uint32_t data, void *opaque)
 		if ((data & NV_PMC_ENABLE_PTIMER) == 0) {
 			ptimer_reset();
 			has_int_state_changed = true;
+		}
+		if ((data & NV_PMC_ENABLE_PFB) == 0) {
+			pfb_reset();
 		}
 		if ((data & NV_PMC_ENABLE_PCRTC) == 0) {
 			pcrtc_reset();

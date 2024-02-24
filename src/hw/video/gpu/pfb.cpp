@@ -9,6 +9,8 @@
 #define NV_PFB_BASE (NV2A_REGISTER_BASE + NV_PFB)
 #define NV_PFB_SIZE 0x1000
 
+#define NV_PFB_CFG0 (NV2A_REGISTER_BASE + 0x00100200)
+#define NV_PFB_CFG1 (NV2A_REGISTER_BASE + 0x00100204)
 #define NV_PFB_CSTATUS (NV2A_REGISTER_BASE + 0x0010020C)
 
 
@@ -17,6 +19,14 @@ pfb_write(uint32_t addr, const uint32_t data, void *opaque)
 {
 	switch (addr)
 	{
+	case NV_PFB_CFG0:
+		g_nv2a.pfb.cfg0 = data;
+		break;
+
+	case NV_PFB_CFG1:
+		g_nv2a.pfb.cfg1 = data;
+		break;
+
 	case NV_PFB_CSTATUS:
 		// This register is read-only
 		break;
@@ -33,8 +43,16 @@ pfb_read(uint32_t addr, void *opaque)
 
 	switch (addr)
 	{
+	case NV_PFB_CFG0:
+		value = g_nv2a.pfb.cfg0;
+		break;
+
+	case NV_PFB_CFG1:
+		value = g_nv2a.pfb.cfg1;
+		break;
+
 	case NV_PFB_CSTATUS:
-		// Returns the size of the framebuffer
+		// Returns the size of the framebuffer in MiB in the bits 20-31. Bit 0 is a flag that indicates > 4 GiB of fb when set
 		value = NV2A_FB_SIZE;
 		break;
 
@@ -46,9 +64,19 @@ pfb_read(uint32_t addr, void *opaque)
 }
 
 void
+pfb_reset()
+{
+	// Values dumped from a Retail 1.0 xbox
+	g_nv2a.pfb.cfg0 = 0x03070003;
+	g_nv2a.pfb.cfg1 = 0x11448000;
+}
+
+void
 pfb_init()
 {
 	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, NV_PFB_BASE, NV_PFB_SIZE, false, { .fnr32 = pfb_read, .fnw32 = pfb_write }, nullptr))) {
 		throw nxbx_exp_abort("Failed to initialize pfb MMIO range");
 	}
+
+	pfb_reset();
 }
