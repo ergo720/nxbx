@@ -5,19 +5,32 @@
 #include "nv2a.hpp"
 
 
-void
-nv2a_init()
+bool
+nv2a::init()
 {
-	pmc_init();
-	pramdac_init();
-	pbus_init();
-	pfb_init();
-	pcrtc_init();
-	ptimer_init();
+	if (!m_pmc.init()) {
+		return false;
+	}
+	if (!m_pramdac.init()) {
+		return false;
+	}
+	if (!m_pbus.init()) {
+		return false;
+	}
+	if (!m_pfb.init()) {
+		return false;
+	}
+	if (!m_pcrtc.init()) {
+		return false;
+	}
+	if (!m_ptimer.init()) {
+		return false;
+	}
+	return true;
 }
 
 uint64_t
-nv2a_get_next_update_time(uint64_t now)
+nv2a::get_next_update_time(uint64_t now)
 {
-	return ptimer_get_next_alarm_time(now);
+	return m_ptimer.get_next_alarm_time(now);
 }

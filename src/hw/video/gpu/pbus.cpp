@@ -2,9 +2,7 @@
 
 // SPDX-FileCopyrightText: 2024 ergo720
 
-#include "../../pci.hpp"
-#include "../../cpu.hpp"
-#include "nv2a.hpp"
+#include "machine.hpp"
 
 #define NV_PBUS 0x00001000
 #define NV_PBUS_BASE (NV2A_REGISTER_BASE + NV_PBUS)
@@ -85,84 +83,98 @@ static constexpr uint32_t default_pci_configuration[] = {
 };
 
 static int
-nv2a_pci_write(uint8_t *ptr, uint8_t addr, uint8_t data)
+nv2a_pci_write(uint8_t *ptr, uint8_t addr, uint8_t data, void *opaque)
 {
 	return 0; // pass-through the write
 }
 
-static void
-pbus_write(uint32_t addr, const uint32_t data, void *opaque)
+void
+pbus::write(uint32_t addr, const uint32_t data)
 {
 	switch (addr)
 	{
 	case NV_PBUS_FBIO_RAM:
-		g_nv2a.pbus.fbio_ram = data;
+		fbio_ram = data;
 		break;
 
 	default:
-		nxbx_fatal("Unhandled PFB write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
+		nxbx::fatal("Unhandled %s write at address 0x%" PRIX32 " with value 0x%" PRIX32, get_name(), addr, data);
 	}
 }
 
-static uint32_t
-pbus_read(uint32_t addr, void *opaque)
+uint32_t
+pbus::read(uint32_t addr)
 {
-	uint32_t value = std::numeric_limits<uint32_t>::max();
+	uint32_t value = 0;
 
 	switch (addr)
 	{
 	case NV_PBUS_FBIO_RAM:
-		value = g_nv2a.pbus.fbio_ram;
+		value = fbio_ram;
 		break;
 
 	default:
-		nxbx_fatal("Unhandled PFB read at address 0x%" PRIX32, addr);
+		nxbx::fatal("Unhandled %s read at address 0x%" PRIX32, get_name(), addr);
 	}
 
 	return value;
 }
 
-static void
-pbus_pci_write(uint32_t addr, const uint32_t data, void *opaque)
+void
+pbus::pci_write(uint32_t addr, const uint32_t data)
 {
-	uint32_t *pci_conf = (uint32_t *)opaque;
+	uint32_t *pci_conf = (uint32_t *)m_pci_conf;
 	pci_conf[(addr - NV_PBUS_PCI_BASE) / 4] = data;
 }
 
-static uint32_t
-pbus_pci_read(uint32_t addr, void *opaque)
+uint32_t
+pbus::pci_read(uint32_t addr)
 {
-	uint32_t *pci_conf = (uint32_t *)opaque;
+	uint32_t *pci_conf = (uint32_t *)m_pci_conf;
 	return pci_conf[(addr - NV_PBUS_PCI_BASE) / 4];
 }
 
-static void
-pbus_pci_init()
+bool
+pbus::pci_init()
 {
-	void *pci_conf = pci_create_device(1, 0, 0, nv2a_pci_write);
+	void *pci_conf = m_machine->get<pci>().create_device(1, 0, 0, nv2a_pci_write, nullptr);
 	assert(pci_conf);
-	pci_copy_default_configuration(pci_conf, (void *)default_pci_configuration, sizeof(default_pci_configuration));
+	m_machine->get<pci>().copy_default_configuration(pci_conf, (void *)default_pci_configuration, sizeof(default_pci_configuration));
 
-	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, NV_PBUS_PCI_BASE, sizeof(default_pci_configuration), false,
-		{ .fnr32 = pbus_pci_read, .fnw32 = pbus_pci_write }, pci_conf))) {
-		throw nxbx_exp_abort("Failed to initialize pbus pci MMIO range");
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PBUS_PCI_BASE, sizeof(default_pci_configuration), false,
+		{
+			.fnr32 = cpu_read<pbus, uint32_t, &pbus::pci_read>,
+			.fnw32 = cpu_write<pbus, uint32_t, &pbus::pci_write>
+		},
+		this))) {
+		logger(log_lv::error, "Failed to initialize %s (PCI) mmio ports", get_name());
+		return false;
 	}
-}
+	m_pci_conf = pci_conf;
 
-static void
-pbus_reset()
-{
-	// Values dumped from a Retail 1.0 xbox
-	g_nv2a.pbus.fbio_ram = 0x00010000 | NV_PBUS_FBIO_RAM_TYPE_DDR; // ddr even though is should be sdram?
+	return true;
 }
 
 void
-pbus_init()
+pbus::reset()
 {
-	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, NV_PBUS_BASE, NV_PBUS_SIZE, false, { .fnr32 = pbus_read, .fnw32 = pbus_write }, nullptr))) {
-		throw nxbx_exp_abort("Failed to initialize pbus MMIO range");
+	// Values dumped from a Retail 1.0 xbox
+	fbio_ram = 0x00010000 | NV_PBUS_FBIO_RAM_TYPE_DDR; // ddr even though is should be sdram?
+}
+
+bool
+pbus::init()
+{
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PBUS_BASE, NV_PBUS_SIZE, false,
+		{
+			.fnr32 = cpu_read<pbus, uint32_t, &pbus::read>,
+			.fnw32 = cpu_write<pbus, uint32_t, &pbus::write>
+		},
+		this))) {
+		logger(log_lv::error, "Failed to initialize %s mmio ports", get_name());
+		return false;
 	}
 
-	pbus_reset();
-	pbus_pci_init();
+	reset();
+	return pci_init();
 }

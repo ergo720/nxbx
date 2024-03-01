@@ -2,16 +2,11 @@
 
 // SPDX-FileCopyrightText: 2023 ergo720
 
-#include "cpu.hpp"
-#include "pic.hpp"
-#include "pit.hpp"
-#include "cmos.hpp"
-#include "video/gpu/nv2a.hpp"
+#include "machine.hpp"
 #include "../logger.hpp"
 #include "../kernel.hpp"
 #include "../pe.hpp"
 #include "../clock.hpp"
-#include "../init.hpp"
 #include <fstream>
 #include <cinttypes>
 #include <array>
@@ -39,22 +34,23 @@ cpu_logger(log_level lv, const unsigned count, const char *msg, ...)
 	va_end(args);
 }
 
-static void
-cpu_reset()
+void
+cpu::reset()
 {
 	// TODO: lib86cpu doesn't support resetting the cpu yet
 }
 
-void
-cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
+bool
+cpu::init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 {
-	// XXX: xbox memory hard coded to 64 MiB for now
+	// FIXME: xbox memory hard coded to 64 MiB for now
 	uint32_t ramsize = 64 * 1024 * 1024;
 
 	// Load the nboxkrnl exe file
 	std::ifstream ifs(kernel.c_str(), std::ios_base::in | std::ios_base::binary);
 	if (!ifs.is_open()) {
-		throw nxbx_exp_abort("Could not open kernel file");
+		logger(log_lv::error, "Could not open kernel file");
+		return false;
 	}
 	ifs.seekg(0, ifs.end);
 	std::streampos length = ifs.tellg();
@@ -62,15 +58,18 @@ cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 
 	// Sanity checks on the kernel exe size
 	if (length == 0) {
-		throw nxbx_exp_abort("Size of kernel file detected as zero");
+		logger(log_lv::error, "Size of kernel file detected as zero");
+		return false;
 	}
 	else if (length > ramsize) {
-		throw nxbx_exp_abort("Kernel file doesn't fit inside RAM");
+		logger(log_lv::error, "Kernel file doesn't fit inside ram");
+		return false;
 	}
 
 	std::unique_ptr<char[]> krnl_buff{ new char[static_cast<unsigned>(length)] };
 	if (!krnl_buff) {
-		throw nxbx_exp_abort("Could not allocate kernel buffer");
+		logger(log_lv::error, "Could not allocate kernel buffer");
+		return false;
 	}
 	ifs.read(krnl_buff.get(), length);
 	ifs.close();
@@ -78,7 +77,8 @@ cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 	// Sanity checks on the kernel exe file
 	PIMAGE_DOS_HEADER dosHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(krnl_buff.get());
 	if (dosHeader->e_magic != IMAGE_DOS_SIGNATURE) {
-		throw nxbx_exp_abort("Kernel image has an invalid dos header signature");
+		logger(log_lv::error, "Kernel image has an invalid dos header signature");
+		return false;
 	}
 
 	PIMAGE_NT_HEADERS32 peHeader = reinterpret_cast<PIMAGE_NT_HEADERS32>(reinterpret_cast<uint8_t *>(dosHeader) + dosHeader->e_lfanew);
@@ -86,38 +86,42 @@ cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 		peHeader->FileHeader.Machine != IMAGE_FILE_MACHINE_I386 ||
 		peHeader->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR32_MAGIC ||
 		peHeader->OptionalHeader.Subsystem != IMAGE_SUBSYSTEM_NATIVE) {
-		throw nxbx_exp_abort("Kernel image has an invalid nt header signature");
+		logger(log_lv::error, "Kernel image has an invalid nt header signature");
+		return false;
 	}
 
 	if (peHeader->OptionalHeader.ImageBase != KERNEL_BASE) {
-		throw nxbx_exp_abort("Kernel image has an incorrect image base address");
+		logger(log_lv::error, "Kernel image has an incorrect image base address");
+		return false;
 	}
 
 	// Init lib86cpu
-	if (!LC86_SUCCESS(cpu_new(ramsize, g_cpu, pic_get_interrupt, "nboxkrnl"))) {
-		throw nxbx_exp_abort("Failed to create cpu instance");
+	if (!LC86_SUCCESS(cpu_new(ramsize, m_lc86cpu, { get_interrupt_for_cpu, &m_machine->get<pic>() }, "nboxkrnl"))) {
+		logger(log_lv::error, "Failed to create cpu instance");
+		return false;
 	}
 
 	register_log_func(cpu_logger);
 
-	cpu_set_flags(g_cpu, static_cast<uint32_t>(syntax) | (use_dbg ? CPU_DBG_PRESENT : 0));
+	cpu_set_flags(m_lc86cpu, static_cast<uint32_t>(syntax) | (use_dbg ? CPU_DBG_PRESENT : 0));
 
-	if (!LC86_SUCCESS(mem_init_region_ram(g_cpu, 0, ramsize))) {
-		throw nxbx_exp_abort("Failed to initialize ram memory");
+	if (!LC86_SUCCESS(mem_init_region_ram(m_lc86cpu, 0, ramsize))) {
+		logger(log_lv::error, "Failed to initialize ram memory");
+		return false;
 	}
 
-	if (!LC86_SUCCESS(mem_init_region_alias(g_cpu, CONTIGUOUS_MEMORY_BASE, 0, ramsize))) {
-		throw nxbx_exp_abort("Failed to initialize contiguous memory");
+	if (!LC86_SUCCESS(mem_init_region_alias(m_lc86cpu, CONTIGUOUS_MEMORY_BASE, 0, ramsize))) {
+		logger(log_lv::error, "Failed to initialize contiguous memory");
+		return false;
 	}
 
-	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, KERNEL_IO_BASE, KERNEL_IO_SIZE, true, io_handlers_t{ .fnr32 = nboxkrnl_read_handler, .fnw32 = nboxkrnl_write_handler }, g_cpu))) {
-		throw nxbx_exp_abort("Failed to initialize kernel communication I/O ports");
+	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, kernel::IO_BASE, kernel::IO_SIZE, true, { .fnr32 = kernel::read_handler, .fnw32 = kernel::write_handler }, m_lc86cpu))) {
+		logger(log_lv::error, "Failed to initialize kernel communication io ports");
+		return false;
 	}
-
-	add_reset_func(cpu_reset);
 
 	// Load kernel exe into ram
-	uint8_t *ram = get_ram_ptr(g_cpu);
+	uint8_t *ram = get_ram_ptr(m_lc86cpu);
 	std::memcpy(&ram[peHeader->OptionalHeader.ImageBase - CONTIGUOUS_MEMORY_BASE], dosHeader, peHeader->OptionalHeader.SizeOfHeaders);
 
 	PIMAGE_SECTION_HEADER sections = reinterpret_cast<PIMAGE_SECTION_HEADER>(reinterpret_cast<uint8_t *>(peHeader) + sizeof(IMAGE_NT_HEADERS32));
@@ -129,22 +133,22 @@ cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 		}
 	}
 
-	mem_fill_block_virt(g_cpu, 0xF000, 0x1000, 0);
+	mem_fill_block_virt(m_lc86cpu, 0xF000, 0x1000, 0);
 	uint32_t pde = 0xE3; // large, dirty, accessed, r/w, present
-	mem_write_block_virt(g_cpu, 0xFF000, 4, &pde);
+	mem_write_block_virt(m_lc86cpu, 0xFF000, 4, &pde);
 	for (int i = 0; i < 16; ++i) {
-		mem_write_block_virt(g_cpu, 0xF000 + (i * 4), 4, &pde); // this identity maps all physical memory
+		mem_write_block_virt(m_lc86cpu, 0xF000 + (i * 4), 4, &pde); // this identity maps all physical memory
 		pde += 0x400000;
 	}
 	pde = 0x800000E3;
 	for (int i = 0; i < 16; ++i) {
-		mem_write_block_virt(g_cpu, 0xF800 + (i * 4), 4, &pde); // this identity maps all contiguous memory
+		mem_write_block_virt(m_lc86cpu, 0xF800 + (i * 4), 4, &pde); // this identity maps all contiguous memory
 		pde += 0x400000;
 	}
 	pde = 0x0000F063; // dirty, accessed, r/w, present
-	mem_write_block_virt(g_cpu, 0xFC00, 4, &pde); // this maps the pts at 0xC0000000
+	mem_write_block_virt(m_lc86cpu, 0xFC00, 4, &pde); // this maps the pts at 0xC0000000
 
-	regs_t *regs = get_regs_ptr(g_cpu);
+	regs_t *regs = get_regs_ptr(m_lc86cpu);
 	regs->cs_hidden.base = 0;
 	regs->es_hidden.base = 0;
 	regs->ds_hidden.base = 0;
@@ -168,34 +172,36 @@ cpu_init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 	regs->eip = peHeader->OptionalHeader.ImageBase + peHeader->OptionalHeader.AddressOfEntryPoint;
 
 	// Pass eeprom and certificate keys on the stack (we use dummy all-zero keys)
-	mem_fill_block_virt(g_cpu, 0x80400000, 16 * 2, 0);
+	mem_fill_block_virt(m_lc86cpu, 0x80400000, 16 * 2, 0);
+
+	return true;
 }
 
 uint64_t
-cpu_check_periodic_events(uint64_t now)
+cpu::check_periodic_events(uint64_t now)
 {
 	std::array<uint64_t, 3> dev_timeout;
-	dev_timeout[0] = pit_get_next_irq_time(now);
-	dev_timeout[1] = cmos_get_next_update_time(now);
-	dev_timeout[2] = nv2a_get_next_update_time(now);
+	dev_timeout[0] = m_machine->get<pit>().get_next_irq_time(now);
+	dev_timeout[1] = m_machine->get<cmos>().get_next_update_time(now);
+	dev_timeout[2] = m_machine->get<nv2a>().get_next_update_time(now);
 
 	return *std::min_element(dev_timeout.begin(), dev_timeout.end());
 }
 
-static uint64_t
-cpu_check_periodic_events()
+uint64_t
+cpu::check_periodic_events()
 {
-	return cpu_check_periodic_events(get_now());
+	return check_periodic_events(timer::get_now());
 }
 
 void
-cpu_start()
+cpu::start()
 {
-	cpu_sync_state(g_cpu);
+	cpu_sync_state(m_lc86cpu);
 
 	lc86_status code;
 	while (true) {
-		code = cpu_run_until(g_cpu, cpu_check_periodic_events());
+		code = cpu_run_until(m_lc86cpu, check_periodic_events());
 		if (code != lc86_status::timeout) [[unlikely]] {
 			break;
 		}
@@ -205,10 +211,16 @@ cpu_start()
 }
 
 void
-cpu_cleanup()
+cpu::exit()
 {
-	if (g_cpu) {
-		cpu_free(g_cpu);
-		g_cpu = nullptr;
+	cpu_exit(m_lc86cpu);
+}
+
+void
+cpu::deinit()
+{
+	if (m_lc86cpu) {
+		cpu_free(m_lc86cpu);
+		m_lc86cpu = nullptr;
 	}
 }

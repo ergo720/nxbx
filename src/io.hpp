@@ -4,14 +4,19 @@
 
 #pragma once
 
-#include <cstdint>
-#include <string>
+#include "util.hpp"
 
 
-inline bool pending_packets = false;
+struct cpu_t;
 
-bool io_init(std::string nxbx_path, std::string xbe_path);
-void io_stop();
-void submit_io_packet(uint32_t addr);
-void flush_pending_packets();
-void query_io_packet(uint32_t addr);
+namespace io {
+	inline bool pending_packets = false;
+	inline util::xbox_string xbe_name;
+	inline util::xbox_string xbe_path;
+
+	bool init(std::string nxbx_path, std::string xbe_path_, cpu_t *cpu);
+	void stop();
+	void submit_io_packet(uint32_t addr);
+	void flush_pending_packets();
+	void query_io_packet(uint32_t addr);
+}

@@ -4,8 +4,7 @@
 
 #include "../../../util.hpp"
 #include "../../../clock.hpp"
-#include "../../cpu.hpp"
-#include "nv2a.hpp"
+#include "machine.hpp"
 
 #define NV_PTIMER 0x00009000
 #define NV_PTIMER_BASE (NV2A_REGISTER_BASE + NV_PTIMER)
@@ -26,26 +25,26 @@
 
 
 uint64_t
-ptimer_counter_to_us()
+ptimer::counter_to_us()
 {
-	return muldiv128_(muldiv128_(g_nv2a.ptimer.alarm >> 5, ticks_per_second, g_nv2a.pramdac.core_freq),
-		g_nv2a.ptimer.divider & NV_PTIMER_DENOMINATOR_MASK, g_nv2a.ptimer.multiplier & NV_PTIMER_NUMERATOR_MASK);
+	return util::muldiv128(util::muldiv128(alarm >> 5, timer::ticks_per_second, m_machine->get<pramdac>().core_freq),
+		divider & NV_PTIMER_DENOMINATOR_MASK, multiplier & NV_PTIMER_NUMERATOR_MASK);
 }
 
 uint64_t
-ptimer_get_next_alarm_time(uint64_t now)
+ptimer::get_next_alarm_time(uint64_t now)
 {
-	if (g_nv2a.ptimer.counter_active) {
-		uint64_t next_time, ptimer_period = g_nv2a.ptimer.counter_period;
-		if (now - g_nv2a.ptimer.last_alarm_time >= ptimer_period) {
-			g_nv2a.ptimer.last_alarm_time = now;
+	if (counter_active) {
+		uint64_t next_time, ptimer_period = counter_period;
+		if (now - last_alarm_time >= ptimer_period) {
+			last_alarm_time = now;
 			next_time = ptimer_period;
 
-			g_nv2a.ptimer.int_status |= NV_PTIMER_INTR_0_ALARM_PENDING;
-			pmc_update_irq();
+			int_status |= NV_PTIMER_INTR_0_ALARM_PENDING;
+			m_machine->get<pmc>().update_irq();
 		}
 		else {
-			next_time = g_nv2a.ptimer.last_alarm_time + ptimer_period - now;
+			next_time = last_alarm_time + ptimer_period - now;
 		}
 
 		return next_time;
@@ -54,127 +53,134 @@ ptimer_get_next_alarm_time(uint64_t now)
 	return std::numeric_limits<uint64_t>::max();
 }
 
-static void
-ptimer_write(uint32_t addr, const uint32_t data, void *opaque)
+void
+ptimer::write(uint32_t addr, const uint32_t data)
 {
 	switch (addr)
 	{
 	case NV_PTIMER_INTR_0:
-		g_nv2a.ptimer.int_status &= ~data;
-		pmc_update_irq();
+		int_status &= ~data;
+		m_machine->get<pmc>().update_irq();
 		break;
 
 	case NV_PTIMER_INTR_EN_0:
-		g_nv2a.ptimer.int_enabled = data;
-		pmc_update_irq();
+		int_enabled = data;
+		m_machine->get<pmc>().update_irq();
 		break;
 
 	case NV_PTIMER_NUMERATOR: {
 		// A multiplier of zero stops the 56 bit counter
-		g_nv2a.ptimer.multiplier = data;
-		g_nv2a.ptimer.counter_active = g_nv2a.ptimer.multiplier & NV_PTIMER_NUMERATOR_MASK ? 1 : 0;
-		uint64_t now = get_now();
-		if (g_nv2a.ptimer.counter_active) {
-			g_nv2a.ptimer.counter_period = ptimer_counter_to_us();
-			g_nv2a.ptimer.last_alarm_time = now;
+		multiplier = data;
+		counter_active = multiplier & NV_PTIMER_NUMERATOR_MASK ? 1 : 0;
+		uint64_t now = timer::get_now();
+		if (counter_active) {
+			counter_period = counter_to_us();
+			last_alarm_time = now;
 		}
-		cpu_set_timeout(g_cpu, cpu_check_periodic_events(now));
+		cpu_set_timeout(m_machine->get<cpu_t *>(), m_machine->get<cpu>().check_periodic_events(timer::get_now()));
 	}
 	break;
 
 	case NV_PTIMER_DENOMINATOR:
-		g_nv2a.ptimer.divider = data;
-		if (g_nv2a.ptimer.counter_active) {
-			g_nv2a.ptimer.counter_period = ptimer_counter_to_us();
-			cpu_set_timeout(g_cpu, cpu_check_periodic_events(get_now()));
+		divider = data;
+		if (counter_active) {
+			counter_period = counter_to_us();
+			cpu_set_timeout(m_machine->get<cpu_t *>(), m_machine->get<cpu>().check_periodic_events(timer::get_now()));
 		}
 		break;
 
 		// Tested on a Retail 1.0 xbox: writing to the NV_PTIMER_TIME_0/1 registers causes the timer to start counting from the written value
 	case NV_PTIMER_TIME_0:
-		g_nv2a.ptimer.counter_offset = (g_nv2a.ptimer.counter_offset & (0xFFFFFFFFULL << 32)) | data;
+		counter_offset = (counter_offset & (0xFFFFFFFFULL << 32)) | data;
 		break;
 
 	case NV_PTIMER_TIME_1:
-		g_nv2a.ptimer.counter_offset = (g_nv2a.ptimer.counter_offset & 0xFFFFFFFFULL) | ((uint64_t)data << 32);
+		counter_offset = (counter_offset & 0xFFFFFFFFULL) | ((uint64_t)data << 32);
 		break;
 
 	case NV_PTIMER_ALARM_0:
-		g_nv2a.ptimer.alarm = data;
-		if (g_nv2a.ptimer.counter_active) {
-			g_nv2a.ptimer.counter_period = ptimer_counter_to_us();
-			cpu_set_timeout(g_cpu, cpu_check_periodic_events(get_now()));
+		alarm = data;
+		if (counter_active) {
+			counter_period = counter_to_us();
+			cpu_set_timeout(m_machine->get<cpu_t *>(), m_machine->get<cpu>().check_periodic_events(timer::get_now()));
 		}
 		break;
 
 	default:
-		nxbx_fatal("Unhandled PTIMER write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
+		nxbx::fatal("Unhandled %s write at address 0x%" PRIX32 " with value 0x%" PRIX32, get_name(), addr, data);
 	}
 }
 
-static uint32_t
-ptimer_read(uint32_t addr, void *opaque)
+uint32_t
+ptimer::read(uint32_t addr)
 {
-	uint32_t value = std::numeric_limits<uint32_t>::max();
+	uint32_t value = 0;
 
 	switch (addr)
 	{
 	case NV_PTIMER_INTR_0:
-		value = g_nv2a.ptimer.int_status;
+		value = int_status;
 		break;
 
 	case NV_PTIMER_INTR_EN_0:
-		value = g_nv2a.ptimer.int_enabled;
+		value = int_enabled;
 		break;
 
 	case NV_PTIMER_NUMERATOR:
-		value = g_nv2a.ptimer.multiplier;
+		value = multiplier;
 		break;
 
 	case NV_PTIMER_DENOMINATOR:
-		value = g_nv2a.ptimer.divider;
+		value = divider;
 		break;
 
 	case NV_PTIMER_TIME_0:
 		// Returns the low 27 bits of the 56 bit counter
-		value = uint32_t(g_nv2a.ptimer.counter_offset + ((get_dev_now(g_nv2a.pramdac.core_freq) & 0x7FFFFFF) << 5));
+		value = uint32_t(counter_offset + ((timer::get_dev_now(m_machine->get<pramdac>().core_freq) & 0x7FFFFFF) << 5));
 		break;
 
 	case NV_PTIMER_TIME_1:
 		// Returns the high 29 bits of the 56 bit counter
-		value = uint32_t(g_nv2a.ptimer.counter_offset + ((get_dev_now(g_nv2a.pramdac.core_freq) >> 27) & 0x1FFFFFFF));
+		value = uint32_t(counter_offset + ((timer::get_dev_now(m_machine->get<pramdac>().core_freq) >> 27) & 0x1FFFFFFF));
 		break;
 
 	case NV_PTIMER_ALARM_0:
-		value = g_nv2a.ptimer.alarm;
+		value = alarm;
 		break;
 
 	default:
-		nxbx_fatal("Unhandled PTIMER read at address 0x%" PRIX32, addr);
+		nxbx::fatal("Unhandled %s read at address 0x%" PRIX32, get_name(), addr);
 	}
 
 	return value;
 }
 
 void
-ptimer_reset()
+ptimer::reset()
 {
-	g_nv2a.ptimer.int_status = NV_PTIMER_INTR_0_ALARM_NOT_PENDING;
-	g_nv2a.ptimer.int_enabled = NV_PTIMER_INTR_EN_0_ALARM_DISABLED;
-	g_nv2a.ptimer.multiplier = 0;
-	g_nv2a.ptimer.divider = 1;
-	g_nv2a.ptimer.alarm = 0;
-	g_nv2a.ptimer.counter_period = 0;
-	g_nv2a.ptimer.counter_active = 0;
-	g_nv2a.ptimer.counter_offset = 0;
+	int_status = NV_PTIMER_INTR_0_ALARM_NOT_PENDING;
+	int_enabled = NV_PTIMER_INTR_EN_0_ALARM_DISABLED;
+	multiplier = 0;
+	divider = 1;
+	alarm = 0;
+	counter_period = 0;
+	counter_active = 0;
+	counter_offset = 0;
 }
 
-void
-ptimer_init()
+bool
+ptimer::init()
 {
-	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, NV_PTIMER_BASE, NV_PTIMER_SIZE, false, { .fnr32 = ptimer_read, .fnw32 = ptimer_write }, nullptr))) {
-		throw nxbx_exp_abort("Failed to initialize ptimer MMIO range");
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PTIMER_BASE, NV_PTIMER_SIZE, false,
+		{
+			.fnr32 = cpu_read<ptimer, uint32_t, &ptimer::read>,
+			.fnw32 = cpu_write<ptimer, uint32_t, &ptimer::write>
+		},
+		this))) {
+		logger(log_lv::error, "Failed to initialize %s mmio ports", get_name());
+		return false;
 	}
 
-	ptimer_reset();
+	reset();
+	return true;
 }

@@ -15,18 +15,28 @@
 enum class disas_syntax : uint32_t {
 	att,
 	masm,
-	intel
+	intel,
 };
 
-class nxbx_exp_abort : public std::runtime_error
-{
+enum class console_t : uint32_t {
+	xbox,
+	chihiro,
+	devkit,
+};
+
+class init_info_t {
 public:
-	explicit nxbx_exp_abort(const std::string &msg) : runtime_error(msg.c_str()) { extra_info = msg.empty() ? false : true; }
-	explicit nxbx_exp_abort(const char *msg) : runtime_error(msg) { extra_info = std::string_view(msg).empty() ? false : true; }
-	bool has_extra_info() { return extra_info; }
-
-private:
-	bool extra_info;
+	std::string m_kernel;
+	std::string m_nxbx_path;
+	std::string m_xbe_path;
+	disas_syntax m_syntax;
+	uint32_t m_use_dbg;
+	console_t m_type;
 };
 
-void nxbx_fatal(const char *msg, ...);
+namespace nxbx {
+	bool init_console(const init_info_t &init_info);
+	void start();
+	void fatal(const char *msg, ...);
+	std::string_view console_to_string(console_t type);
+}

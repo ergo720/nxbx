@@ -4,30 +4,11 @@
 
 // This code is derived from https://github.com/ergo720/halfix/blob/master/src/hardware/pci.cpp
 
-#include "cpu.hpp"
-#include "pci.hpp"
-#include "../init.hpp"
-
-
-struct pci_t {
-	/// ignore: configuration_address_spaces
-	uint32_t configuration_address_register;
-
-	// Whether to generate a configuration cycle or not
-	int configuration_cycle;
-
-	// Device configuration address space.
-	// bus:8 - device:5 - function:3; only nv2a uses bus one so 512 elements are enough to cover all xbox devices
-	uint8_t *configuration_address_spaces[256 * 2];
-
-	pci_conf_write_cb configuration_modification[256 * 2];
-};
-
-static pci_t g_pci;
+#include "machine.hpp"
 
 
 void
-pci_write(uint32_t addr, const uint8_t data, void *opaque)
+pci::write8(uint32_t addr, const uint8_t data)
 {
 	int offset = addr & 3;
 	switch (addr & ~3)
@@ -35,75 +16,71 @@ pci_write(uint32_t addr, const uint8_t data, void *opaque)
 	case 0xCF8: // PCI Configuration Address Register
 		offset *= 8;
 
-		g_pci.configuration_address_register &= ~(0xFF << offset);
-		g_pci.configuration_address_register |= data << offset;
+		configuration_address_register &= ~(0xFF << offset);
+		configuration_address_register |= data << offset;
 
-		if (g_pci.configuration_address_register & 0x7F000003) {
+		if (configuration_address_register & 0x7F000003) {
 			logger(log_lv::info, "Setting reserved bits of configuration address register");
 		}
-		g_pci.configuration_address_register &= ~0x7F000003;
-		g_pci.configuration_cycle = g_pci.configuration_address_register >> 31;
+		configuration_address_register &= ~0x7F000003;
+		configuration_cycle = configuration_address_register >> 31;
 		break;
 
 	case 0xCFC: // PCI Configuration Data Register
-		if (g_pci.configuration_cycle) {
-			int bus = g_pci.configuration_address_register >> 16 & 0xFF;
-			int device_and_function = g_pci.configuration_address_register >> 8 & 0xFF;
-			int offset = (g_pci.configuration_address_register & 0xFC) | (addr & 3);
+		if (configuration_cycle) {
+			int bus = (configuration_address_register >> 16) & 0xFF;
+			int device = (configuration_address_register >> 11) & 0x1F;
+			int function = (configuration_address_register >> 8) & 7;
+			int bdf = (bus << 8) | (device << 3) | function;
+			int offset = (configuration_address_register & 0xFC) | (addr & 3);
 
-			if (bus > 1) [[unlikely]] {
+			const auto it = configuration_modification.find(bdf);
+			if (it == configuration_modification.end()) {
 				return;
 			}
-
-			if (!g_pci.configuration_modification[(bus << 8) | device_and_function]) {
-				return;
-			}
-			uint8_t *arr = g_pci.configuration_address_spaces[(bus << 8) | device_and_function];
-			if (!g_pci.configuration_modification[(bus << 8) | device_and_function](arr, offset, data)) {
+			uint8_t *arr = configuration_address_spaces.find(bdf)->second.get(); // can't fail if above succeeded
+			if (!it->second.first(arr, offset, data, it->second.second)) {
 				arr[offset] = data;
 			}
 		}
 		break;
 
 	default:
-		nxbx_fatal("Write to unknown register - 0x%" PRIX32, addr);
+		nxbx::fatal("Write to unknown register - 0x%" PRIX32, addr);
 	}
 }
 
 uint8_t
-pci_read(uint32_t addr, void *opaque)
+pci::read8(uint32_t addr)
 {
 	int offset = addr & 3;
 	uint32_t retval = -1;
 	switch (addr & ~3)
 	{
 	case 0xCF8: // PCI Status Register
-		return g_pci.configuration_address_register >> (offset * 8) & 0xFF;
+		return configuration_address_register >> (offset * 8) & 0xFF;
 
 	case 0xCFC: { // TODO: Type 0 / Type 1 configuration cycles
-		if (g_pci.configuration_cycle) {
-			int bus = g_pci.configuration_address_register >> 16 & 0xFF;
-			int device_and_function = g_pci.configuration_address_register >> 8 & 0xFF;
-			int offset = g_pci.configuration_address_register & 0xFC;
+		if (configuration_cycle) {
+			int bus = configuration_address_register >> 16 & 0xFF;
+			int device = (configuration_address_register >> 11) & 0x1F;
+			int function = (configuration_address_register >> 8) & 7;
+			int offset = configuration_address_register & 0xFC;
 
-			if (bus > 1) [[unlikely]] {
-				return -1;
-			}
-
-			uint8_t *ptr = g_pci.configuration_address_spaces[(bus << 8) | device_and_function];
-			if (ptr) {
-				retval = ptr[offset | (addr & 3)];
-			}
-			else {
+			const auto it = configuration_address_spaces.find((bus << 8) | (device << 3) | function);
+			if (it == configuration_address_spaces.end()) {
 				retval = -1;
 			}
-			//g_pci.status_register = ~retval & 0x80000000; // ~(uint8_t value) & 0x80000000 == 0x80000000 and ~(-1) & 0x80000000 == 0
+			else {
+				retval = it->second[offset | (addr & 3)];
+			}
+			//status_register = ~retval & 0x80000000; // ~(uint8_t value) & 0x80000000 == 0x80000000 and ~(-1) & 0x80000000 == 0
 		}
 		return retval;
 	}
 
 	default:
-		nxbx_fatal("Read from unknown register - 0x%" PRIX32, addr);
+		nxbx::fatal("Read from unknown register - 0x%" PRIX32, addr);
 		return 0xFF;
 	}
 }
@@ -112,118 +89,114 @@ pci_read(uint32_t addr, void *opaque)
 // Although the PCI spec says that all ports are "Dword-sized," the BochS BIOS reads fractions of registers.
 
 uint16_t
-pci_read16(uint32_t addr, void *opaque)
+pci::read16(uint32_t addr)
 {
-	uint16_t result = pci_read(addr, opaque);
-	result |= ((uint16_t)pci_read(addr + 1, opaque) << 8);
+	uint16_t result = read8(addr);
+	result |= ((uint16_t)read8(addr + 1) << 8);
 	return result;
 }
 
 uint32_t
-pci_read32(uint32_t addr, void *opaque)
+pci::read32(uint32_t addr)
 {
-	uint32_t result = pci_read(addr, opaque);
-	result |= ((uint32_t)pci_read(addr + 1, opaque) << 8);
-	result |= ((uint32_t)pci_read(addr + 2, opaque) << 16);
-	result |= ((uint32_t)pci_read(addr + 3, opaque) << 24);
+	uint32_t result = read8(addr);
+	result |= ((uint32_t)read8(addr + 1) << 8);
+	result |= ((uint32_t)read8(addr + 2) << 16);
+	result |= ((uint32_t)read8(addr + 3) << 24);
 	return result;
 }
 
 void
-pci_write16(uint32_t addr, const uint16_t data, void *opaque)
+pci::write16(uint32_t addr, const uint16_t data)
 {
-	pci_write(addr, data & 0xFF, opaque);
-	pci_write(addr + 1, data >> 8 & 0xFF, opaque);
+	write8(addr, data & 0xFF);
+	write8(addr + 1, data >> 8 & 0xFF);
 }
 
 void
-pci_write32(uint32_t addr, const uint32_t data, void *opaque)
+pci::write32(uint32_t addr, const uint32_t data)
 {
-	pci_write(addr, data & 0xFF, opaque);
-	pci_write(addr + 1, data >> 8 & 0xFF, opaque);
-	pci_write(addr + 2, data >> 16 & 0xFF, opaque);
-	pci_write(addr + 3, data >> 24 & 0xFF, opaque);
+	write8(addr, data & 0xFF);
+	write8(addr + 1, data >> 8 & 0xFF);
+	write8(addr + 2, data >> 16 & 0xFF);
+	write8(addr + 3, data >> 24 & 0xFF);
 }
 
 void *
-pci_create_device(uint32_t bus, uint32_t device, uint32_t function, pci_conf_write_cb cb)
+pci::create_device(uint32_t bus, uint32_t device, uint32_t function, pci_conf_write_cb cb, void *opaque)
 {
 	if (bus > 1) {
-		nxbx_fatal("Unsupported bus id=%" PRIu32, bus);
+		nxbx::fatal("Unsupported bus id=%" PRIu32, bus);
 		return nullptr;
 	}
 	if (device > 31) {
-		nxbx_fatal("Unsupported device id=%" PRIu32, device);
+		nxbx::fatal("Unsupported device id=%" PRIu32, device);
 		return nullptr;
 	}
 	if (function > 7) {
-		nxbx_fatal("Unsupported function id=%" PRIu32, function);
+		nxbx::fatal("Unsupported function id=%" PRIu32, function);
 		return nullptr;
 	}
 
-	g_pci.configuration_modification[(bus << 8) | (device << 3) | function] = cb;
+	int bdf = (bus << 8) | (device << 3) | function;
+	configuration_modification.emplace(bdf, std::make_pair(cb, opaque));
 	logger(log_lv::info, "Registering device at bus=%" PRIu32 " device=%" PRIu32 " function=%" PRIu32, bus, device, function);
 
-	return g_pci.configuration_address_spaces[(bus << 8) | (device << 3) | function] = new uint8_t[256]();
+	return (configuration_address_spaces[bdf] = std::make_unique<uint8_t[]>(256)).get();
 }
 
 void
-pci_copy_default_configuration(void *confptr, void *area, int size)
+pci::copy_default_configuration(void *confptr, void *area, int size)
 {
 	memcpy(confptr, area, size > 256 ? 256 : size);
 }
 
 void *
-pci_get_configuration_ptr(uint32_t bus, uint32_t device, uint32_t function)
+pci::get_configuration_ptr(uint32_t bus, uint32_t device, uint32_t function)
 {
 	if (bus > 1) {
-		nxbx_fatal("Unsupported bus id=%" PRIu32, bus);
+		nxbx::fatal("Unsupported bus id=%" PRIu32, bus);
 		return nullptr;
 	}
 	if (device > 31) {
-		nxbx_fatal("Unsupported device id=%" PRIu32, device);
+		nxbx::fatal("Unsupported device id=%" PRIu32, device);
 		return nullptr;
 	}
 	if (function > 7) {
-		nxbx_fatal("Unsupported function id=%" PRIu32, function);
+		nxbx::fatal("Unsupported function id=%" PRIu32, function);
 		return nullptr;
 	}
 
-	return g_pci.configuration_address_spaces[(bus << 8) | (device << 3) | function];
+	return (configuration_address_spaces[(bus << 8) | (device << 3) | function]).get();
 }
 
 void
-pci_cleanup()
+pci::reset()
 {
-	for (auto &conf : g_pci.configuration_address_spaces) {
-		if (conf) {
-			delete[] conf;
-			conf = nullptr;
-		}
-	}
+	configuration_address_register = 0;
+	configuration_cycle = 0;
+
+	configuration_address_spaces.clear();
+	configuration_modification.clear();
 }
 
-static void
-pci_reset()
+bool
+pci::init()
 {
-	g_pci.configuration_address_register = 0;
-	g_pci.configuration_cycle = 0;
-
-	pci_cleanup();
-
-	for (auto &cb : g_pci.configuration_modification) {
-		cb = nullptr;
-	}
-}
-
-void
-pci_init()
-{
-	io_handlers_t pci_handlers{ .fnr8 = pci_read, .fnr16 = pci_read16, .fnr32 = pci_read32, .fnw8 = pci_write, .fnw16 = pci_write16, .fnw32 = pci_write32 };
-	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0xCF8, 8, true, pci_handlers, nullptr))) {
-		throw nxbx_exp_abort("Failed to initialize pci I/O ports");
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0xCF8, 8, true,
+		{
+			.fnr8 = cpu_read<pci, uint8_t, &pci::read8>,
+			.fnr16 = cpu_read<pci, uint16_t, &pci::read16>,
+			.fnr32 = cpu_read<pci, uint32_t, &pci::read32>,
+			.fnw8 = cpu_write<pci, uint8_t, &pci::write8>,
+			.fnw16 = cpu_write<pci, uint16_t, &pci::write16>,
+			.fnw32 = cpu_write<pci, uint32_t, &pci::write32>
+		},
+		this))) {
+		logger(log_lv::error, "Failed to initialize %s io ports", get_name().data());
+		return false;
 	}
 
-	add_reset_func(pci_reset);
-	pci_reset();
+	reset();
+	return true;
 }

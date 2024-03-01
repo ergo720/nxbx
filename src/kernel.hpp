@@ -11,30 +11,30 @@
 #define KERNEL_BASE 0x80010000
 
 
-enum KERNEL_IO {
-	KERNEL_IO_BASE = 0X200,
-	DBG_STR = 0X200,
-	SYS_TYPE,
-	ABORT,
-	CLOCK_INCREMENT_LOW,
-	CLOCK_INCREMENT_HIGH,
-	BOOT_TIME_MS,
-	IO_START,
-	IO_RETRY,
-	IO_QUERY,
-	UNUSED1,
-	IO_CHECK_ENQUEUE,
-	UNUSED2,
-	UNUSED3,
-	XE_DVD_XBE_LENGTH,
-	XE_DVD_XBE_ADDR,
-	ACPI_TIME_LOW,
-	ACPI_TIME_HIGH,
-	KERNEL_IO_END
-};
-constexpr inline size_t KERNEL_IO_SIZE = KERNEL_IO_END - KERNEL_IO_BASE;
-inline xbox_string xbe_name;
-inline xbox_string xbox_xbe_path;
+namespace kernel {
+	enum IO_PORTS {
+		IO_BASE = 0X200,
+		DBG_STR = 0X200,
+		SYS_TYPE,
+		ABORT,
+		CLOCK_INCREMENT_LOW,
+		CLOCK_INCREMENT_HIGH,
+		BOOT_TIME_MS,
+		IO_START,
+		IO_RETRY,
+		IO_QUERY,
+		UNUSED1,
+		IO_CHECK_ENQUEUE,
+		UNUSED2,
+		UNUSED3,
+		XE_DVD_XBE_LENGTH,
+		XE_DVD_XBE_ADDR,
+		ACPI_TIME_LOW,
+		ACPI_TIME_HIGH,
+		IO_END
+	};
+	constexpr inline size_t IO_SIZE = IO_END - IO_BASE;
 
-uint32_t nboxkrnl_read_handler(addr_t addr, void *opaque);
-void nboxkrnl_write_handler(addr_t addr, const uint32_t value, void *opaque);
+	uint32_t read_handler(addr_t addr, void *opaque);
+	void write_handler(addr_t addr, const uint32_t value, void *opaque);
+}

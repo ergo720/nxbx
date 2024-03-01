@@ -4,77 +4,76 @@
 
 // This code is derived from https://github.com/ergo720/halfix/blob/master/src/hardware/pic.cpp
 
-#include "pic.hpp"
-#include "cpu.hpp"
-#include "../init.hpp"
+#include "machine.hpp"
 #include <bit>
 
 
-static inline bool
-pic_is_master(pic_t *pic)
+uint8_t
+pic::get_interrupt()
 {
-	return pic == &g_pic[0];
-}
-
-static uint8_t
-pic_get_interrupt(pic_t *pic)
-{
-	uint8_t irq = pic->highest_priority_irq_to_send, irq_mask = 1 << irq;
-	if ((pic->irr & irq_mask) == 0) {
+	uint8_t irq = highest_priority_irq_to_send, irq_mask = 1 << irq;
+	if ((irr & irq_mask) == 0) {
 		// Generate a spurious IRQ7 if the interrupt is no longer pending
-		return pic->vector_offset | 7;
+		return vector_offset | 7;
 	}
 
 	// If edge triggered, then clear irr
-	if ((pic->elcr & irq_mask) == 0) {
-		pic->irr &= ~irq_mask;
+	if ((elcr & irq_mask) == 0) {
+		irr &= ~irq_mask;
 	}
 
-	pic->isr |= irq_mask;
+	isr |= irq_mask;
 
-	if (pic_is_master(pic) && irq == 2) {
-		return pic_get_interrupt(&g_pic[1]);
+	if (is_master() && irq == 2) {
+		return m_machine->get<pic, 1>().get_interrupt();
 	}
 
-	return pic->vector_offset + irq;
+	return vector_offset + irq;
+}
+
+uint8_t
+pic::get_interrupt_for_cpu()
+{
+	cpu_lower_hw_int_line(m_machine->get<cpu_t *>());
+	return get_interrupt();
 }
 
 uint16_t
-pic_get_interrupt()
+get_interrupt_for_cpu(void *opaque)
 {
-	cpu_lower_hw_int_line(g_cpu);
-	return pic_get_interrupt(&g_pic[0]);
+	pic *master = static_cast<pic *>(opaque);
+	return master->get_interrupt_for_cpu();
 }
 
-static void
-pic_update_state(pic_t *pic)
+void
+pic::update_state()
 {
-	uint8_t unmasked, isr;
+	uint8_t unmasked, isr1;
 
-	if (!(unmasked = pic->irr & ~pic->imr)) {
+	if (!(unmasked = irr & ~imr)) {
 		// All interrupts masked, nothing to do
 		return;
 	}
 
 	// Left rotate IRR and ISR so that the interrupts are located in decreasing priority
-	unmasked = std::rotl(unmasked, pic->priority_base ^ 7);
-	isr = std::rotl(pic->isr, pic->priority_base ^ 7);
+	unmasked = std::rotl(unmasked, priority_base ^ 7);
+	isr1 = std::rotl(isr, priority_base ^ 7);
 
 	for (unsigned i = 0; i < 8; ++i) {
 		uint8_t mask = 1 << i;
-		if (isr & mask) {
+		if (isr1 & mask) {
 			return;
 		}
 
 		if (unmasked & (1 << i)) {
-			pic->highest_priority_irq_to_send = (pic->priority_base + 1 + i) & 7;
+			highest_priority_irq_to_send = (priority_base + 1 + i) & 7;
 
-			if (pic_is_master(pic)) {
-				cpu_raise_hw_int_line(g_cpu);
+			if (is_master()) {
+				cpu_raise_hw_int_line(m_machine->get<cpu_t *>());
 			}
 			else {
-				pic_lower_irq(2);
-				pic_raise_irq(2);
+				m_machine->lower_irq(2);
+				m_machine->raise_irq(2);
 			}
 
 			return;
@@ -82,97 +81,85 @@ pic_update_state(pic_t *pic)
 	}
 }
 
-static void
-pic_raise_irq(pic_t *pic, uint8_t irq)
+void
+pic::raise_irq(uint8_t irq)
 {
 	uint8_t mask = 1 << irq;
 
-	if (pic->elcr & mask) {
+	if (elcr & mask) {
 		// level triggered
-		pic->pin_state |= mask;
-		pic->irr |= mask;
-		pic_update_state(pic);
+		pin_state |= mask;
+		irr |= mask;
+		update_state();
 	}
 	else {
 		// edge triggered
-		if ((pic->pin_state & mask) == 0) {
-			pic->pin_state |= mask;
-			pic->irr |= mask;
-			pic_update_state(pic);
+		if ((pin_state & mask) == 0) {
+			pin_state |= mask;
+			irr |= mask;
+			update_state();
 		}
 		else {
-			pic->pin_state |= mask;
+			pin_state |= mask;
 		}
 	}
 }
 
-static void
-pic_lower_irq(pic_t *pic, uint8_t irq)
+void
+pic::lower_irq(uint8_t irq)
 {
 	uint8_t mask = 1 << irq;
-	pic->pin_state &= ~mask;
-	pic->irr &= ~mask;
+	pin_state &= ~mask;
+	irr &= ~mask;
 
-	if (!pic_is_master(pic) && !pic->irr) {
-		pic_lower_irq(2);
+	if (!is_master() && !irr) {
+		m_machine->lower_irq(2);
 	}
 }
 
 void
-pic_raise_irq(uint8_t a)
-{
-	pic_raise_irq(&g_pic[a > 7 ? 1 : 0], a & 7);
-}
-
-void
-pic_lower_irq(uint8_t a)
-{
-	pic_lower_irq(&g_pic[a > 7 ? 1 : 0], a & 7);
-}
-
-static void
-pic_write_ocw(pic_t *pic, unsigned idx, uint8_t value)
+pic::write_ocw(unsigned idx, uint8_t value)
 {
 	switch (idx)
 	{
 	case 1:
-		pic->imr = value;
-		pic_update_state(pic);
+		imr = value;
+		update_state();
 		break;
 
 	case 2: {
 		uint8_t rotate = value & 0x80, specific = value & 0x40, eoi = value & 0x20, irq = value & 7;
 		if (eoi) {
 			if (specific) {
-				pic->isr &= ~(1 << irq);
+				isr &= ~(1 << irq);
 				if (rotate) {
-					pic->priority_base = irq;
+					priority_base = irq;
 				}
 			}
 			else {
 				// Clear the highest priority irq
-				uint8_t highest = (pic->priority_base + 1) & 7;
+				uint8_t highest = (priority_base + 1) & 7;
 				for (unsigned i = 0; i < 8; ++i) {
 					uint8_t mask = 1 << ((highest + i) & 7);
-					if (pic->isr & mask) {
-						pic->isr &= ~mask;
+					if (isr & mask) {
+						isr &= ~mask;
 						break;
 					}
 				}
 				if (rotate) {
-					pic->priority_base = irq;
+					priority_base = irq;
 				}
 			}
-			pic_update_state(pic);
+			update_state();
 		}
 		else {
 			if (specific) {
 				if (rotate) {
-					pic->priority_base = irq;
+					priority_base = irq;
 				}
 			}
 			else {
-				nxbx_fatal("Automatic rotation of IRQ priorities is not supported");
+				nxbx::fatal("Automatic rotation of IRQ priorities is not supported");
 			}
 		}
 	}
@@ -180,150 +167,177 @@ pic_write_ocw(pic_t *pic, unsigned idx, uint8_t value)
 
 	case 3: {
 		if (value & 2) {
-			pic->read_isr = value & 1;
+			read_isr = value & 1;
 		}
 		else if (value & 0x44) {
-			nxbx_fatal("Unknown feature: %02X", value);
+			nxbx::fatal("Unknown feature: %02X", value);
 		}
 	}
 	}
 }
 
-static void
-pic_write_icw(pic_t *pic, unsigned idx, uint8_t value)
+void
+pic::write_icw(unsigned idx, uint8_t value)
 {
 	switch (idx)
 	{
 	case 1:
 		if ((value & 1) == 0) {
-			nxbx_fatal("Configuration with no icw4 is not supported");
+			nxbx::fatal("Configuration with no icw4 is not supported");
 		}
 		else if (value & 2) {
-			nxbx_fatal("Single pic configuration is not supported");
+			nxbx::fatal("Single pic configuration is not supported");
 		}
 
-		pic->in_init = 1;
-		pic->imr = 0;
-		pic->isr = 0;
-		pic->irr = 0;
-		pic->priority_base = 7;
-		pic->icw_idx = 2;
+		in_init = 1;
+		imr = 0;
+		isr = 0;
+		irr = 0;
+		priority_base = 7;
+		icw_idx = 2;
 		break;
 
 	case 2:
-		pic->vector_offset = value & ~7;
-		pic->icw_idx = 3;
+		vector_offset = value & ~7;
+		icw_idx = 3;
 		break;
 
 	case 3:
-		pic->icw_idx = 4;
+		icw_idx = 4;
 		break;
 
 	case 4:
 		if ((value & 1) == 0) {
-			nxbx_fatal("MCS-80/85 mode is not supported");
+			nxbx::fatal("MCS-80/85 mode is not supported");
 		}
 		else if (value & 2) {
-			nxbx_fatal("Auto-eoi mode is not supported");
+			nxbx::fatal("Auto-eoi mode is not supported");
 		}
 		else if (value & 8) {
-			nxbx_fatal("Buffered mode is not supported");
+			nxbx::fatal("Buffered mode is not supported");
 		}
 		else if (value & 16) {
-			nxbx_fatal("Special fully nested mode is not supported");
+			nxbx::fatal("Special fully nested mode is not supported");
 		}
 
-		pic->in_init = 0;
-		pic->icw_idx = 5;
+		in_init = 0;
+		icw_idx = 5;
 		break;
 
 	default:
-		nxbx_fatal("Unknown icw specified, idx was %d", idx);
+		nxbx::fatal("Unknown icw specified, idx was %d", idx);
 	}
 }
 
 void
-pic_write_handler(uint32_t addr, const uint8_t data, void *opaque)
+pic::write_handler(uint32_t addr, const uint8_t data)
 {
-	pic_t *pic = static_cast<pic_t *>(opaque);
 	if ((addr & 1) == 0) {
 		switch (data >> 3 & 3)
 		{
 		case 0:
-			pic_write_ocw(pic, 2, data);
+			write_ocw(2, data);
 			break;
 
 		case 1:
-			pic_write_ocw(pic, 3, data);
+			write_ocw(3, data);
 			break;
 
 		default:
-			cpu_lower_hw_int_line(g_cpu);
-			pic_write_icw(pic, 1, data);
+			cpu_lower_hw_int_line(m_machine->get<cpu_t *>());
+			write_icw(1, data);
 		}
 	}
 	else {
-		if (pic->in_init) {
-			pic_write_icw(pic, pic->icw_idx, data);
+		if (in_init) {
+			write_icw(icw_idx, data);
 		}
 		else {
-			pic_write_ocw(pic, 1, data);
+			write_ocw(1, data);
 		}
 	}
 }
 
 uint8_t
-pic_read_handler(uint32_t port, void *opaque)
+pic::read_handler(uint32_t addr)
 {
-	pic_t *pic = static_cast<pic_t *>(opaque);
-	if (port & 1) {
-		return pic->imr;
+	if (addr & 1) {
+		return imr;
 	}
 	else {
-		return pic->read_isr ? pic->isr : pic->irr;
+		return read_isr ? isr : irr;
 	}
 }
 
 void
-pic_elcr_write_handler(uint32_t addr, const uint8_t data, void *opaque)
+pic::elcr_write_handler(uint32_t addr, const uint8_t data)
 {
-	static_cast<pic_t *>(opaque)[addr & 1].elcr = data;
+	elcr = data;
 }
 
 uint8_t
-pic_elcr_read_handler(uint32_t addr, void *opaque)
+pic::elcr_read_handler(uint32_t addr)
 {
-	return static_cast<pic_t *>(opaque)[addr & 1].elcr;
-}
-
-static void
-pic_reset()
-{
-	for (auto &pic : g_pic) {
-		pic.vector_offset = 0;
-		pic.imr = 0xFF;
-		pic.irr = 0;
-		pic.isr = 0;
-		pic.in_init = 0;
-		pic.read_isr = 0;
-	}
+	return elcr;
 }
 
 void
-pic_init()
+pic::reset()
 {
-	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x20, 2, true, io_handlers_t{ .fnr8 = pic_read_handler, .fnw8 = pic_write_handler }, &g_pic[0]))) {
-		throw nxbx_exp_abort("Failed to initialize master pic I/O ports");
+	vector_offset = 0;
+	imr = 0xFF;
+	irr = 0;
+	isr = 0;
+	in_init = 0;
+	read_isr = 0;
+}
+
+bool
+pic::init()
+{
+	if (idx == 0) {
+		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x20, 2, true,
+			{
+				.fnr8 = cpu_read<pic, uint8_t, &pic::read_handler>,
+				.fnw8 = cpu_write<pic, uint8_t, &pic::write_handler>
+			},
+			this))) {
+			logger(log_lv::error, "Failed to initialize %s io ports", get_name().data());
+			return false;
+		}
+
+		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x4D0, 1, true,
+			{
+				.fnr8 = cpu_read<pic, uint8_t, &pic::elcr_read_handler>,
+				.fnw8 = cpu_write<pic, uint8_t, &pic::elcr_write_handler>
+			},
+			this))) {
+			logger(log_lv::error, "Failed to initialize %s elcr io ports", get_name().data());
+			return false;
+		}
+	}
+	else {
+		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0xA0, 2, true,
+			{
+				.fnr8 = cpu_read<pic, uint8_t, &pic::read_handler>,
+				.fnw8 = cpu_write<pic, uint8_t, &pic::write_handler>
+			},
+			this))) {
+			logger(log_lv::error, "Failed to initialize slave pic io ports", get_name().data());
+			return false;
+		}
+
+		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x4D1, 1, true,
+			{
+				.fnr8 = cpu_read<pic, uint8_t, &pic::elcr_read_handler>,
+				.fnw8 = cpu_write<pic, uint8_t, &pic::elcr_write_handler>
+			},
+			this))) {
+			logger(log_lv::error, "Failed to initialize %s elcr io ports", get_name().data());
+			return false;
+		}
 	}
 
-	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0xA0, 2, true, io_handlers_t{ .fnr8 = pic_read_handler, .fnw8 = pic_write_handler }, &g_pic[1]))) {
-		throw nxbx_exp_abort("Failed to initialize slave pic I/O ports");
-	}
-
-	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x4D0, 2, true, io_handlers_t{ .fnr8 = pic_elcr_read_handler, .fnw8 = pic_elcr_write_handler }, g_pic))) {
-		throw nxbx_exp_abort("Failed to initialize elcr I/O ports");
-	}
-
-	add_reset_func(pic_reset);
-	pic_reset();
+	reset();
+	return true;
 }

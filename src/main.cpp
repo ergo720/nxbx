@@ -2,8 +2,8 @@
 
 // SPDX-FileCopyrightText: 2023 ergo720
 
-#include "init.hpp"
 #include "files.hpp"
+#include "nxbx.hpp"
 #include <cstring>
 #include <cstdio>
 #include <filesystem>
@@ -28,6 +28,7 @@ main(int argc, char **argv)
 {
 	init_info_t init_info;
 	init_info.m_syntax = disas_syntax::att;
+	init_info.m_type = console_t::xbox; // FIXME: hardcoded to create an xbox console for now
 	init_info.m_use_dbg = 0;
 	char option = ' ';
 
@@ -106,7 +107,7 @@ main(int argc, char **argv)
 		return 1;
 	}
 
-	init_info.m_nxbx_path = get_nxbx_path();
+	init_info.m_nxbx_path = nxbx::get_path();
 	if (init_info.m_kernel.empty()) {
 		// Attempt to find nboxkrnl in the current directory of nxbx
 		std::filesystem::path curr_dir = init_info.m_nxbx_path;
@@ -121,7 +122,11 @@ main(int argc, char **argv)
 		init_info.m_kernel = curr_dir.string();
 	}
 
-	start_system(init_info);
+	if (nxbx::init_console(init_info) == false) {
+		return 1;
+	}
+
+	nxbx::start();
 
 	return 0;
 }

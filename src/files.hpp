@@ -16,4 +16,6 @@ std::optional<std::fstream> create_file(std::filesystem::path path);
 std::optional<std::fstream> create_file(std::filesystem::path path, uint64_t initial_size);
 std::optional<std::fstream> open_file(std::filesystem::path path);
 std::optional<std::fstream> open_file(std::filesystem::path path, std::uintmax_t *size);
-std::string get_nxbx_path();
+namespace nxbx {
+	std::string get_path();
+}

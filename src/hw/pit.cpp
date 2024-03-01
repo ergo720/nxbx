@@ -4,37 +4,33 @@
 
 // This code is derived from https://github.com/ergo720/halfix/blob/master/src/hardware/pit.cpp
 
-#include "pit.hpp"
-#include "pic.hpp"
-#include "cpu.hpp"
+#include "machine.hpp"
 #include "../clock.hpp"
-#include "../init.hpp"
+
+#define PIT_IRQ_NUM 0
 
 
-// NOTE: on the xbox, the pit frequency is 6% lower than the default one, see https://xboxdevwiki.net/Porting_an_Operating_System_to_the_Xbox_HOWTO#Timer_Frequency
-constexpr uint64_t pit_clock_freq = 1125000;
-
-static inline uint64_t
-pit_counter_to_us()
+uint64_t
+pit::counter_to_us()
 {
-	constexpr double time_scale = static_cast<double>(ticks_per_second) / static_cast<double>(pit_clock_freq);
-	return (uint64_t)(static_cast<double>(pit.chan[0].counter) * time_scale);
+	constexpr double time_scale = static_cast<double>(timer::ticks_per_second) / static_cast<double>(clock_freq);
+	return (uint64_t)(static_cast<double>(m_chan[0].counter) * time_scale);
 }
 
 uint64_t
-pit_get_next_irq_time(uint64_t now)
+pit::get_next_irq_time(uint64_t now)
 {
-	if (pit.chan[0].timer_running) {
-		uint64_t next_time, pit_period = pit_counter_to_us();
-		if (now - pit.chan[0].last_irq_time >= pit_period) {
-			pit.chan[0].last_irq_time = now;
+	if (m_chan[0].timer_running) {
+		uint64_t next_time, pit_period = counter_to_us();
+		if (now - m_chan[0].last_irq_time >= pit_period) {
+			m_chan[0].last_irq_time = now;
 			next_time = pit_period;
 
-			pic_lower_irq(0);
-			pic_raise_irq(0);
+			m_machine->lower_irq(PIT_IRQ_NUM);
+			m_machine->raise_irq(PIT_IRQ_NUM);
 		}
 		else {
-			next_time = pit.chan[0].last_irq_time + pit_period - now;
+			next_time = m_chan[0].last_irq_time + pit_period - now;
 		}
 
 		return next_time;
@@ -43,16 +39,16 @@ pit_get_next_irq_time(uint64_t now)
 	return std::numeric_limits<uint64_t>::max();
 }
 
-static void
-pit_start_timer(pit_channel_t *chan)
+void
+pit::start_timer(uint8_t channel)
 {
-	chan->last_irq_time = get_now();
-	chan->timer_running = 1;
-	cpu_set_timeout(g_cpu, cpu_check_periodic_events(chan->last_irq_time));
+	m_chan[channel].last_irq_time = timer::get_now();
+	m_chan[channel].timer_running = 1;
+	cpu_set_timeout(m_machine->get<cpu_t *>(), m_machine->get<cpu>().check_periodic_events(m_chan[channel].last_irq_time));
 }
 
 void
-pit_write_handler(uint32_t port, const uint8_t value, void *opaque)
+pit::write_handler(uint32_t port, const uint8_t value)
 {
 	uint8_t channel = port & 3;
 
@@ -65,25 +61,25 @@ pit_write_handler(uint32_t port, const uint8_t value, void *opaque)
 		switch (channel)
 		{
 		case 3:
-			nxbx_fatal("Read back command is not supported");
+			nxbx::fatal("Read back command is not supported");
 			break;
 
 		case 0:
 		case 1:
 		case 2: {
-			pit_channel_t *chan = &pit.chan[channel];
+			pit_channel *chan = &m_chan[channel];
 			if (!access) {
-				nxbx_fatal("Counter latch command is not supported");
+				nxbx::fatal("Counter latch command is not supported");
 			}
 			else {
 				if (bcd) {
-					nxbx_fatal("BCD mode not supported");
+					nxbx::fatal("BCD mode not supported");
 				}
 
 				chan->wmode = access;
 				chan->timer_mode = opmode;
 				if ((chan->timer_mode == 2) && (channel == 0)) {
-					pic_raise_irq(0);
+					m_machine->raise_irq(PIT_IRQ_NUM);
 				}
 			}
 			break;
@@ -96,20 +92,20 @@ pit_write_handler(uint32_t port, const uint8_t value, void *opaque)
 	case 0:
 	case 1:
 	case 2: {
-		pit_channel_t *chan = &pit.chan[channel];
+		pit_channel *chan = &m_chan[channel];
 
 		switch (chan->wmode)
 		{
 		case 0:
 		case 1:
 		case 2:
-			nxbx_fatal("Read/Load mode must be LSB first MSB last");
+			nxbx::fatal("Read/Load mode must be LSB first MSB last");
 			break;
 
 		case 3:
 			if (chan->lsb_read) {
 				chan->counter = (static_cast<uint16_t>(value) << 8) | chan->counter;
-				pit_start_timer(chan);
+				start_timer(channel);
 				chan->lsb_read = 0;
 			}
 			else {
@@ -123,30 +119,35 @@ pit_write_handler(uint32_t port, const uint8_t value, void *opaque)
 	}
 }
 
-static void
-pit_channel_reset(pit_channel_t *chan)
+void
+pit::channel_reset(uint8_t channel)
 {
-	chan->counter = 0;
-	chan->timer_mode = 0;
-	chan->lsb_read = 0;
-	chan->timer_running = 0;
-}
-
-static void
-pit_reset()
-{
-	for (pit_channel_t &chan : pit.chan) {
-		pit_channel_reset(&chan);
-	}
+	m_chan[channel].counter = 0;
+	m_chan[channel].timer_mode = 0;
+	m_chan[channel].lsb_read = 0;
+	m_chan[channel].timer_running = 0;
 }
 
 void
-pit_init()
+pit::reset()
 {
-	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, 0x40, 4, true, io_handlers_t{ .fnw8 = pit_write_handler }, nullptr))) {
-		throw nxbx_exp_abort("Failed to initialize pit I/O ports");
+	for (unsigned i = 0; i < 3; ++i) {
+		channel_reset(i);
+	}
+}
+
+bool
+pit::init()
+{
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x40, 4, true,
+		{
+		.fnw8 = cpu_write<pit, uint8_t, &pit::write_handler>
+		},
+		this))) {
+		logger(log_lv::error, "Failed to initialize %s io ports", get_name().data());
+		return false;
 	}
 
-	add_reset_func(pit_reset);
-	pit_reset();
+	reset();
+	return true;
 }

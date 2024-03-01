@@ -2,8 +2,7 @@
 
 // SPDX-FileCopyrightText: 2024 ergo720
 
-#include "../../cpu.hpp"
-#include "nv2a.hpp"
+#include "machine.hpp"
 
 #define NV_PCRTC 0x00600000
 #define NV_PCRTC_BASE (NV2A_REGISTER_BASE + NV_PCRTC)
@@ -15,61 +14,68 @@
 #define NV_PCRTC_INTR_EN_0_VBLANK_DISABLED 0x00000000
 
 
-static void
-pcrtc_write(uint32_t addr, const uint32_t data, void *opaque)
+void
+pcrtc::write(uint32_t addr, const uint32_t data)
 {
 	switch (addr)
 	{
 	case NV_PCRTC_INTR_0:
-		g_nv2a.pcrtc.int_status &= ~data;
-		pmc_update_irq();
+		int_status &= ~data;
+		m_machine->get<pmc>().update_irq();
 		break;
 
 	case NV_PCRTC_INTR_EN_0:
-		g_nv2a.pcrtc.int_enabled = data;
-		pmc_update_irq();
+		int_enabled = data;
+		m_machine->get<pmc>().update_irq();
 		break;
 
 	default:
-		nxbx_fatal("Unhandled PCRTC write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
+		nxbx::fatal("Unhandled %s write at address 0x%" PRIX32 " with value 0x%" PRIX32, get_name(), addr, data);
 	}
 }
 
-static uint32_t
-pcrtc_read(uint32_t addr, void *opaque)
+uint32_t
+pcrtc::read(uint32_t addr)
 {
-	uint32_t value = std::numeric_limits<uint32_t>::max();
+	uint32_t value = 0;
 
 	switch (addr)
 	{
 	case NV_PCRTC_INTR_0:
-		value = g_nv2a.pcrtc.int_status;
+		value = int_status;
 		break;
 
 	case NV_PCRTC_INTR_EN_0:
-		value = g_nv2a.pcrtc.int_enabled;
+		value = int_enabled;
 		break;
 
 	default:
-		nxbx_fatal("Unhandled PCRTC read at address 0x%" PRIX32, addr);
+		nxbx::fatal("Unhandled %s read at address 0x%" PRIX32, get_name(), addr);
 	}
 
 	return value;
 }
 
 void
-pcrtc_reset()
+pcrtc::reset()
 {
-	g_nv2a.pcrtc.int_status = NV_PCRTC_INTR_0_VBLANK_NOT_PENDING;
-	g_nv2a.pcrtc.int_enabled = NV_PCRTC_INTR_EN_0_VBLANK_DISABLED;
+	int_status = NV_PCRTC_INTR_0_VBLANK_NOT_PENDING;
+	int_enabled = NV_PCRTC_INTR_EN_0_VBLANK_DISABLED;
 }
 
-void
-pcrtc_init()
+bool
+pcrtc::init()
 {
-	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, NV_PCRTC_BASE, NV_PCRTC_SIZE, false, { .fnr32 = pcrtc_read, .fnw32 = pcrtc_write }, nullptr))) {
-		throw nxbx_exp_abort("Failed to initialize pcrtc MMIO range");
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PCRTC_BASE, NV_PCRTC_SIZE, false,
+		{
+			.fnr32 = cpu_read<pcrtc, uint32_t, &pcrtc::read>,
+			.fnw32 = cpu_write<pcrtc, uint32_t, &pcrtc::write>
+		},
+		this))) {
+		logger(log_lv::error, "Failed to initialize %s mmio ports", get_name());
+		return false;
 	}
 
-	pcrtc_reset();
+	reset();
+	return true;
 }

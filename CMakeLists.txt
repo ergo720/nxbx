@@ -43,8 +43,8 @@ include_directories(${NXBX_ROOT_DIR}/import/lib86cpu/include ${NXBX_ROOT_DIR}/sr
 
 set(HEADERS
  "${NXBX_ROOT_DIR}/src/clock.hpp"
+ "${NXBX_ROOT_DIR}/src/console.hpp"
  "${NXBX_ROOT_DIR}/src/files.hpp"
- "${NXBX_ROOT_DIR}/src/init.hpp"
  "${NXBX_ROOT_DIR}/src/io.hpp"
  "${NXBX_ROOT_DIR}/src/kernel.hpp"
  "${NXBX_ROOT_DIR}/src/logger.hpp"
@@ -55,6 +55,7 @@ set(HEADERS
  "${NXBX_ROOT_DIR}/src/hw/cmos.hpp"
  "${NXBX_ROOT_DIR}/src/hw/cpu.hpp"
  "${NXBX_ROOT_DIR}/src/hw/eeprom.hpp"
+ "${NXBX_ROOT_DIR}/src/hw/machine.hpp"
  "${NXBX_ROOT_DIR}/src/hw/pci.hpp"
  "${NXBX_ROOT_DIR}/src/hw/pic.hpp"
  "${NXBX_ROOT_DIR}/src/hw/pit.hpp"
@@ -70,7 +71,6 @@ set(HEADERS
 set(SOURCES
  "${NXBX_ROOT_DIR}/src/clock.cpp"
  "${NXBX_ROOT_DIR}/src/files.cpp"
- "${NXBX_ROOT_DIR}/src/init.cpp"
  "${NXBX_ROOT_DIR}/src/io.cpp"
  "${NXBX_ROOT_DIR}/src/kernel.cpp"
  "${NXBX_ROOT_DIR}/src/logger.cpp"

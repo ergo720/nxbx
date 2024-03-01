@@ -2,9 +2,7 @@
 
 // SPDX-FileCopyrightText: 2024 ergo720
 
-#include "../../cpu.hpp"
-#include "pic.hpp"
-#include "nv2a.hpp"
+#include "machine.hpp"
 
 #define NV_PMC 0x00000000
 #define NV_PMC_BASE (NV2A_REGISTER_BASE + NV_PMC)
@@ -38,8 +36,8 @@
 #define NV_PMC_ENABLE_PCRTC (1 << 24)
 
 
-static void
-pmc_write(uint32_t addr, const uint32_t data, void *opaque)
+void
+pmc::write(uint32_t addr, const uint32_t data)
 {
 	switch (addr)
 	{
@@ -52,53 +50,53 @@ pmc_write(uint32_t addr, const uint32_t data, void *opaque)
 		uint32_t mask = NV_PMC_BOOT_1_ENDIAN0_LITTLE_MASK;
 		if (data & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK) {
 			mask = NV_PMC_BOOT_1_ENDIAN0_BIG_MASK;
-			nxbx_fatal("NV_PMC_BOOT_1: big endian switch not implemented");
+			nxbx::fatal("NV_PMC_BOOT_1: big endian switch not implemented");
 			break;
 		}
-		g_nv2a.pmc.endianness = ((data & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK) | mask);
+		endianness = ((data & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK) | mask);
 	}
 	break;
 
 	case NV_PMC_INTR_0:
 		// Only NV_PMC_INTR_0_SOFTWARE is writable, the other bits are read-only
-		g_nv2a.pmc.int_status = (g_nv2a.pmc.int_status & ~NV_PMC_INTR_0_SOFTWARE_MASK) | (data & NV_PMC_INTR_0_SOFTWARE_MASK);
-		pmc_update_irq();
+		int_status = (int_status & ~NV_PMC_INTR_0_SOFTWARE_MASK) | (data & NV_PMC_INTR_0_SOFTWARE_MASK);
+		update_irq();
 		break;
 
 	case NV_PMC_INTR_EN_0:
-		g_nv2a.pmc.int_enabled = data;
-		pmc_update_irq();
+		int_enabled = data;
+		update_irq();
 		break;
 
 	case NV_PMC_ENABLE: {
 		bool has_int_state_changed = false;
-		g_nv2a.pmc.engine_enabled = data;
+		engine_enabled = data;
 		if ((data & NV_PMC_ENABLE_PTIMER) == 0) {
-			ptimer_reset();
+			m_machine->get<ptimer>().reset();
 			has_int_state_changed = true;
 		}
 		if ((data & NV_PMC_ENABLE_PFB) == 0) {
-			pfb_reset();
+			m_machine->get<pfb>().reset();
 		}
 		if ((data & NV_PMC_ENABLE_PCRTC) == 0) {
-			pcrtc_reset();
+			m_machine->get<pcrtc>().reset();
 			has_int_state_changed = true;
 		}
 		if (has_int_state_changed) {
-			pmc_update_irq();
+			update_irq();
 		}
 	}
 	break;
 
 	default:
-		nxbx_fatal("Unhandled PMC write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
+		nxbx::fatal("Unhandled %s write at address 0x%" PRIX32 " with value 0x%" PRIX32, get_name(), addr, data);
 	}
 }
 
-static uint32_t
-pmc_read(uint32_t addr, void *opaque)
+uint32_t
+pmc::read(uint32_t addr)
 {
-	uint32_t value = std::numeric_limits<uint32_t>::max();
+	uint32_t value = 0;
 
 	switch (addr)
 	{
@@ -108,49 +106,49 @@ pmc_read(uint32_t addr, void *opaque)
 		break;
 
 	case NV_PMC_BOOT_1:
-		// Returns the current endianness used for MMIO accesses to the gpu
-		value = g_nv2a.pmc.endianness;
+		// Returns the current endianness used for mmio accesses to the gpu
+		value = endianness;
 		break;
 
 	case NV_PMC_INTR_0:
-		value = g_nv2a.pmc.int_status;
+		value = int_status;
 		break;
 
 	case NV_PMC_INTR_EN_0:
-		value = g_nv2a.pmc.int_enabled;
+		value = int_enabled;
 		break;
 
 	case NV_PMC_ENABLE:
-		value = g_nv2a.pmc.engine_enabled;
+		value = engine_enabled;
 		break;
 
 	default:
-		nxbx_fatal("Unhandled PMC read at address 0x%" PRIX32, addr);
+		nxbx::fatal("Unhandled %s read at address 0x%" PRIX32, get_name(), addr);
 	}
 
 	return value;
 }
 
 void
-pmc_update_irq()
+pmc::update_irq()
 {
 	// Check for pending PCRTC interrupts
-	if (g_nv2a.pcrtc.int_status & g_nv2a.pcrtc.int_enabled) {
-		g_nv2a.pmc.int_status |= (1 << NV_PMC_INTR_0_PCRTC);
+	if (m_machine->get<pcrtc>().int_status & m_machine->get<pcrtc>().int_enabled) {
+		int_status |= (1 << NV_PMC_INTR_0_PCRTC);
 	}
 	else {
-		g_nv2a.pmc.int_status &= ~(1 << NV_PMC_INTR_0_PCRTC);
+		int_status &= ~(1 << NV_PMC_INTR_0_PCRTC);
 	}
 
 	// Check for pending PTIMER interrupts
-	if (g_nv2a.ptimer.int_status & g_nv2a.ptimer.int_enabled) {
-		g_nv2a.pmc.int_status |= (1 << NV_PMC_INTR_0_PTIMER);
+	if (m_machine->get<ptimer>().int_status & m_machine->get<ptimer>().int_enabled) {
+		int_status |= (1 << NV_PMC_INTR_0_PTIMER);
 	}
 	else {
-		g_nv2a.pmc.int_status &= ~(1 << NV_PMC_INTR_0_PTIMER);
+		int_status &= ~(1 << NV_PMC_INTR_0_PTIMER);
 	}
 
-	switch (g_nv2a.pmc.int_enabled)
+	switch (int_enabled)
 	{
 	default:
 	case NV_PMC_INTR_EN_0_INTA_DISABLED:
@@ -158,40 +156,47 @@ pmc_update_irq()
 		break;
 
 	case NV_PMC_INTR_EN_0_INTA_HARDWARE:
-		if (g_nv2a.pmc.int_status & NV_PMC_INTR_0_HARDWARE_MASK) {
-			pic_raise_irq(NV2A_IRQ_NUM);
+		if (int_status & NV_PMC_INTR_0_HARDWARE_MASK) {
+			m_machine->get<pic>().raise_irq(NV2A_IRQ_NUM);
 		}
 		else {
-			pic_lower_irq(NV2A_IRQ_NUM);
+			m_machine->get<pic>().lower_irq(NV2A_IRQ_NUM);
 		}
 		break;
 
 	case NV_PMC_INTR_EN_0_INTA_SOFTWARE:
-		if (g_nv2a.pmc.int_status & NV_PMC_INTR_0_SOFTWARE_MASK) {
-			pic_raise_irq(NV2A_IRQ_NUM);
+		if (int_status & NV_PMC_INTR_0_SOFTWARE_MASK) {
+			m_machine->get<pic>().raise_irq(NV2A_IRQ_NUM);
 		}
 		else {
-			pic_lower_irq(NV2A_IRQ_NUM);
+			m_machine->get<pic>().lower_irq(NV2A_IRQ_NUM);
 		}
 		break;
 	}
 }
 
-static void
-pmc_reset()
+void
+pmc::reset()
 {
-	g_nv2a.pmc.endianness = NV_PMC_BOOT_1_ENDIAN0_LITTLE_MASK | NV_PMC_BOOT_1_ENDIAN24_LITTLE_MASK;
-	g_nv2a.pmc.int_status = NV_PMC_INTR_0_NOT_PENDING;
-	g_nv2a.pmc.int_enabled = NV_PMC_INTR_EN_0_INTA_DISABLED;
-	g_nv2a.pmc.engine_enabled = 0;
+	endianness = NV_PMC_BOOT_1_ENDIAN0_LITTLE_MASK | NV_PMC_BOOT_1_ENDIAN24_LITTLE_MASK;
+	int_status = NV_PMC_INTR_0_NOT_PENDING;
+	int_enabled = NV_PMC_INTR_EN_0_INTA_DISABLED;
+	engine_enabled = 0;
 }
 
-void
-pmc_init()
+bool
+pmc::init()
 {
-	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, NV_PMC_BASE, NV_PMC_SIZE, false, { .fnr32 = pmc_read, .fnw32 = pmc_write }, nullptr))) {
-		throw nxbx_exp_abort("Failed to initialize pmc MMIO range");
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PMC_BASE, NV_PMC_SIZE, false,
+		{
+			.fnr32 = cpu_read<pmc, uint32_t, &pmc::read>,
+			.fnw32 = cpu_write<pmc, uint32_t, &pmc::write>
+		},
+		this))) {
+		logger(log_lv::error, "Failed to initialize %s mmio ports", get_name());
+		return false;
 	}
 
-	pmc_reset();
+	reset();
+	return true;
 }

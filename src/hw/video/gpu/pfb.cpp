@@ -2,8 +2,7 @@
 
 // SPDX-FileCopyrightText: 2024 ergo720
 
-#include "../../cpu.hpp"
-#include "nv2a.hpp"
+#include "machine.hpp"
 
 #define NV_PFB 0x00100000
 #define NV_PFB_BASE (NV2A_REGISTER_BASE + NV_PFB)
@@ -14,17 +13,17 @@
 #define NV_PFB_CSTATUS (NV2A_REGISTER_BASE + 0x0010020C)
 
 
-static void
-pfb_write(uint32_t addr, const uint32_t data, void *opaque)
+void
+pfb::write(uint32_t addr, const uint32_t data)
 {
 	switch (addr)
 	{
 	case NV_PFB_CFG0:
-		g_nv2a.pfb.cfg0 = data;
+		cfg0 = data;
 		break;
 
 	case NV_PFB_CFG1:
-		g_nv2a.pfb.cfg1 = data;
+		cfg1 = data;
 		break;
 
 	case NV_PFB_CSTATUS:
@@ -32,23 +31,23 @@ pfb_write(uint32_t addr, const uint32_t data, void *opaque)
 		break;
 
 	default:
-		nxbx_fatal("Unhandled PFB write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
+		nxbx::fatal("Unhandled %s write at address 0x%" PRIX32 " with value 0x%" PRIX32, get_name(), addr, data);
 	}
 }
 
-static uint32_t
-pfb_read(uint32_t addr, void *opaque)
+uint32_t
+pfb::read(uint32_t addr)
 {
-	uint32_t value = std::numeric_limits<uint32_t>::max();
+	uint32_t value = 0;
 
 	switch (addr)
 	{
 	case NV_PFB_CFG0:
-		value = g_nv2a.pfb.cfg0;
+		value = cfg0;
 		break;
 
 	case NV_PFB_CFG1:
-		value = g_nv2a.pfb.cfg1;
+		value = cfg1;
 		break;
 
 	case NV_PFB_CSTATUS:
@@ -57,26 +56,33 @@ pfb_read(uint32_t addr, void *opaque)
 		break;
 
 	default:
-		nxbx_fatal("Unhandled PFB read at address 0x%" PRIX32, addr);
+		nxbx::fatal("Unhandled %s read at address 0x%" PRIX32, get_name(), addr);
 	}
 
 	return value;
 }
 
 void
-pfb_reset()
+pfb::reset()
 {
 	// Values dumped from a Retail 1.0 xbox
-	g_nv2a.pfb.cfg0 = 0x03070003;
-	g_nv2a.pfb.cfg1 = 0x11448000;
+	cfg0 = 0x03070003;
+	cfg1 = 0x11448000;
 }
 
-void
-pfb_init()
+bool
+pfb::init()
 {
-	if (!LC86_SUCCESS(mem_init_region_io(g_cpu, NV_PFB_BASE, NV_PFB_SIZE, false, { .fnr32 = pfb_read, .fnw32 = pfb_write }, nullptr))) {
-		throw nxbx_exp_abort("Failed to initialize pfb MMIO range");
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PFB_BASE, NV_PFB_SIZE, false,
+		{
+			.fnr32 = cpu_read<pfb, uint32_t, &pfb::read>,
+			.fnw32 = cpu_write<pfb, uint32_t, &pfb::write>
+		},
+		this))) {
+		logger(log_lv::error, "Failed to initialize %s mmio ports", get_name());
+		return false;
 	}
 
-	pfb_reset();
+	reset();
+	return true;
 }

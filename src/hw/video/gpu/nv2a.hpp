@@ -18,16 +18,24 @@
 #define NV2A_FB_SIZE 0x4000000 // = 64 MiB
 
 
-struct nv2a_t {
-	pmc_t pmc;
-	pcrtc_t pcrtc;
-	pramdac_t pramdac;
-	ptimer_t ptimer;
-	pfb_t pfb;
-	pbus_t pbus;
+class nv2a {
+public:
+	nv2a(machine *machine) : m_pmc(machine), m_pcrtc(machine), m_pramdac(machine), m_ptimer(machine),
+		m_pfb(machine), m_pbus(machine) {}
+	bool init();
+	uint64_t get_next_update_time(uint64_t now);
+	pmc &get_pmc() { return m_pmc; }
+	pcrtc &get_pcrtc() { return m_pcrtc; }
+	pramdac &get_pramdac() { return m_pramdac; }
+	ptimer &get_ptimer() { return m_ptimer; }
+	pfb &get_pfb() { return m_pfb; }
+	pbus &get_pbus() { return m_pbus; }
+
+private:
+	pmc m_pmc;
+	pcrtc m_pcrtc;
+	pramdac m_pramdac;
+	ptimer m_ptimer;
+	pfb m_pfb;
+	pbus m_pbus;
 };
-
-inline nv2a_t g_nv2a;
-
-void nv2a_init();
-uint64_t nv2a_get_next_update_time(uint64_t now);
