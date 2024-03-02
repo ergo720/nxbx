@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include "lib86cpu.h"
 #include "util.hpp"
 
 #define CONTIGUOUS_MEMORY_BASE 0x80000000

@@ -2,6 +2,7 @@
 
 // SPDX-FileCopyrightText: 2023 ergo720
 
+#include "console.hpp"
 #include "nxbx.hpp"
 #include "io.hpp"
 #include "kernel.hpp"
@@ -84,10 +85,10 @@ namespace kernel {
 			mem_read_block_virt(static_cast<cpu_t *>(opaque), value, sizeof(buff), buff);
 			logger(log_lv::info, "Kernel says: %s", buff);
 		}
-					break;
+		break;
 
 		case ABORT:
-			cpu_exit(static_cast<cpu_t *>(opaque));
+			console::get().exit();
 			break;
 
 		case IO_START:
