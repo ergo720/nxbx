@@ -17,6 +17,7 @@ print_help()
 options: \n\
 -k <path>  Path to nboxkrnl (xbox kernel) to run\n\
 -s <num>   Specify assembly syntax (default is AT&T)\n\
+-c <name>  Specify the console type to emulate (default is xbox)\n\
 -d         Start with debugger\n\
 -h         Print this message";
 
@@ -28,7 +29,7 @@ main(int argc, char **argv)
 {
 	init_info_t init_info;
 	init_info.m_syntax = disas_syntax::att;
-	init_info.m_type = console_t::xbox; // FIXME: hardcoded to create an xbox console for now
+	init_info.m_type = console_t::xbox;
 	init_info.m_use_dbg = 0;
 	char option = ' ';
 
@@ -71,6 +72,37 @@ main(int argc, char **argv)
 					}
 					break;
 
+				case 'c': {
+					if (++idx == argc || argv[idx][0] == '-') {
+						logger("Missing argument for option \"%c\"", option);
+						return 0;
+					}
+					std::string console = argv[idx];
+					if (console == nxbx::console_to_string(console_t::xbox)) {
+						init_info.m_type = console_t::xbox;
+					}
+					else if (console == nxbx::console_to_string(console_t::chihiro)) {
+						init_info.m_type = console_t::chihiro;
+					}
+					else if (console == nxbx::console_to_string(console_t::devkit)) {
+						init_info.m_type = console_t::devkit;
+					}
+					else {
+						switch (init_info.m_type = static_cast<console_t>(std::stoul(console, nullptr, 0)))
+						{
+						case console_t::xbox:
+						case console_t::chihiro:
+						case console_t::devkit:
+							break;
+
+						default:
+							logger("Unknown console type specified by option \"%c\"", option);
+							return 0;
+						}
+					}
+				}
+				break;
+
 				case 'd':
 					init_info.m_use_dbg = 1;
 					break;
@@ -104,6 +136,12 @@ main(int argc, char **argv)
 
 	if (init_info.m_xbe_path.empty()) {
 		logger("Input file is required");
+		return 1;
+	}
+
+	// FIXME: remove this when the chihiro and devkit console types are supported
+	if ((init_info.m_type == console_t::chihiro) || (init_info.m_type == console_t::devkit)) {
+		logger("The %s console type is currently not supported", nxbx::console_to_string(init_info.m_type).data());
 		return 1;
 	}
 
