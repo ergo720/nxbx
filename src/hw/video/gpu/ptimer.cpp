@@ -77,7 +77,7 @@ ptimer::write(uint32_t addr, const uint32_t data)
 			counter_period = counter_to_us();
 			last_alarm_time = now;
 		}
-		cpu_set_timeout(m_machine->get<cpu_t *>(), m_machine->get<cpu>().check_periodic_events(timer::get_now()));
+		cpu_set_timeout(m_machine->get<cpu_t *>(), m_machine->get<cpu>().check_periodic_events(now));
 	}
 	break;
 
