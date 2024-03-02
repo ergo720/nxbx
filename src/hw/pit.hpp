@@ -5,7 +5,6 @@
 #pragma once
 
 #include <stdint.h>
-#include <string_view>
 
 
 class machine;
@@ -22,7 +21,7 @@ public:
 	pit(machine *machine) : m_machine(machine) {}
 	bool init();
 	void reset();
-	constexpr std::string_view get_name() { return "PIT"; }
+	constexpr const char *get_name() { return "PIT"; }
 	uint64_t get_next_irq_time(uint64_t now);
 	void write_handler(uint32_t port, const uint8_t value);
 

@@ -193,7 +193,7 @@ pci::init()
 			.fnw32 = cpu_write<pci, uint32_t, &pci::write32>
 		},
 		this))) {
-		logger(log_lv::error, "Failed to initialize %s io ports", get_name().data());
+		logger(log_lv::error, "Failed to initialize %s io ports", get_name());
 		return false;
 	}
 

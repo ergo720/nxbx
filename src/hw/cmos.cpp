@@ -280,7 +280,7 @@ cmos::init()
 			.fnw8 = cpu_write<cmos, uint8_t, &cmos::write_handler>
 		},
 		this))) {
-		logger(log_lv::error, "Failed to initialize %s io ports", get_name().data());
+		logger(log_lv::error, "Failed to initialize %s io ports", get_name());
 		return false;
 	}
 

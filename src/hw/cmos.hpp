@@ -15,7 +15,7 @@ public:
 	cmos(machine *machine) : m_machine(machine) {}
 	bool init();
 	void reset();
-	constexpr std::string_view get_name() { return "CMOS"; }
+	constexpr const char *get_name() { return "CMOS"; }
 	uint8_t read_handler(uint32_t port);
 	void write_handler(uint32_t port, const uint8_t data);
 	uint64_t get_next_update_time(uint64_t now);

@@ -144,7 +144,7 @@ pit::init()
 		.fnw8 = cpu_write<pit, uint8_t, &pit::write_handler>
 		},
 		this))) {
-		logger(log_lv::error, "Failed to initialize %s io ports", get_name().data());
+		logger(log_lv::error, "Failed to initialize %s io ports", get_name());
 		return false;
 	}
 

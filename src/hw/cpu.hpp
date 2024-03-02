@@ -20,7 +20,7 @@ public:
 	void reset();
 	void start();
 	void exit();
-	constexpr std::string_view get_name() { return "CPU"; }
+	constexpr const char *get_name() { return "CPU"; }
 	uint64_t check_periodic_events(uint64_t now);
 	cpu_t *get_lc86cpu() { return m_lc86cpu; }
 

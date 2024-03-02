@@ -5,7 +5,6 @@
 #pragma once
 
 #include <stdint.h>
-#include <string_view>
 
 
 class machine;
@@ -15,7 +14,7 @@ public:
 	pic(machine *machine, unsigned idx, const char *const name) : m_machine(machine), m_name(name), idx(idx) {}
 	bool init();
 	void reset();
-	constexpr std::string_view get_name() { return m_name; }
+	constexpr const char *get_name() { return m_name; }
 	uint8_t get_interrupt_for_cpu();
 	void raise_irq(uint8_t a);
 	void lower_irq(uint8_t a);

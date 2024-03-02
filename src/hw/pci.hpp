@@ -5,7 +5,6 @@
 #pragma once
 
 #include <cstdint>
-#include <string_view>
 #include <unordered_map>
 #include <memory>
 
@@ -20,7 +19,7 @@ public:
 	pci(machine *machine) : m_machine(machine) {}
 	bool init();
 	void reset();
-	constexpr std::string_view get_name() { return "PCI"; }
+	constexpr const char *get_name() { return "PCI"; }
 	uint8_t read8(uint32_t addr);
 	uint16_t read16(uint32_t addr);
 	uint32_t read32(uint32_t addr);
