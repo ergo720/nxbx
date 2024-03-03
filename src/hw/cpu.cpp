@@ -115,6 +115,11 @@ cpu::init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 		return false;
 	}
 
+	if (!LC86_SUCCESS(mem_init_region_alias(m_lc86cpu, NV2A_VRAM_BASE, 0, NV2A_VRAM_SIZE))) {
+		logger(log_lv::error, "Failed to initialize vram memory for nv2a");
+		return false;
+	}
+
 	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, kernel::IO_BASE, kernel::IO_SIZE, true, { .fnr32 = kernel::read_handler, .fnw32 = kernel::write_handler }, m_lc86cpu))) {
 		logger(log_lv::error, "Failed to initialize kernel communication io ports");
 		return false;
