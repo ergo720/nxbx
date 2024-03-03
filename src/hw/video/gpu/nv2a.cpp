@@ -26,6 +26,9 @@ nv2a::init()
 	if (!m_ptimer.init()) {
 		return false;
 	}
+	if (!m_pramin.init()) {
+		return false;
+	}
 	return true;
 }
 

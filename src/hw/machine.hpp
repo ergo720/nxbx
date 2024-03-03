@@ -95,6 +95,9 @@ public:
 		else if constexpr (std::is_same_v<T, pbus>) {
 			return m_nv2a.get_pbus();
 		}
+		else if constexpr (std::is_same_v<T, pramin>) {
+			return m_nv2a.get_pramin();
+		}
 		else {
 			throw std::logic_error("Attempt to access unknown device");
 		}

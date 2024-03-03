@@ -13,6 +13,7 @@ class pcrtc;
 class pramdac;
 class pfb;
 class pbus;
+class pramin;
 
 class ptimer {
 public:
@@ -30,6 +31,7 @@ private:
 	friend class pramdac;
 	friend class pfb;
 	friend class pbus;
+	friend class pramin;
 	uint64_t counter_to_us();
 
 	machine *const m_machine;

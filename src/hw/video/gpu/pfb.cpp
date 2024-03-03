@@ -57,8 +57,7 @@ pfb::read(uint32_t addr)
 		break;
 
 	case NV_PFB_CSTATUS:
-		// Returns the size of the framebuffer in MiB in the bits 20-31. Bit 0 is a flag that indicates > 4 GiB of fb when set
-		value = NV2A_FB_SIZE;
+		value = cstatus;
 		break;
 
 	case NV_PFB_NVM:
@@ -79,6 +78,7 @@ pfb::reset()
 	cfg0 = 0x03070003;
 	cfg1 = 0x11448000;
 	nvm = 0; // unknown initial value
+	cstatus = NV2A_FB_SIZE;
 }
 
 bool

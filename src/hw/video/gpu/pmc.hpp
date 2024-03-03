@@ -13,6 +13,7 @@ class pramdac;
 class ptimer;
 class pfb;
 class pbus;
+class pramin;
 
 class pmc {
 public:
@@ -30,6 +31,7 @@ private:
 	friend class ptimer;
 	friend class pfb;
 	friend class pbus;
+	friend class pramin;
 	machine *const m_machine;
 	struct {
 		uint32_t endianness;

@@ -13,6 +13,7 @@ class pcrtc;
 class ptimer;
 class pfb;
 class pbus;
+class pramin;
 
 class pramdac {
 public:
@@ -30,6 +31,7 @@ private:
 	friend class ptimer;
 	friend class pfb;
 	friend class pbus;
+	friend class pramin;
 	machine *const m_machine;
 	uint64_t core_freq; // gpu frequency
 	struct {
