@@ -177,7 +177,7 @@ ptimer::init()
 			.fnw32 = cpu_write<ptimer, uint32_t, &ptimer::write>
 		},
 		this))) {
-		logger(log_lv::error, "Failed to initialize %s mmio ports", get_name());
+		logger(log_lv::error, "Failed to initialize %s mmio region", get_name());
 		return false;
 	}
 

@@ -147,7 +147,7 @@ pbus::pci_init()
 			.fnw32 = cpu_write<pbus, uint32_t, &pbus::pci_write>
 		},
 		this))) {
-		logger(log_lv::error, "Failed to initialize %s (PCI) mmio ports", get_name());
+		logger(log_lv::error, "Failed to initialize %s (PCI) mmio region", get_name());
 		return false;
 	}
 	m_pci_conf = pci_conf;
@@ -171,7 +171,7 @@ pbus::init()
 			.fnw32 = cpu_write<pbus, uint32_t, &pbus::write>
 		},
 		this))) {
-		logger(log_lv::error, "Failed to initialize %s mmio ports", get_name());
+		logger(log_lv::error, "Failed to initialize %s mmio region", get_name());
 		return false;
 	}
 

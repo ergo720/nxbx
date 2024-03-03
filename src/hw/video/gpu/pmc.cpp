@@ -193,7 +193,7 @@ pmc::init()
 			.fnw32 = cpu_write<pmc, uint32_t, &pmc::write>
 		},
 		this))) {
-		logger(log_lv::error, "Failed to initialize %s mmio ports", get_name());
+		logger(log_lv::error, "Failed to initialize %s mmio region", get_name());
 		return false;
 	}
 
