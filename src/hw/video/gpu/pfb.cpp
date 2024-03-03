@@ -11,6 +11,7 @@
 #define NV_PFB_CFG0 (NV2A_REGISTER_BASE + 0x00100200)
 #define NV_PFB_CFG1 (NV2A_REGISTER_BASE + 0x00100204)
 #define NV_PFB_CSTATUS (NV2A_REGISTER_BASE + 0x0010020C)
+#define NV_PFB_NVM (NV2A_REGISTER_BASE + 0x00100214)
 
 
 void
@@ -28,6 +29,11 @@ pfb::write(uint32_t addr, const uint32_t data)
 
 	case NV_PFB_CSTATUS:
 		// This register is read-only
+		break;
+
+	case NV_PFB_NVM:
+		logger(log_lv::warn, "NV_PFB_NVM: functionality unknown");
+		nvm = data;
 		break;
 
 	default:
@@ -55,6 +61,10 @@ pfb::read(uint32_t addr)
 		value = NV2A_FB_SIZE;
 		break;
 
+	case NV_PFB_NVM:
+		value = nvm;
+		break;
+
 	default:
 		nxbx::fatal("Unhandled %s read at address 0x%" PRIX32, get_name(), addr);
 	}
@@ -68,6 +78,7 @@ pfb::reset()
 	// Values dumped from a Retail 1.0 xbox
 	cfg0 = 0x03070003;
 	cfg1 = 0x11448000;
+	nvm = 0; // unknown initial value
 }
 
 bool

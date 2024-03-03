@@ -33,5 +33,7 @@ private:
 	struct {
 		// Appear to contain info about the ram modules
 		uint32_t cfg0, cfg1;
+		// FIXME: unknown what this does
+		uint32_t nvm;
 	};
 };
