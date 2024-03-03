@@ -29,6 +29,9 @@ nv2a::init()
 	if (!m_pramin.init()) {
 		return false;
 	}
+	if (!m_pfifo.init()) {
+		return false;
+	}
 	return true;
 }
 

@@ -13,6 +13,8 @@ class pcrtc;
 class pramdac;
 class ptimer;
 class pfb;
+class pramin;
+class pfifo;
 
 class pbus {
 public:
@@ -31,6 +33,8 @@ private:
 	friend class pramdac;
 	friend class ptimer;
 	friend class pfb;
+	friend class pramin;
+	friend class pfifo;
 	bool pci_init();
 
 	machine *const m_machine;

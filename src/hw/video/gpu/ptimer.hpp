@@ -14,6 +14,7 @@ class pramdac;
 class pfb;
 class pbus;
 class pramin;
+class pfifo;
 
 class ptimer {
 public:
@@ -32,6 +33,7 @@ private:
 	friend class pfb;
 	friend class pbus;
 	friend class pramin;
+	friend class pfifo;
 	uint64_t counter_to_us();
 
 	machine *const m_machine;
