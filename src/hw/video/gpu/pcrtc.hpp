@@ -9,12 +9,6 @@
 
 class machine;
 class pmc;
-class pramdac;
-class ptimer;
-class pfb;
-class pbus;
-class pramin;
-class pfifo;
 
 class pcrtc {
 public:
@@ -27,12 +21,6 @@ public:
 
 private:
 	friend class pmc;
-	friend class pramdac;
-	friend class ptimer;
-	friend class pfb;
-	friend class pbus;
-	friend class pramin;
-	friend class pfifo;
 	machine *const m_machine;
 	struct {
 		// Pending vblank interrupt. Writing a 0 has no effect, and writing a 1 clears the interrupt

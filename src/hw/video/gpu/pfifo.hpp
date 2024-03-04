@@ -8,13 +8,6 @@
 
 
 class machine;
-class pmc;
-class pcrtc;
-class pramdac;
-class ptimer;
-class pbus;
-class pramin;
-class pfb;
 
 class pfifo {
 public:
@@ -26,13 +19,6 @@ public:
 	void write(uint32_t addr, const uint32_t data);
 
 private:
-	friend class pmc;
-	friend class pcrtc;
-	friend class pramdac;
-	friend class ptimer;
-	friend class pbus;
-	friend class pramin;
-	friend class pfb;
 	machine *const m_machine;
 	struct {
 		// Contain the base address and size of ramht, ramfc and ramro in ramin

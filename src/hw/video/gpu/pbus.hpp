@@ -8,13 +8,6 @@
 
 
 class machine;
-class pmc;
-class pcrtc;
-class pramdac;
-class ptimer;
-class pfb;
-class pramin;
-class pfifo;
 
 class pbus {
 public:
@@ -28,13 +21,6 @@ public:
 	void pci_write(uint32_t addr, const uint32_t data);
 
 private:
-	friend class pmc;
-	friend class pcrtc;
-	friend class pramdac;
-	friend class ptimer;
-	friend class pfb;
-	friend class pramin;
-	friend class pfifo;
 	bool pci_init();
 
 	machine *const m_machine;

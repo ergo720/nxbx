@@ -8,13 +8,6 @@
 
 
 class machine;
-class pcrtc;
-class pramdac;
-class ptimer;
-class pfb;
-class pbus;
-class pramin;
-class pfifo;
 
 class pmc {
 public:
@@ -27,13 +20,6 @@ public:
 	void write(uint32_t addr, const uint32_t data);
 
 private:
-	friend class pcrtc;
-	friend class pramdac;
-	friend class ptimer;
-	friend class pfb;
-	friend class pbus;
-	friend class pramin;
-	friend class pfifo;
 	machine *const m_machine;
 	struct {
 		uint32_t endianness;

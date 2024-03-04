@@ -8,13 +8,7 @@
 
 
 class machine;
-class pmc;
-class pcrtc;
-class pramdac;
-class ptimer;
-class pbus;
 class pramin;
-class pfifo;
 
 class pfb {
 public:
@@ -26,13 +20,7 @@ public:
 	void write(uint32_t addr, const uint32_t data);
 
 private:
-	friend class pmc;
-	friend class pcrtc;
-	friend class pramdac;
-	friend class ptimer;
-	friend class pbus;
 	friend class pramin;
-	friend class pfifo;
 	machine *const m_machine;
 	struct {
 		// Appear to contain info about the ram modules
