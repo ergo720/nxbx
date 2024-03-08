@@ -41,13 +41,12 @@ cpu::reset()
 }
 
 bool
-cpu::init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
+cpu::init(const init_info_t &init_info)
 {
-	// FIXME: xbox memory hard coded to 64 MiB for now
-	uint32_t ramsize = 64 * 1024 * 1024;
+	m_ramsize = init_info.m_type == console_t::xbox ? RAM_SIZE64 : RAM_SIZE128;
 
 	// Load the nboxkrnl exe file
-	std::ifstream ifs(kernel.c_str(), std::ios_base::in | std::ios_base::binary);
+	std::ifstream ifs(init_info.m_kernel.c_str(), std::ios_base::in | std::ios_base::binary);
 	if (!ifs.is_open()) {
 		logger(log_lv::error, "Could not open kernel file");
 		return false;
@@ -61,7 +60,7 @@ cpu::init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 		logger(log_lv::error, "Size of kernel file detected as zero");
 		return false;
 	}
-	else if (length > ramsize) {
+	else if (length > m_ramsize) {
 		logger(log_lv::error, "Kernel file doesn't fit inside ram");
 		return false;
 	}
@@ -96,26 +95,26 @@ cpu::init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg)
 	}
 
 	// Init lib86cpu
-	if (!LC86_SUCCESS(cpu_new(ramsize, m_lc86cpu, { get_interrupt_for_cpu, &m_machine->get<pic>() }, "nboxkrnl"))) {
+	if (!LC86_SUCCESS(cpu_new(m_ramsize, m_lc86cpu, { get_interrupt_for_cpu, &m_machine->get<pic>() }, "nboxkrnl"))) {
 		logger(log_lv::error, "Failed to create cpu instance");
 		return false;
 	}
 
 	register_log_func(cpu_logger);
 
-	cpu_set_flags(m_lc86cpu, static_cast<uint32_t>(syntax) | (use_dbg ? CPU_DBG_PRESENT : 0));
+	cpu_set_flags(m_lc86cpu, static_cast<uint32_t>(init_info.m_syntax) | (init_info.m_use_dbg ? CPU_DBG_PRESENT : 0));
 
-	if (!LC86_SUCCESS(mem_init_region_ram(m_lc86cpu, 0, ramsize))) {
+	if (!LC86_SUCCESS(mem_init_region_ram(m_lc86cpu, 0, m_ramsize))) {
 		logger(log_lv::error, "Failed to initialize ram memory");
 		return false;
 	}
 
-	if (!LC86_SUCCESS(mem_init_region_alias(m_lc86cpu, CONTIGUOUS_MEMORY_BASE, 0, ramsize))) {
+	if (!LC86_SUCCESS(mem_init_region_alias(m_lc86cpu, CONTIGUOUS_MEMORY_BASE, 0, m_ramsize))) {
 		logger(log_lv::error, "Failed to initialize contiguous memory");
 		return false;
 	}
 
-	if (!LC86_SUCCESS(mem_init_region_alias(m_lc86cpu, NV2A_VRAM_BASE, 0, NV2A_VRAM_SIZE))) {
+	if (!LC86_SUCCESS(mem_init_region_alias(m_lc86cpu, NV2A_VRAM_BASE, 0, m_ramsize))) {
 		logger(log_lv::error, "Failed to initialize vram memory for nv2a");
 		return false;
 	}

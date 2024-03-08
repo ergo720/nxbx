@@ -29,6 +29,10 @@ pcrtc::write(uint32_t addr, const uint32_t data)
 		m_machine->get<pmc>().update_irq();
 		break;
 
+	case NV_PCRTC_START:
+		fb_addr = data & 0x7FFFFFC; // fb is 4 byte aligned
+		break;
+
 	default:
 		nxbx::fatal("Unhandled %s write at address 0x%" PRIX32 " with value 0x%" PRIX32, get_name(), addr, data);
 	}
@@ -49,6 +53,10 @@ pcrtc::read(uint32_t addr)
 		value = int_enabled;
 		break;
 
+	case NV_PCRTC_START:
+		value = fb_addr;
+		break;
+
 	default:
 		nxbx::fatal("Unhandled %s read at address 0x%" PRIX32, get_name(), addr);
 	}
@@ -61,6 +69,7 @@ pcrtc::reset()
 {
 	int_status = NV_PCRTC_INTR_0_VBLANK_NOT_PENDING;
 	int_enabled = NV_PCRTC_INTR_EN_0_VBLANK_DISABLED;
+	fb_addr = 0;
 }
 
 bool

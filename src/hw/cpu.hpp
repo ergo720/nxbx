@@ -9,13 +9,16 @@
 #include "../nxbx.hpp"
 #include <string>
 
+#define RAM_SIZE64 0x4000000 // = 64 MiB
+#define RAM_SIZE128 0x8000000 // = 128 MiB
+
 
 class machine;
 
 class cpu {
 public:
 	cpu(machine *machine) : m_machine(machine), m_lc86cpu(nullptr) {}
-	bool init(const std::string &kernel, disas_syntax syntax, uint32_t use_dbg);
+	bool init(const init_info_t &init_info);
 	void deinit();
 	void reset();
 	void start();
@@ -23,12 +26,14 @@ public:
 	constexpr const char *get_name() { return "CPU"; }
 	uint64_t check_periodic_events(uint64_t now);
 	cpu_t *get_lc86cpu() { return m_lc86cpu; }
+	uint32_t get_ramsize() { return m_ramsize; }
 
 private:
 	uint64_t check_periodic_events();
 
 	machine *const m_machine;
 	cpu_t *m_lc86cpu;
+	uint32_t m_ramsize;
 };
 
 template<typename D, typename T, auto f>

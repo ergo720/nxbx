@@ -17,10 +17,9 @@
 #define NV2A_CRYSTAL_FREQ 16666666 // = 16 MHz
 #define NV2A_IRQ_NUM 3
 #define NV2A_REGISTER_BASE 0xFD000000
-// FIXME: for chihiro and devkit, this should be 128 MiB instead
-#define NV2A_FB_SIZE 0x4000000 // = 64 MiB
 #define NV2A_VRAM_BASE 0xF0000000
-#define NV2A_VRAM_SIZE NV2A_FB_SIZE
+#define NV2A_VRAM_SIZE64 0x4000000 // = 64 MiB
+#define NV2A_VRAM_SIZE128 0x8000000 // = 128 MiB
 
 
 class nv2a {

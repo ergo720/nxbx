@@ -6,6 +6,8 @@
 
 #include <cstdint>
 
+#define NV_PCRTC_START (NV2A_REGISTER_BASE + 0x00600800)
+
 
 class machine;
 class pmc;
@@ -27,5 +29,7 @@ private:
 		uint32_t int_status;
 		// Enable/disable vblank interrupt
 		uint32_t int_enabled;
+		// The address of the framebuffer
+		uint32_t fb_addr;
 	};
 };

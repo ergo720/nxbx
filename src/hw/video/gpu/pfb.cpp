@@ -78,7 +78,7 @@ pfb::reset()
 	cfg0 = 0x03070003;
 	cfg1 = 0x11448000;
 	nvm = 0; // unknown initial value
-	cstatus = NV2A_FB_SIZE;
+	cstatus = m_machine->get<cpu>().get_ramsize();
 }
 
 bool

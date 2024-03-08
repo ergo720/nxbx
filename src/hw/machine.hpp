@@ -4,13 +4,14 @@
 
 #pragma once
 
+#include "../nxbx.hpp"
 #include "cpu.hpp"
 #include "pic.hpp"
 #include "pit.hpp"
 #include "cmos.hpp"
 #include "pci.hpp"
+#include "video/vga.hpp"
 #include "video/gpu/nv2a.hpp"
-#include "../nxbx.hpp"
 
 
 template<typename T>
@@ -18,10 +19,11 @@ concept is_cpu_t = std::is_same_v<T, cpu_t *>;
 
 class machine {
 public:
-	machine() : m_cpu(this), m_pit(this), m_pic{ {this, 0, "MASTER PIC"}, {this, 1, "SLAVE PIC"} }, m_pci(this), m_cmos(this), m_nv2a(this) {}
+	machine() : m_cpu(this), m_pit(this), m_pic{ {this, 0, "MASTER PIC"}, {this, 1, "SLAVE PIC"} }, m_pci(this), m_cmos(this), m_nv2a(this),
+	m_vga(this) {}
 	bool init(const init_info_t &init_info)
 	{
-		if (!m_cpu.init(init_info.m_kernel, init_info.m_syntax, init_info.m_use_dbg)) {
+		if (!m_cpu.init(init_info)) {
 			return false;
 		}
 		if (!m_pic[0].init()) {
@@ -40,6 +42,9 @@ public:
 			return false;
 		}
 		if (!m_nv2a.init()) {
+			return false;
+		}
+		if (!m_vga.init()) {
 			return false;
 		}
 		return true;
@@ -73,6 +78,9 @@ public:
 		}
 		else if constexpr (std::is_same_v<T, cmos>) {
 			return m_cmos;
+		}
+		else if constexpr (std::is_same_v<T, vga>) {
+			return m_vga;
 		}
 		else if constexpr (std::is_same_v<T, nv2a>) {
 			return m_nv2a;
@@ -132,4 +140,5 @@ private:
 	pci m_pci;
 	cmos m_cmos;
 	nv2a m_nv2a;
+	vga m_vga;
 };
