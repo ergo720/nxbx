@@ -36,16 +36,16 @@ private:
 	uint32_t m_ramsize;
 };
 
-template<typename D, typename T, auto f>
+template<typename D, typename T, auto f, uint32_t base = 0>
 T cpu_read(uint32_t addr, void *opaque)
 {
 	D *device = static_cast<D *>(opaque);
-	return (device->*f)(addr);
+	return (device->*f)(addr - base);
 }
 
-template<typename D, typename T, auto f>
+template<typename D, typename T, auto f, uint32_t base = 0>
 void cpu_write(uint32_t addr, const T value, void *opaque)
 {
 	D *device = static_cast<D *>(opaque);
-	(device->*f)(addr, value);
+	(device->*f)(addr - base, value);
 }

@@ -32,6 +32,9 @@ nv2a::init()
 	if (!m_pfifo.init()) {
 		return false;
 	}
+	if (!m_pvga.init()) {
+		return false;
+	}
 	return true;
 }
 

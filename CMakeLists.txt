@@ -69,6 +69,7 @@ set(HEADERS
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/pramdac.hpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/pramin.hpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/ptimer.hpp"
+ "${NXBX_ROOT_DIR}/src/hw/video/gpu/pvga.hpp"
 )
 
 set(SOURCES
@@ -97,6 +98,7 @@ set(SOURCES
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/pramdac.cpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/pramin.cpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/ptimer.cpp"
+ "${NXBX_ROOT_DIR}/src/hw/video/gpu/pvga.cpp"
 )
 
 source_group(TREE ${NXBX_ROOT_DIR} PREFIX header FILES ${HEADERS})
