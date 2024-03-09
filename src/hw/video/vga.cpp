@@ -1340,7 +1340,7 @@ vga::reset()
 	std::fill(dac_palette, &dac_palette[256], 0 );
 	dac_mask = dac_state = dac_address = dac_color = dac_read_address = 0;
 	std::fill(status, &status[2], 0);
-	misc = 0;
+	misc = 1; // set to 1 because Direct3D_CreateDevice attempts to access port 0x3D4 without setting this register first
 	char_width = 9; // default size of SR01 bit 0 is 0
 	std::fill(character_map, &character_map[2], 0);
 	pixel_panning = current_pixel_panning = 0;
