@@ -813,7 +813,7 @@ vga::io_read8(uint32_t addr)
 
 	case 0x3B5:
 	case 0x3D5:
-		if ((crt_index > 0x18) && (crt[0x1F] == 0)) {
+		if ((crt_index > 0x18) && (crt_index != 0x1F) && (crt[0x1F] == 0)) {
 			return 0;
 		}
 		return crt[crt_index];
