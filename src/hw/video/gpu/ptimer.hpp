@@ -31,10 +31,14 @@ private:
 	uint64_t last_alarm_time;
 	// Time in us before the alarm triggers
 	uint64_t counter_period;
-	// Counter is running if 1
+	// Bias added/subtracted to counter before an alarm is due
+	int64_t counter_bias;
+	// Counter is running if not zero
 	uint8_t counter_active;
-	// offset added to counter
+	// Offset added to counter
 	uint64_t counter_offset;
+	// Counter value when it was stopped
+	uint64_t counter_when_stopped;
 	struct {
 		// Pending alarm interrupt. Writing a 0 has no effect, and writing a 1 clears the interrupt
 		uint32_t int_status;
