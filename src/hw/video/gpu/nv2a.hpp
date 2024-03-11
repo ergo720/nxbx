@@ -13,6 +13,7 @@
 #include "pramin.hpp"
 #include "pfifo.hpp"
 #include "pvga.hpp"
+#include "pvideo.hpp"
 
 #define NV2A_CLOCK_FREQ 233333324 // = 233 MHz
 #define NV2A_CRYSTAL_FREQ 16666666 // = 16 MHz
@@ -26,7 +27,7 @@
 class nv2a {
 public:
 	nv2a(machine *machine) : m_pmc(machine), m_pcrtc(machine), m_pramdac(machine), m_ptimer(machine),
-		m_pfb(machine), m_pbus(machine), m_pramin(machine), m_pfifo(machine), m_pvga(machine) {}
+		m_pfb(machine), m_pbus(machine), m_pramin(machine), m_pfifo(machine), m_pvga(machine), m_pvideo(machine) {}
 	bool init();
 	uint64_t get_next_update_time(uint64_t now);
 	pmc &get_pmc() { return m_pmc; }
@@ -38,6 +39,7 @@ public:
 	pramin &get_pramin() { return m_pramin; }
 	pfifo &get_pfifo() { return m_pfifo; }
 	pvga &get_pvga() { return m_pvga; }
+	pvideo &get_pvideo() { return m_pvideo; }
 
 private:
 	pmc m_pmc;
@@ -49,4 +51,5 @@ private:
 	pramin m_pramin;
 	pfifo m_pfifo;
 	pvga m_pvga;
+	pvideo m_pvideo;
 };

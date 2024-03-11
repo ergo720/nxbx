@@ -35,6 +35,9 @@ nv2a::init()
 	if (!m_pvga.init()) {
 		return false;
 	}
+	if (!m_pvideo.init()) {
+		return false;
+	}
 	return true;
 }
 
