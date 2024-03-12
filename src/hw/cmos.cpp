@@ -255,9 +255,9 @@ cmos::get_next_update_time(uint64_t now)
 	}
 	else {
 		if (now - last_update_time >= timer::ticks_per_second) {
+			update_time(now - last_update_time);
 			last_update_time = now;
 			next_time = timer::ticks_per_second;
-			update_time(now - last_update_time);
 		}
 		else {
 			next_time = last_update_time + timer::ticks_per_second - now;
