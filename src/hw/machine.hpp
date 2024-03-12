@@ -52,6 +52,7 @@ public:
 	void deinit()
 	{
 		m_cpu.deinit();
+		m_cmos.deinit();
 	}
 	void start() { m_cpu.start(); }
 	void exit() { m_cpu.exit(); }

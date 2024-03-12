@@ -203,10 +203,13 @@ cmos::write_handler(uint32_t port, const uint8_t data)
 				break;
 			}
 
-			sys_time = std::mktime(&local_time);
-			if (sys_time == -1) {
+			if (time_t time = std::mktime(&local_time); time == -1) {
 				nxbx::fatal("Failed to update CMOS time");
 				return;
+			}
+			else {
+				sys_time = time;
+				sys_time_bias = time - std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 			}
 		}
 		else {
@@ -290,6 +293,12 @@ cmos::init()
 	ram[0x0D] = 0x80;
 	lost_us = 0;
 	last_update_time = timer::get_now();
-	sys_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()); // TODO: this should be read form a ini file instead
+	sys_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) + nxbx::get_settings<core_s>().sys_time_bias;
 	return true;
+}
+
+void
+cmos::deinit()
+{
+	nxbx::get_settings<core_s>().sys_time_bias = sys_time_bias;
 }

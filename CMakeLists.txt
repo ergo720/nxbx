@@ -39,7 +39,11 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY_REL
 endif()
 
 message("Building nxbx")
-include_directories(${NXBX_ROOT_DIR}/import/lib86cpu/include ${NXBX_ROOT_DIR}/src/hw)
+include_directories(
+ ${NXBX_ROOT_DIR}/import/lib86cpu/include
+ ${NXBX_ROOT_DIR}/import/simpleini
+ ${NXBX_ROOT_DIR}/src/hw
+)
 
 set(HEADERS
  "${NXBX_ROOT_DIR}/src/clock.hpp"
@@ -50,6 +54,7 @@ set(HEADERS
  "${NXBX_ROOT_DIR}/src/logger.hpp"
  "${NXBX_ROOT_DIR}/src/nxbx.hpp"
  "${NXBX_ROOT_DIR}/src/pe.hpp"
+ "${NXBX_ROOT_DIR}/src/settings.hpp"
  "${NXBX_ROOT_DIR}/src/util.hpp"
  "${NXBX_ROOT_DIR}/src/xpartition.hpp"
  "${NXBX_ROOT_DIR}/src/hw/cmos.hpp"
@@ -81,6 +86,7 @@ set(SOURCES
  "${NXBX_ROOT_DIR}/src/logger.cpp"
  "${NXBX_ROOT_DIR}/src/nxbx.cpp"
  "${NXBX_ROOT_DIR}/src/main.cpp"
+ "${NXBX_ROOT_DIR}/src/settings.cpp"
  "${NXBX_ROOT_DIR}/src/util.cpp"
  "${NXBX_ROOT_DIR}/src/xpartition.cpp"
  "${NXBX_ROOT_DIR}/src/hw/cmos.cpp"

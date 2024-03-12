@@ -2,3 +2,7 @@
 	path = import/lib86cpu
 	url = https://github.com/ergo720/lib86cpu
 	shallow = true
+[submodule "import/simpleini"]
+	path = import/simpleini
+	url = https://github.com/brofield/simpleini
+	shallow = true

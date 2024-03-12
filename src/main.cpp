@@ -160,11 +160,16 @@ main(int argc, char **argv)
 		init_info.m_kernel = curr_dir.string();
 	}
 
+	if (nxbx::init_settings(init_info) == false) {
+		return 1;
+	}
+
 	if (nxbx::init_console(init_info) == false) {
 		return 1;
 	}
 
 	nxbx::start();
+	nxbx::exit();
 
 	return 0;
 }

@@ -14,6 +14,7 @@ class cmos {
 public:
 	cmos(machine *machine) : m_machine(machine) {}
 	bool init();
+	void deinit();
 	void reset();
 	constexpr const char *get_name() { return "CMOS"; }
 	uint8_t read_handler(uint32_t port);
@@ -31,4 +32,5 @@ private:
 	uint64_t last_update_time;
 	uint64_t lost_us;
 	std::time_t sys_time;
+	int64_t sys_time_bias; // difference between guest and host clocks
 };

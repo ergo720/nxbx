@@ -4,6 +4,7 @@
 
 #include "nxbx.hpp"
 #include "console.hpp"
+#include "settings.hpp"
 
 
 namespace nxbx {
@@ -18,13 +19,42 @@ namespace nxbx {
 		return console::get().init(init_info);
 	}
 
+	bool
+	init_settings(const init_info_t &init_info)
+	{
+		return settings::get().init(init_info);
+	}
+
+	void
+	save_settings()
+	{
+		settings::get().save();
+	}
+
+	template<typename T>
+	T &get_settings()
+	{
+		if constexpr (std::is_same_v<T, core_s>) {
+			return settings::get().m_core;
+		}
+		else {
+			throw std::logic_error("Attempt to access unknown settings");
+		}
+	}
+
 	void
 	start()
 	{
 		console::get().start();
 	}
 
-	std::string_view
+	void
+	exit()
+	{
+		nxbx::save_settings();
+	}
+
+	const std::string &
 	console_to_string(console_t type)
 	{
 		switch (type)
@@ -52,4 +82,6 @@ namespace nxbx {
 		va_end(args);
 		console::get().exit();
 	}
+
+	template core_s &get_settings();
 }
