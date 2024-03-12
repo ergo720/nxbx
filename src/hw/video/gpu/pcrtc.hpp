@@ -31,5 +31,7 @@ private:
 		uint32_t int_enabled;
 		// The address of the framebuffer
 		uint32_t fb_addr;
+		// Unknown
+		uint32_t unknown[1];
 	};
 };

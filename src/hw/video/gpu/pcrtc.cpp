@@ -12,6 +12,7 @@
 #define NV_PCRTC_INTR_0_VBLANK_NOT_PENDING 0x00000000
 #define NV_PCRTC_INTR_EN_0 (NV2A_REGISTER_BASE + 0x00600140)
 #define NV_PCRTC_INTR_EN_0_VBLANK_DISABLED 0x00000000
+#define NV_PCRTC_UNKNOWN0 (NV2A_REGISTER_BASE + 0x00600804)
 
 
 void
@@ -31,6 +32,10 @@ pcrtc::write(uint32_t addr, const uint32_t data)
 
 	case NV_PCRTC_START:
 		fb_addr = data & 0x7FFFFFC; // fb is 4 byte aligned
+		break;
+
+	case NV_PCRTC_UNKNOWN0:
+		unknown[0] = data;
 		break;
 
 	default:
@@ -57,6 +62,10 @@ pcrtc::read(uint32_t addr)
 		value = fb_addr;
 		break;
 
+	case NV_PCRTC_UNKNOWN0:
+		value = unknown[0];
+		break;
+
 	default:
 		nxbx::fatal("Unhandled %s read at address 0x%" PRIX32, get_name(), addr);
 	}
@@ -70,6 +79,9 @@ pcrtc::reset()
 	int_status = NV_PCRTC_INTR_0_VBLANK_NOT_PENDING;
 	int_enabled = NV_PCRTC_INTR_EN_0_VBLANK_DISABLED;
 	fb_addr = 0;
+	for (uint32_t &reg : unknown) {
+		reg = 0;
+	}
 }
 
 bool

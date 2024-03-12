@@ -32,7 +32,6 @@ pfb::write(uint32_t addr, const uint32_t data)
 		break;
 
 	case NV_PFB_NVM:
-		logger(log_lv::warn, "NV_PFB_NVM: functionality unknown");
 		nvm = data;
 		break;
 
