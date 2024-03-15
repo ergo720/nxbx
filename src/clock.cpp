@@ -22,7 +22,7 @@ namespace timer {
 	{
 		struct timeval tv;
 		gettimeofday(&tv, NULL);
-		last_time = static_cast<uint64_t>(tv.tv_sec) * static_cast<uint64_t>(ticks_per_second) + static_cast<uint64_t>(tv.tv_usec);
+		last_time = util::muldiv128(static_cast<uint64_t>(tv.tv_sec), ticks_per_second, 1ULL) + static_cast<uint64_t>(tv.tv_usec);
 	}
 #elif _WIN64
 	static uint64_t host_freq;
@@ -44,7 +44,7 @@ namespace timer {
 #ifdef __linux__
 		timeval tv;
 		gettimeofday(&tv, NULL);
-		uint64_t curr_time = static_cast<uint64_t>(tv.tv_sec) * static_cast<uint64_t>(ticks_per_second) + static_cast<uint64_t>(tv.tv_usec);
+		uint64_t curr_time = util::muldiv128(static_cast<uint64_t>(tv.tv_sec), ticks_per_second, 1ULL) + static_cast<uint64_t>(tv.tv_usec);
 		return curr_time - last_time;
 #elif _WIN64
 		LARGE_INTEGER now;
@@ -66,7 +66,7 @@ namespace timer {
 		uint64_t elapsed_us = static_cast<uint64_t>(now.QuadPart) - last_time;
 		return util::muldiv128(elapsed_us, host_freq, dev_freq);
 #else
-		return muldiv128_(get_now(), dev_freq, ticks_per_second);
+		return util::muldiv128(get_now(), dev_freq, ticks_per_second);
 #endif
 	}
 

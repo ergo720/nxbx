@@ -155,7 +155,7 @@ namespace io {
 	static std::deque<std::unique_ptr<io_request>> curr_io_queue;
 	static std::vector<std::unique_ptr<io_request>> pending_io_vec;
 	static std::unordered_map<uint64_t, std::unique_ptr<io_request>> completed_io_info;
-	static std::array<std::unordered_map<uint64_t, std::pair<std::fstream, util::xbox_string>>, NUM_OF_DEVS> xbox_handle_map;
+	static std::array<std::unordered_map<uint64_t, std::pair<std::fstream, std::string>>, NUM_OF_DEVS> xbox_handle_map;
 	static std::mutex queue_mtx;
 	static std::mutex completed_io_mtx;
 	static std::atomic_flag io_pending;
@@ -174,8 +174,7 @@ namespace io {
 				return false;
 			}
 			else {
-				auto pair = xbox_handle_map[handle].emplace(handle, std::make_pair(std::move(*opt),
-					util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(resolved_path.string())));
+				auto pair = xbox_handle_map[handle].emplace(handle, std::make_pair(std::move(*opt), resolved_path.string()));
 				assert(pair.second == true);
 				return true;
 			}
@@ -203,12 +202,12 @@ namespace io {
 		// "device name" can be CdRom0, Harddisk0 and "partition number" can be Partition0, Partition1, ...
 		// NOTE2: path comparisons are case-insensitive in the xbox kernel, so we need to do the same
 
-		util::xbox_string_view path(curr_io_request->path, curr_io_request->size);
+		std::string_view path(curr_io_request->path, curr_io_request->size);
 		size_t dev_pos = path.find_first_of('\\', 1); // discards "device"
-		assert(dev_pos != util::xbox_string_view::npos);
+		assert(dev_pos != std::string_view::npos);
 		size_t pos = path.find_first_of('\\', dev_pos + 1);
-		assert(pos != util::xbox_string_view::npos);
-		util::xbox_string_view device = path.substr(dev_pos + 1, pos - dev_pos - 1); // extracts device name
+		assert(pos != std::string_view::npos);
+		util::xbox_string_view device = util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(path.substr(dev_pos + 1, pos - dev_pos - 1)); // extracts device name
 		std::filesystem::path resolved_path;
 		if (device.compare("CdRom0") == 0) {
 			resolved_path = dvd_path;
@@ -216,12 +215,12 @@ namespace io {
 		else {
 			resolved_path = hdd_path;
 			size_t pos2 = path.find_first_of('\\', pos + 1);
-			assert(pos != util::xbox_string_view::npos);
-			util::xbox_string_view partition = path.substr(pos + 1, pos2 - pos - 1); // extracts partition number
+			assert(pos != std::string_view::npos);
+			std::string_view partition = path.substr(pos + 1, pos2 - pos - 1); // extracts partition number
 			resolved_path /= partition;
 			pos = pos2;
 		}
-		util::xbox_string_view name = path.substr(pos + 1);
+		std::string_view name = path.substr(pos + 1);
 		resolved_path /= name;
 		resolved_path.make_preferred();
 
@@ -275,10 +274,9 @@ namespace io {
 
 				const auto add_to_map = [&curr_io_request, &resolved_path, dev](auto &&opt, io_info_block *io_result) {
 					// NOTE: this insertion will fail when the guest creates a new handle to the same file. This, because it will pass the same host handle, and std::unordered_map
-					// doesn't allow duplicated keys. This is ok though, because we can reuse the same std::fstream for the same file and it will have the same xbox_string path too
+					// doesn't allow duplicated keys. This is ok though, because we can reuse the same std::fstream for the same file and it will have the same path too
 					loggerex1(info, "Opened %s with handle %" PRIu64 " and path %s", opt->is_open() ? "file" : "directory", curr_io_request->handle_oc, resolved_path.string().c_str());
-					auto pair = xbox_handle_map[dev].emplace(curr_io_request->handle_oc, std::make_pair(std::move(*opt),
-						util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(resolved_path.string())));
+					auto pair = xbox_handle_map[dev].emplace(curr_io_request->handle_oc, std::make_pair(std::move(*opt), resolved_path.string()));
 					io_result->status = success;
 					};
 				const auto check_dir_flags = [flags](bool host_is_directory, io_info_block *io_result) -> bool {
@@ -446,7 +444,7 @@ namespace io {
 
 			case io_request_type::remove1: {
 				loggerex1(info, "Deleted %s with handle %" PRIu64, fs->is_open() ? "file" : "directory", it->first);
-				util::xbox_string file_path(it->second.second);
+				std::string file_path(it->second.second);
 				xbox_handle_map[dev].erase(it);
 				std::error_code ec;
 				std::filesystem::remove(file_path, ec);

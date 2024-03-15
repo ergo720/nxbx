@@ -5,6 +5,7 @@
 // This code is derived from https://github.com/ergo720/halfix/blob/master/src/hardware/pci.cpp
 
 #include "machine.hpp"
+#include <cstring>
 
 #define MODULE_NAME pci
 

@@ -4,6 +4,14 @@
 
 #include "xpartition.hpp"
 #include <array>
+#include <algorithm>
+
+#ifdef __GNUC__
+// Ignore multichar warning in the fatx signature macro used below
+// Requires at least gcc 13 due to a bug in gcc 4.7.0 that cause the pragma to be ignored,
+// see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=53431 for details
+#pragma GCC diagnostic ignored "-Wmultichar"
+#endif
 
 #define PE_PARTFLAGS_IN_USE	0x80000000
 

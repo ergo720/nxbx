@@ -3,6 +3,7 @@
 // SPDX-FileCopyrightText: 2023 ergo720
 
 #include "eeprom.hpp"
+#include <cstdint>
 
 
 // This is bunnie's eeprom, except that it stores the encrypted settings unencrypted, because nboxkrnl cannot decrypt them yet

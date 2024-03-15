@@ -10,6 +10,7 @@
 #include <fstream>
 #include <cinttypes>
 #include <array>
+#include <cstring>
 
 #define MODULE_NAME cpu
 

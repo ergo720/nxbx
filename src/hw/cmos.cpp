@@ -49,18 +49,12 @@ cmos::read_handler(uint32_t addr)
 {
 	if (addr == 0x71) {
 		if ((reg_idx < 0xA) || (reg_idx == 0x7F)) {
-			tm local_time;
-#ifdef _WIN32
-			if (localtime_s(&local_time, &sys_time)) {
+			tm *local_time;
+			if (local_time = std::localtime(&sys_time); local_time == nullptr) {
 				nxbx_fatal("Failed to read CMOS time");
-				return 0xFF;
+				return 0;
 			}
-#else
-			if (localtime_s(&sys_time, &local_time) == nullptr) {
-				nxbx_fatal("Failed to read CMOS time");
-				return 0xFF;
-			}
-#endif
+
 			switch (reg_idx)
 			{
 			case 1:
@@ -69,46 +63,46 @@ cmos::read_handler(uint32_t addr)
 				return ram[reg_idx];
 
 			case 0:
-				return to_bcd(local_time.tm_sec);
+				return to_bcd(local_time->tm_sec);
 
 			case 2:
-				return to_bcd(local_time.tm_min);
+				return to_bcd(local_time->tm_min);
 
 			case 4:
 				if (!(ram[0xB] & 2)) {
 					// 12 hour format enabled
-					if (local_time.tm_hour == 0) {
+					if (local_time->tm_hour == 0) {
 						return to_bcd(12);
 					}
-					else if (local_time.tm_hour > 11) {
+					else if (local_time->tm_hour > 11) {
 						// time is pm
-						if (local_time.tm_hour != 12) {
-							return to_bcd(local_time.tm_hour - 12) | 0x80;
+						if (local_time->tm_hour != 12) {
+							return to_bcd(local_time->tm_hour - 12) | 0x80;
 						}
-						return to_bcd(local_time.tm_hour) | 0x80;
+						return to_bcd(local_time->tm_hour) | 0x80;
 					}
 				}
-				return to_bcd(local_time.tm_hour);
+				return to_bcd(local_time->tm_hour);
 
 			case 6:
-				return to_bcd(local_time.tm_wday + 1);
+				return to_bcd(local_time->tm_wday + 1);
 
 			case 7:
-				return to_bcd(local_time.tm_mday);
+				return to_bcd(local_time->tm_mday);
 
 			case 8:
-				return to_bcd(local_time.tm_mon + 1);
+				return to_bcd(local_time->tm_mon + 1);
 
 			case 9:
-				return to_bcd(local_time.tm_year % 100);
+				return to_bcd(local_time->tm_year % 100);
 
 			case 0x7F:
-				return to_bcd((local_time.tm_year + 1900) / 100);
+				return to_bcd((local_time->tm_year + 1900) / 100);
 			}
 
 			assert(0);
 
-			return 0xFF;
+			return 0;
 		}
 		else if (reg_idx == 0xC) {
 			ram[0x0C] = 0x00; // clears all interrupt flags
@@ -136,18 +130,11 @@ cmos::write_handler(uint32_t addr, const uint8_t data)
 
 	case 0x71:
 		if ((reg_idx < 0xA) || (reg_idx == 0x7F)) {
-			tm local_time;
-#ifdef _WIN32
-			if (localtime_s(&local_time, &sys_time)) {
-				nxbx_fatal("Failed to update CMOS time");
+			tm *local_time;
+			if (local_time = std::localtime(&sys_time); local_time == nullptr) {
+				nxbx_fatal("Failed to read CMOS time");
 				return;
 			}
-#else
-			if (localtime_s(&sys_time, &local_time) == nullptr) {
-				nxbx_fatal("Failed to update CMOS time");
-				return;
-			}
-#endif
 
 			switch (reg_idx)
 			{
@@ -158,46 +145,46 @@ cmos::write_handler(uint32_t addr, const uint8_t data)
 				break;
 
 			case 0:
-				local_time.tm_sec = from_bcd(data1);
+				local_time->tm_sec = from_bcd(data1);
 				break;
 
 			case 2:
-				local_time.tm_min = from_bcd(data1);
+				local_time->tm_min = from_bcd(data1);
 				break;
 
 			case 4: {
 				uint8_t masked_data = data1 & 0x7F;
-				local_time.tm_hour = from_bcd(masked_data);
+				local_time->tm_hour = from_bcd(masked_data);
 				if (!(ram[0xB] & 2)) {
 					// 12 hour format enabled
 					if (data & 0x80) {
 						// time is pm
 						if (masked_data < 12) {
-							local_time.tm_hour += 12;
+							local_time->tm_hour += 12;
 						}
 					}
 					else if (masked_data == 12) {
 						// it's 12 am
-						local_time.tm_hour = 0;
+						local_time->tm_hour = 0;
 					}
 				}
 			}
 			break;
 
 			case 6:
-				local_time.tm_wday = from_bcd(data1) - 1;
+				local_time->tm_wday = from_bcd(data1) - 1;
 				break;
 
 			case 7:
-				local_time.tm_mday = from_bcd(data1);
+				local_time->tm_mday = from_bcd(data1);
 				break;
 
 			case 8:
-				local_time.tm_mon = from_bcd(data1) - 1;
+				local_time->tm_mon = from_bcd(data1) - 1;
 				break;
 
 			case 9:
-				local_time.tm_year = (ram[0x7F] * 100 - 1900) + from_bcd(data1);
+				local_time->tm_year = (ram[0x7F] * 100 - 1900) + from_bcd(data1);
 				break;
 
 			case 0x7F:
@@ -205,7 +192,7 @@ cmos::write_handler(uint32_t addr, const uint8_t data)
 				break;
 			}
 
-			if (time_t time = std::mktime(&local_time); time == -1) {
+			if (time_t time = std::mktime(local_time); time == -1) {
 				nxbx_fatal("Failed to update CMOS time");
 				return;
 			}

@@ -31,7 +31,7 @@ private:
 	SI_Error set_int64_value(const char *a_pSection, const char *a_pKey, int64_t a_pValue);
 
 	CSimpleIniA m_ini;
-	struct {
+	struct core_str {
 		static constexpr const char *name = "core";
 		static constexpr const char *version = "version";
 		static constexpr const char *log_version = "log_version";
