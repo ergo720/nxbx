@@ -11,6 +11,8 @@
 #include <assert.h>
 #include "logger.hpp"
 
+#define nxbx_fatal(msg, ...) do { nxbx::fatal(log_module::MODULE_NAME, msg __VA_OPT__(,) __VA_ARGS__); } while(0)
+
 
 enum class disas_syntax : uint32_t {
 	att,
@@ -36,7 +38,10 @@ struct init_info_t {
 // Settings struct declarations, used in the settings class
 struct core_s {
 	uint32_t version;
+	uint32_t log_version;
 	int64_t sys_time_bias;
+	log_lv log_level;
+	uint32_t log_modules[NUM_OF_LOG_MODULES32];
 };
 
 namespace nxbx {
@@ -45,8 +50,9 @@ namespace nxbx {
 	void save_settings();
 	template<typename T>
 	T &get_settings();
+	void update_logging();
 	void start();
 	void exit();
-	void fatal(const char *msg, ...);
 	const std::string &console_to_string(console_t type);
+	void fatal(log_module name, const char *msg, ...);
 }

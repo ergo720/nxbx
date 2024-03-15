@@ -14,16 +14,21 @@ public:
 	pic(machine *machine, unsigned idx, const char *const name) : m_machine(machine), m_name(name), idx(idx) {}
 	bool init();
 	void reset();
-	constexpr const char *get_name() { return m_name; }
+	void update_io_logging() { update_io(true); }
 	uint8_t get_interrupt_for_cpu();
 	void raise_irq(uint8_t a);
 	void lower_irq(uint8_t a);
 	uint8_t read_handler(uint32_t addr);
 	void write_handler(uint32_t addr, const uint8_t data);
+	uint8_t read_handler_logger(uint32_t addr);
+	void write_handler_logger(uint32_t addr, const uint8_t data);
 	uint8_t elcr_read_handler(uint32_t addr);
 	void elcr_write_handler(uint32_t addr, const uint8_t data);
+	uint8_t elcr_read_handler_logger(uint32_t addr);
+	void elcr_write_handler_logger(uint32_t addr, const uint8_t data);
 
 private:
+	bool update_io(bool is_update);
 	bool is_master() { return idx == 0; }
 	uint8_t get_interrupt();
 	void update_state();

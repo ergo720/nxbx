@@ -5,6 +5,8 @@
 #include "../../../clock.hpp"
 #include "machine.hpp"
 
+#define MODULE_NAME pramdac
+
 #define NV_PRAMDAC 0x00680300
 #define NV_PRAMDAC_BASE (NV2A_REGISTER_BASE + NV_PRAMDAC)
 #define NV_PRAMDAC_SIZE 0xD00
@@ -45,7 +47,7 @@ pramdac::write32(uint32_t addr, const uint32_t data)
 		break;
 
 	default:
-		nxbx::fatal("Unhandled %s write at address 0x%" PRIX32 " with value 0x%" PRIX32, get_name(), addr, data);
+		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
 	}
 }
 
@@ -69,7 +71,7 @@ pramdac::read32(uint32_t addr)
 		break;
 
 	default:
-		nxbx::fatal("Unhandled %s read at address 0x%" PRIX32, get_name(), addr);
+		nxbx_fatal("Unhandled %s read at address 0x%" PRIX32, addr);
 	}
 
 	return value;
@@ -87,6 +89,47 @@ pramdac::read8(uint32_t addr)
 	return uint8_t((value & (0xFF << addr_offset)) >> addr_offset);
 }
 
+uint8_t
+pramdac::read8_logger(uint32_t addr)
+{
+	uint8_t data = read8(addr);
+	log_io_read();
+	return data;
+}
+
+uint32_t
+pramdac::read32_logger(uint32_t addr)
+{
+	uint32_t data = read32(addr);
+	log_io_read();
+	return data;
+}
+
+void
+pramdac::write32_logger(uint32_t addr, const uint32_t data)
+{
+	log_io_write();
+	write32(addr, data);
+}
+
+bool
+pramdac::update_io(bool is_update)
+{
+	bool enable = module_enabled();
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PRAMDAC_BASE, NV_PRAMDAC_SIZE, false,
+		{
+			.fnr8 = enable ? cpu_read<pramdac, uint8_t, &pramdac::read8_logger> : cpu_read<pramdac, uint8_t, &pramdac::read8>,
+			.fnr32 = enable ? cpu_read<pramdac, uint32_t, &pramdac::read32_logger> : cpu_read<pramdac, uint32_t, &pramdac::read32>,
+			.fnw32 = enable ? cpu_write<pramdac, uint32_t, &pramdac::write32_logger> : cpu_write<pramdac, uint32_t, &pramdac::write32>
+		},
+		this, is_update, is_update))) {
+		loggerex1(error, "Failed to update mmio region");
+		return false;
+	}
+
+	return true;
+}
+
 void
 pramdac::reset()
 {
@@ -100,14 +143,7 @@ pramdac::reset()
 bool
 pramdac::init()
 {
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PRAMDAC_BASE, NV_PRAMDAC_SIZE, false,
-		{
-			.fnr8 = cpu_read<pramdac, uint8_t, &pramdac::read8>,
-			.fnr32 = cpu_read<pramdac, uint32_t, &pramdac::read32>,
-			.fnw32 = cpu_write<pramdac, uint32_t, &pramdac::write32>
-		},
-		this))) {
-		logger(log_lv::error, "Failed to initialize %s mmio region", get_name());
+	if (!update_io(false)) {
 		return false;
 	}
 

@@ -11,6 +11,8 @@
 #include <cinttypes>
 #include <array>
 
+#define MODULE_NAME cpu
+
 
 static consteval bool
 check_cpu_log_lv()
@@ -30,8 +32,24 @@ cpu_logger(log_level lv, const unsigned count, const char *msg, ...)
 {
 	std::va_list args;
 	va_start(args, msg);
-	logger(static_cast<log_lv>(lv), msg, args);
+	logger<log_module::cpu, true>(static_cast<log_lv>(lv), msg, args);
 	va_end(args);
+}
+
+bool
+cpu::update_io(bool is_update)
+{
+	bool enable = module_enabled();
+	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, kernel::IO_BASE, kernel::IO_SIZE, true,
+		{
+			.fnr32 = enable ? kernel::read_handler_logger : kernel::read_handler,
+			.fnw32 = enable ? kernel::write_handler_logger : kernel::write_handler
+		}, m_lc86cpu, is_update, is_update))) {
+		loggerex1(error, "Failed to update kernel communication io ports");
+		return false;
+	}
+
+	return true;
 }
 
 void
@@ -48,7 +66,7 @@ cpu::init(const init_info_t &init_info)
 	// Load the nboxkrnl exe file
 	std::ifstream ifs(init_info.m_kernel.c_str(), std::ios_base::in | std::ios_base::binary);
 	if (!ifs.is_open()) {
-		logger(log_lv::error, "Could not open kernel file");
+		loggerex1(error, "Could not open kernel file");
 		return false;
 	}
 	ifs.seekg(0, ifs.end);
@@ -57,17 +75,17 @@ cpu::init(const init_info_t &init_info)
 
 	// Sanity checks on the kernel exe size
 	if (length == 0) {
-		logger(log_lv::error, "Size of kernel file detected as zero");
+		loggerex1(error, "Size of kernel file detected as zero");
 		return false;
 	}
 	else if (length > m_ramsize) {
-		logger(log_lv::error, "Kernel file doesn't fit inside ram");
+		loggerex1(error, "Kernel file doesn't fit inside ram");
 		return false;
 	}
 
 	std::unique_ptr<char[]> krnl_buff{ new char[static_cast<unsigned>(length)] };
 	if (!krnl_buff) {
-		logger(log_lv::error, "Could not allocate kernel buffer");
+		loggerex1(error, "Could not allocate kernel buffer");
 		return false;
 	}
 	ifs.read(krnl_buff.get(), length);
@@ -76,7 +94,7 @@ cpu::init(const init_info_t &init_info)
 	// Sanity checks on the kernel exe file
 	PIMAGE_DOS_HEADER dosHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(krnl_buff.get());
 	if (dosHeader->e_magic != IMAGE_DOS_SIGNATURE) {
-		logger(log_lv::error, "Kernel image has an invalid dos header signature");
+		loggerex1(error, "Kernel image has an invalid dos header signature");
 		return false;
 	}
 
@@ -85,18 +103,18 @@ cpu::init(const init_info_t &init_info)
 		peHeader->FileHeader.Machine != IMAGE_FILE_MACHINE_I386 ||
 		peHeader->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR32_MAGIC ||
 		peHeader->OptionalHeader.Subsystem != IMAGE_SUBSYSTEM_NATIVE) {
-		logger(log_lv::error, "Kernel image has an invalid nt header signature");
+		loggerex1(error, "Kernel image has an invalid nt header signature");
 		return false;
 	}
 
 	if (peHeader->OptionalHeader.ImageBase != KERNEL_BASE) {
-		logger(log_lv::error, "Kernel image has an incorrect image base address");
+		loggerex1(error, "Kernel image has an incorrect image base address");
 		return false;
 	}
 
 	// Init lib86cpu
 	if (!LC86_SUCCESS(cpu_new(m_ramsize, m_lc86cpu, { get_interrupt_for_cpu, &m_machine->get<pic>() }, "nboxkrnl"))) {
-		logger(log_lv::error, "Failed to create cpu instance");
+		loggerex1(error, "Failed to create cpu instance");
 		return false;
 	}
 
@@ -105,22 +123,21 @@ cpu::init(const init_info_t &init_info)
 	cpu_set_flags(m_lc86cpu, static_cast<uint32_t>(init_info.m_syntax) | (init_info.m_use_dbg ? CPU_DBG_PRESENT : 0));
 
 	if (!LC86_SUCCESS(mem_init_region_ram(m_lc86cpu, 0, m_ramsize))) {
-		logger(log_lv::error, "Failed to initialize ram memory");
+		loggerex1(error, "Failed to initialize ram memory");
 		return false;
 	}
 
 	if (!LC86_SUCCESS(mem_init_region_alias(m_lc86cpu, CONTIGUOUS_MEMORY_BASE, 0, m_ramsize))) {
-		logger(log_lv::error, "Failed to initialize contiguous memory");
+		loggerex1(error, "Failed to initialize contiguous memory");
 		return false;
 	}
 
 	if (!LC86_SUCCESS(mem_init_region_alias(m_lc86cpu, NV2A_VRAM_BASE, 0, m_ramsize))) {
-		logger(log_lv::error, "Failed to initialize vram memory for nv2a");
+		loggerex1(error, "Failed to initialize vram memory for nv2a");
 		return false;
 	}
 
-	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, kernel::IO_BASE, kernel::IO_SIZE, true, { .fnr32 = kernel::read_handler, .fnw32 = kernel::write_handler }, m_lc86cpu))) {
-		logger(log_lv::error, "Failed to initialize kernel communication io ports");
+	if (!update_io(false)) {
 		return false;
 	}
 
@@ -211,7 +228,7 @@ cpu::start()
 		}
 	}
 
-	logger(log_lv::highest, "Emulation terminated with status %" PRId32 ". The error was \"%s\"", static_cast<int32_t>(code), get_last_error().c_str());
+	logger<log_lv::highest, log_module::nxbx, false>("Emulation terminated with status %" PRId32 ". The error was \"%s\"", static_cast<int32_t>(code), get_last_error().c_str());
 }
 
 void

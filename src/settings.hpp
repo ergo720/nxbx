@@ -34,9 +34,13 @@ private:
 	struct {
 		static constexpr const char *name = "core";
 		static constexpr const char *version = "version";
+		static constexpr const char *log_version = "log_version";
 		static constexpr const char *sys_time_bias = "sys_time_bias";
+		static constexpr const char *log_level = "log_level";
+		static constexpr const char *log_modules1 = "log_modules1";
 	} m_core_str;
 	std::string m_ini_path;
 	console_t m_type;
 	static constexpr uint32_t m_version = 1;
+	static constexpr uint32_t m_log_version = 1; // add one to this every time the log modules change
 };

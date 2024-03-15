@@ -17,6 +17,8 @@
 #include <cassert>
 #include <array>
 
+#define MODULE_NAME io
+
 // Device number
 #define DEV_CDROM      0
 #define DEV_EEPROM     1
@@ -274,6 +276,7 @@ namespace io {
 				const auto add_to_map = [&curr_io_request, &resolved_path, dev](auto &&opt, io_info_block *io_result) {
 					// NOTE: this insertion will fail when the guest creates a new handle to the same file. This, because it will pass the same host handle, and std::unordered_map
 					// doesn't allow duplicated keys. This is ok though, because we can reuse the same std::fstream for the same file and it will have the same xbox_string path too
+					loggerex1(info, "Opened %s with handle %" PRIu64 " and path %s", opt->is_open() ? "file" : "directory", curr_io_request->handle_oc, resolved_path.string().c_str());
 					auto pair = xbox_handle_map[dev].emplace(curr_io_request->handle_oc, std::make_pair(std::move(*opt),
 						util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(resolved_path.string())));
 					io_result->status = success;
@@ -377,7 +380,7 @@ namespace io {
 			io_info_block io_result(success, no_data);
 			auto it = xbox_handle_map[dev].find(curr_io_request->handle);
 			if (it == xbox_handle_map[dev].end()) [[unlikely]] {
-				logger(log_lv::warn, "Xbox handle %" PRIu32 " not found", curr_io_request->handle); // this should not happen...
+				loggerex1(warn, "Handle %" PRIu64 " not found", curr_io_request->handle); // this should not happen...
 				io_result.status = error;
 				completed_io_mtx.lock();
 				completed_io_info.emplace(curr_io_request->id, std::move(curr_io_request));
@@ -389,13 +392,14 @@ namespace io {
 			switch (io_type)
 			{
 			case io_request_type::close:
+				loggerex1(info, "Closed file handle %" PRIu64 " with path %s", it->first, it->second.second.c_str());
 				xbox_handle_map[dev].erase(it);
 				break;
 
 			case io_request_type::read:
 				if (!fs->is_open()) [[unlikely]] {
 					// Read operation on a directory (this should not happen...)
-					logger(log_lv::warn, "Read operation to directory handle %" PRIu32 " with path %s", it->first, it->second.second.c_str());
+					loggerex1(warn, "Read operation to directory handle %" PRIu64 " with path %s", it->first, it->second.second.c_str());
 					io_result.status = error;
 					io_result.info = no_data;
 					break;
@@ -405,17 +409,21 @@ namespace io {
 				fs->read(curr_io_request->io_buffer.get(), curr_io_request->size);
 				if (fs->good()) {
 					io_result.info = static_cast<io_info>(fs->gcount());
+					loggerex1(info, "Read operation to file handle %" PRIu64 ", offset=0x%08" PRIX32 ", size=0x%08" PRIX32 ", actual bytes transferred=0x%08" PRIX32 " -> OK!",
+						it->first, curr_io_request->offset, curr_io_request->size, io_result.info);
 				}
 				else {
 					io_result.status = error;
 					fs->clear();
+					loggerex1(info, "Read operation to file handle %" PRIu64 " with path %s, offset=0x%08" PRIX32 ", size=0x%08" PRIX32 " -> FAILED!",
+						it->first, it->second.second.c_str(), curr_io_request->offset, curr_io_request->size);
 				}
 				break;
 
 			case io_request_type::write:
 				if (!fs->is_open()) [[unlikely]] {
 					// Write operation on a directory (this should not happen...)
-					logger(log_lv::warn, "Write operation to directory handle %" PRIu32 " with path %s", it->first, it->second.second.c_str());
+					loggerex1(warn, "Write operation to directory handle %" PRIu64 " with path %s", it->first, it->second.second.c_str());
 					io_result.status = error;
 					io_result.info = no_data;
 					break;
@@ -426,13 +434,18 @@ namespace io {
 					io_result.status = error;
 					io_result.info = no_data;
 					fs->clear();
+					loggerex1(info, "Write operation to file handle %" PRIu64 " with path %s, offset=0x%08" PRIX32 ", size=0x%08" PRIX32 " -> FAILED!",
+						it->first, it->second.second.c_str(), curr_io_request->offset, curr_io_request->size);
 				}
 				else {
 					io_result.info = static_cast<io_info>(curr_io_request->size);
+					loggerex1(info, "Write operation to file handle %" PRIu64 ", offset=0x%08" PRIX32 ", size=0x%08" PRIX32 " -> OK!",
+						it->first, curr_io_request->offset, curr_io_request->size);
 				}
 				break;
 
 			case io_request_type::remove1: {
+				loggerex1(info, "Deleted %s with handle %" PRIu64, fs->is_open() ? "file" : "directory", it->first);
 				util::xbox_string file_path(it->second.second);
 				xbox_handle_map[dev].erase(it);
 				std::error_code ec;
@@ -441,7 +454,7 @@ namespace io {
 			break;
 
 			default:
-				logger(log_lv::warn, "Unknown I/O request of type %" PRId32, curr_io_request->type);
+				loggerex1(warn, "Unknown io request of type %" PRId32, curr_io_request->type);
 			}
 
 			curr_io_request->info = io_result;
@@ -558,7 +571,7 @@ namespace io {
 				}
 			}
 			if (!create_partition_metadata_file(curr_partition_dir, i)) {
-				logger(log_lv::error, "Failed to create partition metadata bin files");
+				loggerex1(error, "Failed to create partition metadata bin files");
 				return false;
 			}
 		}
@@ -567,12 +580,12 @@ namespace io {
 		eeprom_dir.make_preferred();
 		if (!file_exists(eeprom_dir)) {
 			if (auto opt = create_file(eeprom_dir); !opt) {
-				logger(log_lv::error, "Failed to create eeprom file");
+				loggerex1(error, "Failed to create eeprom file");
 				return false;
 			}
 			else {
 				if (!gen_eeprom(std::move(opt.value()))) {
-					logger(log_lv::error, "Failed to update eeprom file");
+					loggerex1(error, "Failed to update eeprom file");
 					return false;
 				}
 			}
@@ -600,7 +613,7 @@ namespace io {
 		}
 
 		if (!open_special_files()) {
-			logger(log_lv::error, "Failed to open partition metadata bin files");
+			loggerex1(error, "Failed to open partition metadata bin files");
 			return false;
 		}
 

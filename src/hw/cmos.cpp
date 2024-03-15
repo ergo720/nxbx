@@ -6,6 +6,8 @@
 #include "../clock.hpp"
 #include <assert.h>
 
+#define MODULE_NAME cmos
+
 
 uint8_t
 cmos::to_bcd(uint8_t data) // binary -> bcd
@@ -43,19 +45,19 @@ cmos::update_time(uint64_t elapsed_us)
 }
 
 uint8_t
-cmos::read_handler(uint32_t port)
+cmos::read_handler(uint32_t addr)
 {
-	if (port == 0x71) {
+	if (addr == 0x71) {
 		if ((reg_idx < 0xA) || (reg_idx == 0x7F)) {
 			tm local_time;
 #ifdef _WIN32
 			if (localtime_s(&local_time, &sys_time)) {
-				nxbx::fatal("Failed to read CMOS time");
+				nxbx_fatal("Failed to read CMOS time");
 				return 0xFF;
 			}
 #else
 			if (localtime_s(&sys_time, &local_time) == nullptr) {
-				nxbx::fatal("Failed to read CMOS time");
+				nxbx_fatal("Failed to read CMOS time");
 				return 0xFF;
 			}
 #endif
@@ -122,11 +124,11 @@ cmos::read_handler(uint32_t port)
 }
 
 void
-cmos::write_handler(uint32_t port, const uint8_t data)
+cmos::write_handler(uint32_t addr, const uint8_t data)
 {
 	uint8_t data1 = data;
 
-	switch (port)
+	switch (addr)
 	{
 	case 0x70:
 		reg_idx = data;
@@ -137,12 +139,12 @@ cmos::write_handler(uint32_t port, const uint8_t data)
 			tm local_time;
 #ifdef _WIN32
 			if (localtime_s(&local_time, &sys_time)) {
-				nxbx::fatal("Failed to update CMOS time");
+				nxbx_fatal("Failed to update CMOS time");
 				return;
 			}
 #else
 			if (localtime_s(&sys_time, &local_time) == nullptr) {
-				nxbx::fatal("Failed to update CMOS time");
+				nxbx_fatal("Failed to update CMOS time");
 				return;
 			}
 #endif
@@ -204,7 +206,7 @@ cmos::write_handler(uint32_t port, const uint8_t data)
 			}
 
 			if (time_t time = std::mktime(&local_time); time == -1) {
-				nxbx::fatal("Failed to update CMOS time");
+				nxbx_fatal("Failed to update CMOS time");
 				return;
 			}
 			else {
@@ -221,7 +223,7 @@ cmos::write_handler(uint32_t port, const uint8_t data)
 
 			case 0xB:
 				if (data1 & 0x78) {
-					nxbx::fatal("CMOS interrupts and square wave outputs are not supported");
+					nxbx_fatal("CMOS interrupts and square wave outputs are not supported");
 				}
 				else if (data1 & 0x80) {
 					ram[0xA] &= ~0x80; // clears UIP
@@ -235,7 +237,7 @@ cmos::write_handler(uint32_t port, const uint8_t data)
 
 			default:
 				if (reg_idx >= sizeof(ram)) {
-					logger(log_lv::warn, "CMOS write: unknown register %u", reg_idx);
+					loggerex1(warn, "CMOS write: unknown register %u", reg_idx);
 					return;
 				}
 			}
@@ -244,6 +246,21 @@ cmos::write_handler(uint32_t port, const uint8_t data)
 		}
 		break;
 	}
+}
+
+uint8_t
+cmos::read_handler_logger(uint32_t addr)
+{
+	uint8_t data = read_handler(addr);
+	log_io_read();
+	return data;
+}
+
+void
+cmos::write_handler_logger(uint32_t addr, const uint8_t data)
+{
+	log_io_write();
+	write_handler(addr, data);
 }
 
 uint64_t
@@ -267,6 +284,23 @@ cmos::get_next_update_time(uint64_t now)
 	}
 }
 
+bool
+cmos::update_io(bool is_update)
+{
+	bool enable = module_enabled();
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x70, 2, true,
+		{
+			.fnr8 = enable ? cpu_read<cmos, uint8_t, &cmos::read_handler_logger> : cpu_read<cmos, uint8_t, &cmos::read_handler>,
+			.fnw8 = enable ? cpu_write<cmos, uint8_t, &cmos::write_handler_logger> : cpu_write<cmos, uint8_t, &cmos::write_handler>
+		},
+		this, is_update, is_update))) {
+		loggerex1(error, "Failed to update io ports");
+		return false;
+	}
+
+	return true;
+}
+
 void
 cmos::reset()
 {
@@ -277,13 +311,7 @@ cmos::reset()
 bool
 cmos::init()
 {
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x70, 2, true,
-		{
-			.fnr8 = cpu_read<cmos, uint8_t, &cmos::read_handler>,
-			.fnw8 = cpu_write<cmos, uint8_t, &cmos::write_handler>
-		},
-		this))) {
-		logger(log_lv::error, "Failed to initialize %s io ports", get_name());
+	if (!update_io(false)) {
 		return false;
 	}
 

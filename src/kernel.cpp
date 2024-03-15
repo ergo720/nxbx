@@ -11,6 +11,8 @@
 #include <cinttypes>
 #include <assert.h>
 
+#define MODULE_NAME kernel
+
 
 namespace kernel {
 	static uint64_t lost_clock_increment, last_us, curr_us;
@@ -67,14 +69,14 @@ namespace kernel {
 			return acpi_time >> 32;
 
 		default:
-			logger(log_lv::warn, "%s: unexpected I/O read at port 0x%" PRIX16, __func__, addr);
+			loggerex1(warn, "%s: unexpected I/O read at port 0x%" PRIX16, __func__, addr);
 		}
 
 		return 0;
 	}
 
 	void
-	write_handler(addr_t addr, const uint32_t value, void *opaque)
+	write_handler(addr_t addr, const uint32_t data, void *opaque)
 	{
 		switch (addr)
 		{
@@ -82,8 +84,8 @@ namespace kernel {
 			// The debug strings from nboxkrnl are 512 byte long at most
 			// Also, they might not be contiguous in physical memory, so we use mem_read_block_virt to avoid issues with allocations spanning pages
 			uint8_t buff[512];
-			mem_read_block_virt(static_cast<cpu_t *>(opaque), value, sizeof(buff), buff);
-			logger(log_lv::info, "Kernel says: %s", buff);
+			mem_read_block_virt(static_cast<cpu_t *>(opaque), data, sizeof(buff), buff);
+			loggerex1(info, "%s", buff);
 		}
 		break;
 
@@ -92,7 +94,7 @@ namespace kernel {
 			break;
 
 		case IO_START:
-			io::submit_io_packet(value);
+			io::submit_io_packet(data);
 			break;
 
 		case IO_RETRY:
@@ -100,15 +102,30 @@ namespace kernel {
 			break;
 
 		case IO_QUERY:
-			io::query_io_packet(value);
+			io::query_io_packet(data);
 			break;
 
 		case XE_DVD_XBE_ADDR:
-			mem_write_block_virt(static_cast<cpu_t *>(opaque), value, (uint32_t)io::xbe_path.size(), io::xbe_path.c_str());
+			mem_write_block_virt(static_cast<cpu_t *>(opaque), data, (uint32_t)io::xbe_path.size(), io::xbe_path.c_str());
 			break;
 
 		default:
-			logger(log_lv::warn, "%s: unexpected I/O write at port 0x%" PRIX16, __func__, addr);
+			loggerex1(warn, "unexpected io write at port 0x%" PRIX16, addr);
 		}
+	}
+
+	uint32_t
+	read_handler_logger(addr_t addr, void *opaque)
+	{
+		uint32_t data = read_handler(addr, opaque);
+		log_io_read();
+		return data;
+	}
+
+	void
+	write_handler_logger(addr_t addr, const uint32_t data, void *opaque)
+	{
+		log_io_write();
+		write_handler(addr, data, opaque);
 	}
 }

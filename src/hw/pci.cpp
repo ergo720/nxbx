@@ -6,6 +6,8 @@
 
 #include "machine.hpp"
 
+#define MODULE_NAME pci
+
 
 void
 pci::write8(uint32_t addr, const uint8_t data)
@@ -20,7 +22,7 @@ pci::write8(uint32_t addr, const uint8_t data)
 		configuration_address_register |= data << offset;
 
 		if (configuration_address_register & 0x7F000003) {
-			logger(log_lv::info, "Setting reserved bits of configuration address register");
+			loggerex1(info, "Setting reserved bits of configuration address register");
 		}
 		configuration_address_register &= ~0x7F000003;
 		configuration_cycle = configuration_address_register >> 31;
@@ -46,7 +48,7 @@ pci::write8(uint32_t addr, const uint8_t data)
 		break;
 
 	default:
-		nxbx::fatal("Write to unknown register - 0x%" PRIX32, addr);
+		nxbx_fatal("Write to unknown register - 0x%" PRIX32, addr);
 	}
 }
 
@@ -80,7 +82,7 @@ pci::read8(uint32_t addr)
 	}
 
 	default:
-		nxbx::fatal("Read from unknown register - 0x%" PRIX32, addr);
+		nxbx_fatal("Read from unknown register - 0x%" PRIX32, addr);
 		return 0xFF;
 	}
 }
@@ -122,25 +124,68 @@ pci::write32(uint32_t addr, const uint32_t data)
 	write8(addr + 3, data >> 24 & 0xFF);
 }
 
+uint8_t
+pci::read8_logger(uint32_t addr)
+{
+	uint8_t data = read8(addr);
+	log_io_read();
+	return data;
+}
+
+uint16_t
+pci::read16_logger(uint32_t addr)
+{
+	uint16_t data = read16(addr);
+	log_io_read();
+	return data;
+}
+
+uint32_t
+pci::read32_logger(uint32_t addr)
+{
+	uint32_t data = read32(addr);
+	log_io_read();
+	return data;
+}
+
+void
+pci::write8_logger(uint32_t addr, const uint8_t data)
+{
+	log_io_write();
+	write8(addr, data);
+}
+
+void pci::write16_logger(uint32_t addr, const uint16_t data)
+{
+	log_io_write();
+	write16(addr, data);
+}
+
+void pci::write32_logger(uint32_t addr, const uint32_t data)
+{
+	log_io_write();
+	write32(addr, data);
+}
+
 void *
 pci::create_device(uint32_t bus, uint32_t device, uint32_t function, pci_conf_write_cb cb, void *opaque)
 {
 	if (bus > 1) {
-		nxbx::fatal("Unsupported bus id=%" PRIu32, bus);
+		nxbx_fatal("Unsupported bus id=%" PRIu32, bus);
 		return nullptr;
 	}
 	if (device > 31) {
-		nxbx::fatal("Unsupported device id=%" PRIu32, device);
+		nxbx_fatal("Unsupported device id=%" PRIu32, device);
 		return nullptr;
 	}
 	if (function > 7) {
-		nxbx::fatal("Unsupported function id=%" PRIu32, function);
+		nxbx_fatal("Unsupported function id=%" PRIu32, function);
 		return nullptr;
 	}
 
 	int bdf = (bus << 8) | (device << 3) | function;
 	configuration_modification.emplace(bdf, std::make_pair(cb, opaque));
-	logger(log_lv::info, "Registering device at bus=%" PRIu32 " device=%" PRIu32 " function=%" PRIu32, bus, device, function);
+	loggerex1(info, "Registering device at bus=%" PRIu32 " device=%" PRIu32 " function=%" PRIu32, bus, device, function);
 
 	return (configuration_address_spaces[bdf] = std::make_unique<uint8_t[]>(256)).get();
 }
@@ -155,19 +200,40 @@ void *
 pci::get_configuration_ptr(uint32_t bus, uint32_t device, uint32_t function)
 {
 	if (bus > 1) {
-		nxbx::fatal("Unsupported bus id=%" PRIu32, bus);
+		nxbx_fatal("Unsupported bus id=%" PRIu32, bus);
 		return nullptr;
 	}
 	if (device > 31) {
-		nxbx::fatal("Unsupported device id=%" PRIu32, device);
+		nxbx_fatal("Unsupported device id=%" PRIu32, device);
 		return nullptr;
 	}
 	if (function > 7) {
-		nxbx::fatal("Unsupported function id=%" PRIu32, function);
+		nxbx_fatal("Unsupported function id=%" PRIu32, function);
 		return nullptr;
 	}
 
 	return (configuration_address_spaces[(bus << 8) | (device << 3) | function]).get();
+}
+
+bool
+pci::update_io(bool is_update)
+{
+	bool enable = module_enabled();
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0xCF8, 8, true,
+		{
+			.fnr8 = enable ? cpu_read<pci, uint8_t, &pci::read8_logger> : cpu_read<pci, uint8_t, &pci::read8>,
+			.fnr16 = enable ? cpu_read<pci, uint16_t, &pci::read16_logger> : cpu_read<pci, uint16_t, &pci::read16>,
+			.fnr32 = enable ? cpu_read<pci, uint32_t, &pci::read32_logger> : cpu_read<pci, uint32_t, &pci::read32>,
+			.fnw8 = enable ? cpu_write<pci, uint8_t, &pci::write8_logger> : cpu_write<pci, uint8_t, &pci::write8>,
+			.fnw16 = enable ? cpu_write<pci, uint16_t, &pci::write16_logger> : cpu_write<pci, uint16_t, &pci::write16>,
+			.fnw32 = enable ? cpu_write<pci, uint32_t, &pci::write32_logger> : cpu_write<pci, uint32_t, &pci::write32>
+		},
+		this, is_update, is_update))) {
+		loggerex1(error, "Failed to update io ports");
+		return false;
+	}
+
+	return true;
 }
 
 void
@@ -183,17 +249,7 @@ pci::reset()
 bool
 pci::init()
 {
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0xCF8, 8, true,
-		{
-			.fnr8 = cpu_read<pci, uint8_t, &pci::read8>,
-			.fnr16 = cpu_read<pci, uint16_t, &pci::read16>,
-			.fnr32 = cpu_read<pci, uint32_t, &pci::read32>,
-			.fnw8 = cpu_write<pci, uint8_t, &pci::write8>,
-			.fnw16 = cpu_write<pci, uint16_t, &pci::write16>,
-			.fnw32 = cpu_write<pci, uint32_t, &pci::write32>
-		},
-		this))) {
-		logger(log_lv::error, "Failed to initialize %s io ports", get_name());
+	if (!update_io(false)) {
 		return false;
 	}
 

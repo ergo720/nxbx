@@ -15,7 +15,6 @@ public:
 	vga(machine *machine) : m_machine(machine) {}
 	bool init();
 	void reset();
-	constexpr const char *get_name() { return "VGA"; }
 	uint8_t io_read8(uint32_t addr);
 	void io_write8(uint32_t addr, const uint8_t data);
 	void io_write16(uint32_t addr, const uint16_t data);

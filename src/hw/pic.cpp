@@ -7,6 +7,8 @@
 #include "machine.hpp"
 #include <bit>
 
+#define MODULE_NAME pic
+
 
 uint8_t
 pic::get_interrupt()
@@ -159,7 +161,7 @@ pic::write_ocw(unsigned idx, uint8_t value)
 				}
 			}
 			else {
-				nxbx::fatal("Automatic rotation of IRQ priorities is not supported");
+				nxbx_fatal("Automatic rotation of IRQ priorities is not supported");
 			}
 		}
 	}
@@ -170,7 +172,7 @@ pic::write_ocw(unsigned idx, uint8_t value)
 			read_isr = value & 1;
 		}
 		else if (value & 0x44) {
-			nxbx::fatal("Unknown feature: %02X", value);
+			nxbx_fatal("Unknown feature: %02X", value);
 		}
 	}
 	}
@@ -183,10 +185,10 @@ pic::write_icw(unsigned idx, uint8_t value)
 	{
 	case 1:
 		if ((value & 1) == 0) {
-			nxbx::fatal("Configuration with no icw4 is not supported");
+			nxbx_fatal("Configuration with no icw4 is not supported");
 		}
 		else if (value & 2) {
-			nxbx::fatal("Single pic configuration is not supported");
+			nxbx_fatal("Single pic configuration is not supported");
 		}
 
 		in_init = 1;
@@ -208,16 +210,16 @@ pic::write_icw(unsigned idx, uint8_t value)
 
 	case 4:
 		if ((value & 1) == 0) {
-			nxbx::fatal("MCS-80/85 mode is not supported");
+			nxbx_fatal("MCS-80/85 mode is not supported");
 		}
 		else if (value & 2) {
-			nxbx::fatal("Auto-eoi mode is not supported");
+			nxbx_fatal("Auto-eoi mode is not supported");
 		}
 		else if (value & 8) {
-			nxbx::fatal("Buffered mode is not supported");
+			nxbx_fatal("Buffered mode is not supported");
 		}
 		else if (value & 16) {
-			nxbx::fatal("Special fully nested mode is not supported");
+			nxbx_fatal("Special fully nested mode is not supported");
 		}
 
 		in_init = 0;
@@ -225,7 +227,7 @@ pic::write_icw(unsigned idx, uint8_t value)
 		break;
 
 	default:
-		nxbx::fatal("Unknown icw specified, idx was %d", idx);
+		nxbx_fatal("Unknown icw specified, idx was %d", idx);
 	}
 }
 
@@ -270,6 +272,21 @@ pic::read_handler(uint32_t addr)
 }
 
 void
+pic::write_handler_logger(uint32_t addr, const uint8_t data)
+{
+	log_io_write();
+	write_handler(addr, data);
+}
+
+uint8_t
+pic::read_handler_logger(uint32_t addr)
+{
+	uint8_t data = read_handler(addr);
+	log_io_read();
+	return data;
+}
+
+void
 pic::elcr_write_handler(uint32_t addr, const uint8_t data)
 {
 	elcr = data;
@@ -279,6 +296,71 @@ uint8_t
 pic::elcr_read_handler(uint32_t addr)
 {
 	return elcr;
+}
+
+void
+pic::elcr_write_handler_logger(uint32_t addr, const uint8_t data)
+{
+	log_io_write();
+	elcr_write_handler(addr, data);
+}
+
+uint8_t
+pic::elcr_read_handler_logger(uint32_t addr)
+{
+	uint8_t data = elcr_read_handler(addr);
+	log_io_read();
+	return data;
+}
+
+bool
+pic::update_io(bool is_update)
+{
+	bool enable = module_enabled();
+	if (idx == 0) {
+		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x20, 2, true,
+			{
+				.fnr8 = enable ? cpu_read<pic, uint8_t, &pic::read_handler_logger> : cpu_read<pic, uint8_t, &pic::read_handler>,
+				.fnw8 = enable ? cpu_write<pic, uint8_t, &pic::write_handler_logger> : cpu_write<pic, uint8_t, &pic::write_handler>
+			},
+			this, is_update, is_update))) {
+			loggerex1(error, "Failed to update io ports");
+			return false;
+		}
+
+		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x4D0, 1, true,
+			{
+				.fnr8 = enable ? cpu_read<pic, uint8_t, &pic::elcr_read_handler_logger> : cpu_read<pic, uint8_t, &pic::elcr_read_handler>,
+				.fnw8 = enable ? cpu_write<pic, uint8_t, &pic::elcr_write_handler_logger> : cpu_write<pic, uint8_t, &pic::elcr_write_handler>
+			},
+			this, is_update, is_update))) {
+			loggerex1(error, "Failed to update elcr io ports");
+			return false;
+		}
+	}
+	else {
+		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0xA0, 2, true,
+			{
+				.fnr8 = enable ? cpu_read<pic, uint8_t, &pic::read_handler_logger> : cpu_read<pic, uint8_t, &pic::read_handler>,
+				.fnw8 = enable ? cpu_write<pic, uint8_t, &pic::write_handler_logger> : cpu_write<pic, uint8_t, &pic::write_handler>
+			},
+			this, is_update, is_update))) {
+			loggerex1(error, "Failed to update pic io ports");
+			return false;
+		}
+
+		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x4D1, 1, true,
+			{
+				.fnr8 = enable ? cpu_read<pic, uint8_t, &pic::elcr_read_handler_logger> : cpu_read<pic, uint8_t, &pic::elcr_read_handler>,
+				.fnw8 = enable ? cpu_write<pic, uint8_t, &pic::elcr_write_handler_logger> : cpu_write<pic, uint8_t, &pic::elcr_write_handler>
+			},
+			this, is_update, is_update))) {
+			loggerex1(error, "Failed to update elcr io ports");
+			return false;
+		}
+	}
+
+	return true;
 }
 
 void
@@ -295,47 +377,8 @@ pic::reset()
 bool
 pic::init()
 {
-	if (idx == 0) {
-		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x20, 2, true,
-			{
-				.fnr8 = cpu_read<pic, uint8_t, &pic::read_handler>,
-				.fnw8 = cpu_write<pic, uint8_t, &pic::write_handler>
-			},
-			this))) {
-			logger(log_lv::error, "Failed to initialize %s io ports", get_name());
-			return false;
-		}
-
-		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x4D0, 1, true,
-			{
-				.fnr8 = cpu_read<pic, uint8_t, &pic::elcr_read_handler>,
-				.fnw8 = cpu_write<pic, uint8_t, &pic::elcr_write_handler>
-			},
-			this))) {
-			logger(log_lv::error, "Failed to initialize %s elcr io ports", get_name());
-			return false;
-		}
-	}
-	else {
-		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0xA0, 2, true,
-			{
-				.fnr8 = cpu_read<pic, uint8_t, &pic::read_handler>,
-				.fnw8 = cpu_write<pic, uint8_t, &pic::write_handler>
-			},
-			this))) {
-			logger(log_lv::error, "Failed to initialize slave pic io ports", get_name());
-			return false;
-		}
-
-		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x4D1, 1, true,
-			{
-				.fnr8 = cpu_read<pic, uint8_t, &pic::elcr_read_handler>,
-				.fnw8 = cpu_write<pic, uint8_t, &pic::elcr_write_handler>
-			},
-			this))) {
-			logger(log_lv::error, "Failed to initialize %s elcr io ports", get_name());
-			return false;
-		}
+	if (!update_io(false)) {
+		return false;
 	}
 
 	reset();

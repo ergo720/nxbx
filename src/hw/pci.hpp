@@ -19,18 +19,26 @@ public:
 	pci(machine *machine) : m_machine(machine) {}
 	bool init();
 	void reset();
-	constexpr const char *get_name() { return "PCI"; }
+	void update_io_logging() { update_io(true); }
 	uint8_t read8(uint32_t addr);
 	uint16_t read16(uint32_t addr);
 	uint32_t read32(uint32_t addr);
 	void write8(uint32_t addr, const uint8_t data);
 	void write16(uint32_t addr, const uint16_t data);
 	void write32(uint32_t addr, const uint32_t data);
+	uint8_t read8_logger(uint32_t addr);
+	uint16_t read16_logger(uint32_t addr);
+	uint32_t read32_logger(uint32_t addr);
+	void write8_logger(uint32_t addr, const uint8_t data);
+	void write16_logger(uint32_t addr, const uint16_t data);
+	void write32_logger(uint32_t addr, const uint32_t data);
 	void *create_device(uint32_t bus, uint32_t device, uint32_t function, pci_conf_write_cb cb, void *opaque);
 	void copy_default_configuration(void *confptr, void *area, int size);
 	void *get_configuration_ptr(uint32_t bus, uint32_t device, uint32_t function);
 
 private:
+	bool update_io(bool is_update);
+
 	machine *const m_machine;
 	/// ignore: configuration_address_spaces
 	uint32_t configuration_address_register;

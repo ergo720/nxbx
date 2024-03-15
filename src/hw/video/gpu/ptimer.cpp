@@ -6,6 +6,8 @@
 #include "../../../clock.hpp"
 #include "machine.hpp"
 
+#define MODULE_NAME ptimer
+
 #define COUNTER_ON 2 // use 2 instead of 1 so that the value can be ORed with the int_enabled register
 #define COUNTER_OFF 0
 
@@ -88,7 +90,7 @@ ptimer::write(uint32_t addr, const uint32_t data)
 		if (multiplier > divider) [[unlikely]] {
 			// Testing on a Retail 1.0 xbox shows that, when this condition is hit, the console hangs. We don't actually want to freeze the emulator, so
 			// we will just terminate the emulation instead
-			nxbx::fatal("Invalid ratio multiplier -> multiplier > divider (the real hardware would hang here)");
+			nxbx_fatal("Invalid ratio multiplier -> multiplier > divider (the real hardware would hang here)");
 		}
 		counter_active = multiplier ? COUNTER_ON : COUNTER_OFF; // A multiplier of zero stops the 56 bit counter
 		uint64_t now = timer::get_now();
@@ -135,7 +137,7 @@ ptimer::write(uint32_t addr, const uint32_t data)
 	break;
 
 	default:
-		nxbx::fatal("Unhandled %s write at address 0x%" PRIX32 " with value 0x%" PRIX32, get_name(), addr, data);
+		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
 	}
 }
 
@@ -181,10 +183,42 @@ ptimer::read(uint32_t addr)
 		break;
 
 	default:
-		nxbx::fatal("Unhandled %s read at address 0x%" PRIX32, get_name(), addr);
+		nxbx_fatal("Unhandled read at address 0x%" PRIX32, addr);
 	}
 
 	return value;
+}
+
+uint32_t
+ptimer::read_logger(uint32_t addr)
+{
+	uint32_t data = read(addr);
+	log_io_read();
+	return data;
+}
+
+void
+ptimer::write_logger(uint32_t addr, const uint32_t data)
+{
+	log_io_write();
+	write(addr, data);
+}
+
+bool
+ptimer::update_io(bool is_update)
+{
+	bool enable = module_enabled();
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PTIMER_BASE, NV_PTIMER_SIZE, false,
+		{
+			.fnr32 = enable ? cpu_read<ptimer, uint32_t, &ptimer::read_logger> : cpu_read<ptimer, uint32_t, &ptimer::read>,
+			.fnw32 = enable ? cpu_write<ptimer, uint32_t, &ptimer::write_logger> : cpu_write<ptimer, uint32_t, &ptimer::write>
+		},
+		this, is_update, is_update))) {
+		loggerex1(error, "Failed to update mmio region");
+		return false;
+	}
+
+	return true;
 }
 
 void
@@ -205,13 +239,7 @@ ptimer::reset()
 bool
 ptimer::init()
 {
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PTIMER_BASE, NV_PTIMER_SIZE, false,
-		{
-			.fnr32 = cpu_read<ptimer, uint32_t, &ptimer::read>,
-			.fnw32 = cpu_write<ptimer, uint32_t, &ptimer::write>
-		},
-		this))) {
-		logger(log_lv::error, "Failed to initialize %s mmio region", get_name());
+	if (!update_io(false)) {
 		return false;
 	}
 

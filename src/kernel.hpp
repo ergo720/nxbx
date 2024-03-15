@@ -35,5 +35,7 @@ namespace kernel {
 	constexpr inline size_t IO_SIZE = IO_END - IO_BASE;
 
 	uint32_t read_handler(addr_t addr, void *opaque);
-	void write_handler(addr_t addr, const uint32_t value, void *opaque);
+	void write_handler(addr_t addr, const uint32_t data, void *opaque);
+	uint32_t read_handler_logger(addr_t addr, void *opaque);
+	void write_handler_logger(addr_t addr, const uint32_t data, void *opaque);
 }

@@ -139,6 +139,17 @@ public:
 	{
 		m_pic[a > 7 ? 1 : 0].lower_irq(a & 7);
 	}
+	void apply_log_settings()
+	{
+		m_cpu.update_io_logging();
+		m_pit.update_io_logging();
+		m_pic[0].update_io_logging();
+		m_pic[1].update_io_logging();
+		m_pci.update_io_logging();
+		m_cmos.update_io_logging();
+		m_nv2a.apply_log_settings();
+		mem_init_region_io(m_cpu.get_lc86cpu(), 0, 0, true, {}, m_cpu.get_lc86cpu(), true, 3); // trigger the update in lib86cpu too
+	}
 
 private:
 	cpu m_cpu;

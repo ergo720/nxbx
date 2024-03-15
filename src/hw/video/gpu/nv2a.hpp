@@ -40,6 +40,7 @@ public:
 	pfifo &get_pfifo() { return m_pfifo; }
 	pvga &get_pvga() { return m_pvga; }
 	pvideo &get_pvideo() { return m_pvideo; }
+	void apply_log_settings();
 
 private:
 	pmc m_pmc;

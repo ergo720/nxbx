@@ -4,6 +4,8 @@
 
 #include "machine.hpp"
 
+#define MODULE_NAME pfifo
+
 #define NV_PFIFO 0x00002000
 #define NV_PFIFO_BASE (NV2A_REGISTER_BASE + NV_PFIFO)
 #define NV_PFIFO_SIZE 0x2000
@@ -31,7 +33,7 @@ pfifo::write(uint32_t addr, const uint32_t data)
 		break;
 
 	default:
-		nxbx::fatal("Unhandled %s write at address 0x%" PRIX32 " with value 0x%" PRIX32, get_name(), addr, data);
+		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
 	}
 }
 
@@ -55,10 +57,42 @@ pfifo::read(uint32_t addr)
 		break;
 
 	default:
-		nxbx::fatal("Unhandled %s read at address 0x%" PRIX32, get_name(), addr);
+		nxbx_fatal("Unhandled read at address 0x%" PRIX32, addr);
 	}
 
 	return value;
+}
+
+uint32_t
+pfifo::read_logger(uint32_t addr)
+{
+	uint32_t data = read(addr);
+	log_io_read();
+	return data;
+}
+
+void
+pfifo::write_logger(uint32_t addr, const uint32_t data)
+{
+	log_io_write();
+	write(addr, data);
+}
+
+bool
+pfifo::update_io(bool is_update)
+{
+	bool enable = module_enabled();
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PFIFO_BASE, NV_PFIFO_SIZE, false,
+		{
+			.fnr32 = enable ? cpu_read<pfifo, uint32_t, &pfifo::read_logger> : cpu_read<pfifo, uint32_t, &pfifo::read>,
+			.fnw32 = enable ? cpu_write<pfifo, uint32_t, &pfifo::write_logger> : cpu_write<pfifo, uint32_t, &pfifo::write>
+		},
+		this, is_update, is_update))) {
+		loggerex1(error, "Failed to update mmio region");
+		return false;
+	}
+
+	return true;
 }
 
 void
@@ -73,13 +107,7 @@ pfifo::reset()
 bool
 pfifo::init()
 {
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PFIFO_BASE, NV_PFIFO_SIZE, false,
-		{
-			.fnr32 = cpu_read<pfifo, uint32_t, &pfifo::read>,
-			.fnw32 = cpu_write<pfifo, uint32_t, &pfifo::write>
-		},
-		this))) {
-		logger(log_lv::error, "Failed to initialize %s mmio region", get_name());
+	if (!update_io(false)) {
 		return false;
 	}
 

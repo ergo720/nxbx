@@ -44,9 +44,22 @@ void
 settings::load_config_values()
 {
 	// core settings
-	m_core.version = (uint32_t)m_ini.GetLongValue(m_core_str.name, m_core_str.version, m_version);
+	m_core.version = m_ini.GetLongValue(m_core_str.name, m_core_str.version, m_version);
+	m_core.log_version = m_ini.GetLongValue(m_core_str.name, m_core_str.log_version, m_log_version);
 	m_core.sys_time_bias = get_int64_value(m_core_str.name, m_core_str.sys_time_bias, 0);
-	
+	m_core.log_level = static_cast<log_lv>(m_ini.GetLongValue(m_core_str.name, m_core_str.log_level, static_cast<std::underlying_type_t<log_lv>>(default_log_lv)));
+	if (!is_log_lv_in_range(m_core.log_level)) {
+		m_core.log_level = default_log_lv;
+	}
+	if (m_core.log_version == m_log_version) {
+		// If the log version matches with the one used by this build of the emulator, then we can safely process the log modules
+		m_core.log_modules[0] = m_ini.GetLongValue(m_core_str.name, m_core_str.log_modules1, default_log_modules1);
+	}
+	else {
+		// ...otherwise, use default log module settings
+		m_core.log_modules[0] = default_log_modules1;
+	}
+	nxbx::update_logging();
 }
 
 bool
@@ -54,7 +67,10 @@ settings::save_config_values()
 {
 	// core settings
 	m_ini.SetLongValue(m_core_str.name, m_core_str.version, m_core.version, nullptr, false, true);
+	m_ini.SetLongValue(m_core_str.name, m_core_str.log_version, m_log_version, nullptr, false, true);
 	set_int64_value(m_core_str.name, m_core_str.sys_time_bias, m_core.sys_time_bias);
+	m_ini.SetLongValue(m_core_str.name, m_core_str.log_level, (int32_t)m_core.log_level, nullptr, false, true);
+	m_ini.SetLongValue(m_core_str.name, m_core_str.log_modules1, m_core.log_modules[0], nullptr, false, true);
 
 	return m_ini.SaveFile(m_ini_path.c_str()) >= 0;
 }

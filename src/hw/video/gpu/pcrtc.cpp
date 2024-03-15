@@ -4,6 +4,8 @@
 
 #include "machine.hpp"
 
+#define MODULE_NAME pcrtc
+
 #define NV_PCRTC 0x00600000
 #define NV_PCRTC_BASE (NV2A_REGISTER_BASE + NV_PCRTC)
 #define NV_PCRTC_SIZE 0x1000
@@ -39,7 +41,7 @@ pcrtc::write(uint32_t addr, const uint32_t data)
 		break;
 
 	default:
-		nxbx::fatal("Unhandled %s write at address 0x%" PRIX32 " with value 0x%" PRIX32, get_name(), addr, data);
+		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
 	}
 }
 
@@ -67,10 +69,42 @@ pcrtc::read(uint32_t addr)
 		break;
 
 	default:
-		nxbx::fatal("Unhandled %s read at address 0x%" PRIX32, get_name(), addr);
+		nxbx_fatal("Unhandled read at address 0x%" PRIX32, addr);
 	}
 
 	return value;
+}
+
+uint32_t
+pcrtc::read_logger(uint32_t addr)
+{
+	uint32_t data = read(addr);
+	log_io_read();
+	return data;
+}
+
+void
+pcrtc::write_logger(uint32_t addr, const uint32_t data)
+{
+	log_io_write();
+	write(addr, data);
+}
+
+bool
+pcrtc::update_io(bool is_update)
+{
+	bool enable = module_enabled();
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PCRTC_BASE, NV_PCRTC_SIZE, false,
+		{
+			.fnr32 = enable ? cpu_read<pcrtc, uint32_t, &pcrtc::read_logger> : cpu_read<pcrtc, uint32_t, &pcrtc::read>,
+			.fnw32 = enable ? cpu_write<pcrtc, uint32_t, &pcrtc::write_logger> : cpu_write<pcrtc, uint32_t, &pcrtc::write>
+		},
+		this, is_update, is_update))) {
+		loggerex1(error, "Failed to update mmio region");
+		return false;
+	}
+
+	return true;
 }
 
 void
@@ -87,13 +121,7 @@ pcrtc::reset()
 bool
 pcrtc::init()
 {
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PCRTC_BASE, NV_PCRTC_SIZE, false,
-		{
-			.fnr32 = cpu_read<pcrtc, uint32_t, &pcrtc::read>,
-			.fnw32 = cpu_write<pcrtc, uint32_t, &pcrtc::write>
-		},
-		this))) {
-		logger(log_lv::error, "Failed to initialize %s mmio region", get_name());
+	if (!update_io(false)) {
 		return false;
 	}
 

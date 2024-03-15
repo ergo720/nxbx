@@ -83,7 +83,6 @@ set(SOURCES
  "${NXBX_ROOT_DIR}/src/files.cpp"
  "${NXBX_ROOT_DIR}/src/io.cpp"
  "${NXBX_ROOT_DIR}/src/kernel.cpp"
- "${NXBX_ROOT_DIR}/src/logger.cpp"
  "${NXBX_ROOT_DIR}/src/nxbx.cpp"
  "${NXBX_ROOT_DIR}/src/main.cpp"
  "${NXBX_ROOT_DIR}/src/settings.cpp"
@@ -113,6 +112,7 @@ source_group(TREE ${NXBX_ROOT_DIR} PREFIX header FILES ${HEADERS})
 source_group(TREE ${NXBX_ROOT_DIR} PREFIX source FILES ${SOURCES})
 
 if (${COMPILER_IS_MSVC})
+set(CMAKE_CXX_FLAGS "/EHsc /Zc:preprocessor")
 add_definitions(-D_CRT_SECURE_NO_WARNINGS -D_CRT_NONSTDC_NO_WARNINGS -D_SCL_SECURE_NO_WARNINGS)
 endif()
 

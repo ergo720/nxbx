@@ -23,12 +23,13 @@ public:
 	void reset();
 	void start();
 	void exit();
-	constexpr const char *get_name() { return "CPU"; }
+	void update_io_logging() { update_io(true); }
 	uint64_t check_periodic_events(uint64_t now);
 	cpu_t *get_lc86cpu() { return m_lc86cpu; }
 	uint32_t get_ramsize() { return m_ramsize; }
 
 private:
+	bool update_io(bool is_update);
 	uint64_t check_periodic_events();
 
 	machine *const m_machine;

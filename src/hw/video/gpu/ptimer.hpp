@@ -16,12 +16,16 @@ public:
 	ptimer(machine *machine) : m_machine(machine) {}
 	bool init();
 	void reset();
-	constexpr const char *get_name() { return "NV2A.PTIMER"; }
+	void update_io_logging() { update_io(true); }
 	uint64_t get_next_alarm_time(uint64_t now);
 	uint32_t read(uint32_t addr);
 	void write(uint32_t addr, const uint32_t data);
+	uint32_t read_logger(uint32_t addr);
+	void write_logger(uint32_t addr, const uint32_t data);
 
 private:
+	bool update_io(bool is_update);
+
 	friend class pmc;
 	friend class pramdac;
 	uint64_t counter_to_us();

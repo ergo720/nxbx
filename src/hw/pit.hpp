@@ -21,11 +21,13 @@ public:
 	pit(machine *machine) : m_machine(machine) {}
 	bool init();
 	void reset();
-	constexpr const char *get_name() { return "PIT"; }
+	void update_io_logging() { update_io(true); }
 	uint64_t get_next_irq_time(uint64_t now);
-	void write_handler(uint32_t port, const uint8_t value);
+	void write_handler(uint32_t addr, const uint8_t data);
+	void write_handler_logger(uint32_t addr, const uint8_t data);
 
 private:
+	bool update_io(bool is_update);
 	uint64_t counter_to_us();
 	void start_timer(uint8_t channel);
 	void channel_reset(uint8_t channel);

@@ -43,6 +43,14 @@ namespace nxbx {
 	}
 
 	void
+	update_logging()
+	{
+		g_log_lv = settings::get().m_core.log_level;
+		g_log_modules[0] = settings::get().m_core.log_modules[0];
+		console::get().apply_log_settings();
+	}
+
+	void
 	start()
 	{
 		console::get().start();
@@ -51,7 +59,7 @@ namespace nxbx {
 	void
 	exit()
 	{
-		nxbx::save_settings();
+		save_settings();
 	}
 
 	const std::string &
@@ -74,11 +82,11 @@ namespace nxbx {
 	}
 
 	void
-	fatal(const char *msg, ...)
+	fatal(log_module name, const char *msg, ...)
 	{
 		std::va_list args;
 		va_start(args, msg);
-		logger(log_lv::error, msg, args);
+		logger<log_lv::highest, false>(name, msg, args);
 		va_end(args);
 		console::get().exit();
 	}

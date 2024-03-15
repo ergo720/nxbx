@@ -24,7 +24,7 @@ public:
 			if (!((init_info.m_type == console_t::xbox) ||
 				(init_info.m_type == console_t::chihiro) ||
 				(init_info.m_type == console_t::devkit))) {
-				logger(log_lv::error, "Attempted to create unrecognized machine of type %" PRIu32, (uint32_t)init_info.m_type);
+				logger_nxbx(error, "Attempted to create unrecognized machine of type %" PRIu32, (uint32_t)init_info.m_type);
 				return false;
 			}
 			timer::init();
@@ -49,6 +49,12 @@ public:
 	}
 	void start() { m_machine.start(); deinit(); }
 	void exit() { m_machine.exit(); }
+	void apply_log_settings()
+	{
+		if (m_is_init) {
+			m_machine.apply_log_settings();
+		}
+	}
 
 private:
 	console() : m_is_init(false) {}

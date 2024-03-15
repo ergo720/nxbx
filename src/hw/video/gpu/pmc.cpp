@@ -4,6 +4,8 @@
 
 #include "machine.hpp"
 
+#define MODULE_NAME pmc
+
 #define NV_PMC 0x00000000
 #define NV_PMC_BASE (NV2A_REGISTER_BASE + NV_PMC)
 #define NV_PMC_SIZE 0x1000
@@ -50,7 +52,7 @@ pmc::write(uint32_t addr, const uint32_t data)
 		uint32_t mask = NV_PMC_BOOT_1_ENDIAN0_LITTLE_MASK;
 		if (data & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK) {
 			mask = NV_PMC_BOOT_1_ENDIAN0_BIG_MASK;
-			nxbx::fatal("NV_PMC_BOOT_1: big endian switch not implemented");
+			nxbx_fatal("NV_PMC_BOOT_1: big endian switch not implemented");
 			break;
 		}
 		endianness = ((data & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK) | mask);
@@ -89,7 +91,7 @@ pmc::write(uint32_t addr, const uint32_t data)
 	break;
 
 	default:
-		nxbx::fatal("Unhandled %s write at address 0x%" PRIX32 " with value 0x%" PRIX32, get_name(), addr, data);
+		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
 	}
 }
 
@@ -123,10 +125,25 @@ pmc::read(uint32_t addr)
 		break;
 
 	default:
-		nxbx::fatal("Unhandled %s read at address 0x%" PRIX32, get_name(), addr);
+		nxbx_fatal("Unhandled %s read at address 0x%" PRIX32, addr);
 	}
 
 	return value;
+}
+
+uint32_t
+pmc::read_logger(uint32_t addr)
+{
+	uint32_t data = read(addr);
+	log_io_read();
+	return data;
+}
+
+void
+pmc::write_logger(uint32_t addr, const uint32_t data)
+{
+	log_io_write();
+	write(addr, data);
 }
 
 void
@@ -175,6 +192,23 @@ pmc::update_irq()
 	}
 }
 
+bool
+pmc::update_io(bool is_update)
+{
+	bool enable = module_enabled();
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PMC_BASE, NV_PMC_SIZE, false,
+		{
+			.fnr32 = enable ? cpu_read<pmc, uint32_t, &pmc::read_logger> : cpu_read<pmc, uint32_t, &pmc::read>,
+			.fnw32 = enable ? cpu_write<pmc, uint32_t, &pmc::write_logger> : cpu_write<pmc, uint32_t, &pmc::write>
+		},
+		this, is_update, is_update))) {
+		loggerex1(error, "Failed to update mmio region");
+		return false;
+	}
+
+	return true;
+}
+
 void
 pmc::reset()
 {
@@ -187,13 +221,7 @@ pmc::reset()
 bool
 pmc::init()
 {
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PMC_BASE, NV_PMC_SIZE, false,
-		{
-			.fnr32 = cpu_read<pmc, uint32_t, &pmc::read>,
-			.fnw32 = cpu_write<pmc, uint32_t, &pmc::write>
-		},
-		this))) {
-		logger(log_lv::error, "Failed to initialize %s mmio region", get_name());
+	if (!update_io(false)) {
 		return false;
 	}
 

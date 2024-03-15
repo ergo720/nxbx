@@ -16,12 +16,15 @@ public:
 	bool init();
 	void deinit();
 	void reset();
-	constexpr const char *get_name() { return "CMOS"; }
-	uint8_t read_handler(uint32_t port);
-	void write_handler(uint32_t port, const uint8_t data);
+	void update_io_logging() { update_io(true); }
+	uint8_t read_handler(uint32_t addr);
+	void write_handler(uint32_t addr, const uint8_t data);
+	uint8_t read_handler_logger(uint32_t addr);
+	void write_handler_logger(uint32_t addr, const uint8_t data);
 	uint64_t get_next_update_time(uint64_t now);
 
 private:
+	bool update_io(bool is_update);
 	void update_time(uint64_t elapsed_us);
 	uint8_t to_bcd(uint8_t data);
 	uint8_t from_bcd(uint8_t data);

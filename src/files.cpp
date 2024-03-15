@@ -13,6 +13,8 @@
 #include <unistd.h>
 #endif
 
+#define MODULE_NAME file
+
 
 bool
 file_exists(std::filesystem::path path)
@@ -22,10 +24,10 @@ file_exists(std::filesystem::path path)
 		return std::filesystem::exists(path);
 	}
 	catch (const std::filesystem::filesystem_error &e) {
-		logger(log_lv::info, "Failed to check existence of path %s, the error was %s", path.string().c_str(), e.what());
+		loggerex1(info, "Failed to check existence of path %s, the error was %s", path.string().c_str(), e.what());
 	}
 	catch (const std::bad_alloc &e) {
-		logger(log_lv::info, "Failed to check existence of path %s, the error was %s", path.string().c_str(), e.what());
+		loggerex1(info, "Failed to check existence of path %s, the error was %s", path.string().c_str(), e.what());
 	}
 
 	return false;
@@ -40,10 +42,10 @@ file_exists(std::filesystem::path path, bool *is_directory)
 			return true;
 		}
 		catch (const std::filesystem::filesystem_error &e) {
-			logger(log_lv::info, "Failed to determine the file type of path %s, the error was %s", path.string().c_str(), e.what());
+			loggerex1(info, "Failed to determine the file type of path %s, the error was %s", path.string().c_str(), e.what());
 		}
 		catch (const std::bad_alloc &e) {
-			logger(log_lv::info, "Failed to determine the file type of path %s, the error was %s", path.string().c_str(), e.what());
+			loggerex1(info, "Failed to determine the file type of path %s, the error was %s", path.string().c_str(), e.what());
 		}
 	}
 
@@ -64,7 +66,7 @@ create_directory(std::filesystem::path path)
 		if (!exists) {
 			exists = std::filesystem::create_directories(path);
 			if (!exists) {
-				logger(log_lv::info, "Failed to created directory %s", path.string().c_str());
+				loggerex1(info, "Failed to created directory %s", path.string().c_str());
 				return false;
 			}
 		}
@@ -72,10 +74,10 @@ create_directory(std::filesystem::path path)
 		return true;
 	}
 	catch (const std::filesystem::filesystem_error &e) {
-		logger(log_lv::info, "Failed to created directory %s, the error was %s", path.string().c_str(), e.what());
+		loggerex1(info, "Failed to created directory %s, the error was %s", path.string().c_str(), e.what());
 	}
 	catch (const std::bad_alloc &e) {
-		logger(log_lv::info, "Failed to created directory %s, the error was %s", path.string().c_str(), e.what());
+		loggerex1(info, "Failed to created directory %s, the error was %s", path.string().c_str(), e.what());
 	}
 
 	return false;
@@ -98,10 +100,10 @@ create_file(std::filesystem::path path, uint64_t initial_size)
 				std::filesystem::resize_file(path, initial_size);
 			}
 			catch (const std::filesystem::filesystem_error &e) {
-				logger(log_lv::info, "Failed to set the initial file size of path %s, the error was %s", path.string().c_str(), e.what());
+				loggerex1(info, "Failed to set the initial file size of path %s, the error was %s", path.string().c_str(), e.what());
 			}
 			catch (const std::bad_alloc &e) {
-				logger(log_lv::info, "Failed to set the initial file size of path %s, the error was %s", path.string().c_str(), e.what());
+				loggerex1(info, "Failed to set the initial file size of path %s, the error was %s", path.string().c_str(), e.what());
 			}
 		}
 		return opt;
@@ -125,11 +127,11 @@ open_file(std::filesystem::path path, std::uintmax_t *size)
 		}
 		catch (const std::filesystem::filesystem_error &e) {
 			*size = 0;
-			logger(log_lv::info, "Failed to determine the file size of path %s, the error was %s", path.string().c_str(), e.what());
+			loggerex1(info, "Failed to determine the file size of path %s, the error was %s", path.string().c_str(), e.what());
 		}
 		catch (const std::bad_alloc &e) {
 			*size = 0;
-			logger(log_lv::info, "Failed to determine the file size of path %s, the error was %s", path.string().c_str(), e.what());
+			loggerex1(info, "Failed to determine the file size of path %s, the error was %s", path.string().c_str(), e.what());
 		}
 		return opt;
 	}

@@ -7,6 +7,8 @@
 #include "machine.hpp"
 #include "../clock.hpp"
 
+#define MODULE_NAME pit
+
 #define PIT_IRQ_NUM 0
 
 
@@ -48,20 +50,20 @@ pit::start_timer(uint8_t channel)
 }
 
 void
-pit::write_handler(uint32_t port, const uint8_t value)
+pit::write_handler(uint32_t addr, const uint8_t data)
 {
-	uint8_t channel = port & 3;
+	uint8_t channel = addr & 3;
 
 	switch (channel)
 	{
 	case 3: {
-		channel = value >> 6;
-		uint8_t opmode = value >> 1 & 7, bcd = value & 1, access = value >> 4 & 3;
+		channel = data >> 6;
+		uint8_t opmode = data >> 1 & 7, bcd = data & 1, access = data >> 4 & 3;
 
 		switch (channel)
 		{
 		case 3:
-			nxbx::fatal("Read back command is not supported");
+			nxbx_fatal("Read back command is not supported");
 			break;
 
 		case 0:
@@ -69,11 +71,11 @@ pit::write_handler(uint32_t port, const uint8_t value)
 		case 2: {
 			pit_channel *chan = &m_chan[channel];
 			if (!access) {
-				nxbx::fatal("Counter latch command is not supported");
+				nxbx_fatal("Counter latch command is not supported");
 			}
 			else {
 				if (bcd) {
-					nxbx::fatal("BCD mode not supported");
+					nxbx_fatal("BCD mode not supported");
 				}
 
 				chan->wmode = access;
@@ -99,17 +101,17 @@ pit::write_handler(uint32_t port, const uint8_t value)
 		case 0:
 		case 1:
 		case 2:
-			nxbx::fatal("Read/Load mode must be LSB first MSB last");
+			nxbx_fatal("Read/Load mode must be LSB first MSB last");
 			break;
 
 		case 3:
 			if (chan->lsb_read) {
-				chan->counter = (static_cast<uint16_t>(value) << 8) | chan->counter;
+				chan->counter = (static_cast<uint16_t>(data) << 8) | chan->counter;
 				start_timer(channel);
 				chan->lsb_read = 0;
 			}
 			else {
-				chan->counter = value;
+				chan->counter = data;
 				chan->lsb_read = 1;
 			}
 			break;
@@ -120,12 +122,35 @@ pit::write_handler(uint32_t port, const uint8_t value)
 }
 
 void
+pit::write_handler_logger(uint32_t addr, const uint8_t data)
+{
+	log_io_write();
+	write_handler(addr, data);
+}
+
+void
 pit::channel_reset(uint8_t channel)
 {
 	m_chan[channel].counter = 0;
 	m_chan[channel].timer_mode = 0;
 	m_chan[channel].lsb_read = 0;
 	m_chan[channel].timer_running = 0;
+}
+
+bool
+pit::update_io(bool is_update)
+{
+	bool enable = module_enabled();
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x40, 4, true,
+		{
+		.fnw8 = enable ? cpu_write<pit, uint8_t, &pit::write_handler_logger> : cpu_write<pit, uint8_t, &pit::write_handler>
+		},
+		this, is_update, is_update))) {
+		loggerex1(error, "Failed to update io ports");
+		return false;
+	}
+
+	return true;
 }
 
 void
@@ -139,12 +164,7 @@ pit::reset()
 bool
 pit::init()
 {
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x40, 4, true,
-		{
-		.fnw8 = cpu_write<pit, uint8_t, &pit::write_handler>
-		},
-		this))) {
-		logger(log_lv::error, "Failed to initialize %s io ports", get_name());
+	if (!update_io(false)) {
 		return false;
 	}
 
