@@ -220,9 +220,9 @@ namespace io {
 			resolved_path /= partition;
 			pos = pos2;
 		}
-		std::string_view name = path.substr(pos + 1);
+		std::string name(path.substr(pos + 1));
+		xbox_to_host_separator(name);
 		resolved_path /= name;
-		resolved_path.make_preferred();
 
 		return resolved_path;
 	}

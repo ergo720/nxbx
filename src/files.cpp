@@ -138,6 +138,15 @@ open_file(std::filesystem::path path, std::uintmax_t *size)
 	return std::nullopt;
 }
 
+void
+xbox_to_host_separator(std::string &path)
+{
+#if defined(__linux__)
+	// Note that on Linux, the slash is a valid character for file names, so std::filesystem::path::make_preferred won't change them
+	std::replace(path.begin(), path.end(), '\\', '/');
+#endif
+}
+
 namespace nxbx {
 	std::string
 	get_path()
