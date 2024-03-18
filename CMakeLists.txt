@@ -1,6 +1,6 @@
 # ergo720 Copyright (c) 2023
 
-cmake_minimum_required(VERSION 3.4.3)
+cmake_minimum_required(VERSION 3.5)
 project(nxbx)
 
 if(NOT DEFINED CMAKE_RUNTIME_OUTPUT_DIRECTORY)
