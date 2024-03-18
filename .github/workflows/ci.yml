@@ -1,0 +1,68 @@
+name: GitHub CI
+
+on:
+  workflow_dispatch:
+  push:
+    paths-ignore:
+      - '.github/*'
+      - '.github/*TEMPLATE/**'
+    branches:
+      - '**'
+  pull_request:
+    paths-ignore:
+      - '*.md'
+      - '.github/*'
+      - '.github/*TEMPLATE/**'
+env:
+  is_pr: ${{ startsWith(github.ref, 'refs/pull/') }}
+  repo_default: 'ergo720/nxbx'
+
+jobs:
+  build:
+    name: ${{ matrix.platform }} (${{ matrix.arch }}, ${{ matrix.configuration }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        cmake-generator:
+          # x64 arch
+          - -A x64 # Visual Studio (latest IDE)
+          - -G "Unix Makefiles"
+          #- -G Xcode
+        configuration: [Debug, Release]
+        include:
+          - cmake-generator: -A x64
+            platform: Windows
+            os: windows-latest
+            arch: x64
+            cmake-build-param: -j $env:NUMBER_OF_PROCESSORS
+            folder: win
+          - cmake-generator: -G "Unix Makefiles"
+            platform: Linux
+            install-cmd: sudo apt-get -y update && sudo apt-get -y install xorg-dev
+            os: ubuntu-latest
+            arch: x64
+            cmake-build-param: -j $(nproc --all)
+            folder: linux
+          #- cmake-generator: -G Xcode
+          #  platform: macOS
+          #  os: macos-latest
+          #  arch: x64
+          #  cmake-build-param: -j $(sysctl -n hw.ncpu)
+          #  folder: macos
+    steps:
+      - name: Install Dependencies
+        if: matrix.install-cmd != ''
+        run: ${{ matrix.install-cmd }}
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Generate CMake Files
+        # NOTES:
+        # -Werror=dev is used to validate CMakeLists.txt for any faults.
+        run: cmake -B build -Werror=dev ${{ matrix.cmake-generator }}
+      - name: Build
+        run: cmake --build build --config ${{ matrix.configuration }} ${{ matrix.cmake-build-param }}
+      # In case if CTests later implement can use the step below.
+      #- name: CTests
+      #  run: ctest --test-dir build --build-config ${{ matrix.configuration }} --verbose
