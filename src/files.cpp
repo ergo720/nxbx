@@ -9,6 +9,7 @@
 #include <fstream>
 #if defined(_WIN64)
 #include "Windows.h"
+#undef min
 #elif defined(__linux__)
 #include <unistd.h>
 #endif
@@ -17,36 +18,89 @@
 
 
 bool
-file_exists(std::filesystem::path path)
+file_exists(std::pair<std::filesystem::path, std::string> path_to_check, std::filesystem::path &resolved_path)
 {
+	// path_to_check.first -> base device part, decided by host, path_to_check.second -> remaining variable part, decided by xbox
+
 	try {
-		// TODO: this can probably spuriously fail if the OS filesystem doesn't do case-insensitive comparisons
-		return std::filesystem::exists(path);
+		resolved_path = path_to_check.first / path_to_check.second;
+		bool exists = std::filesystem::exists(resolved_path);
+		if (!exists) {
+			// If it failed, the path might still exists, but the OS filesystem doesn't do case-insensitive comparisons (which the xbox always does)
+			// E.g.: on Linux, the ext4 filesystem might trigger this case
+
+			if (path_to_check.second.empty()) {
+				return false;
+			}
+
+			// This starts from the device path, and checks each file name component of the path for a case-insensitive match with a host file in the current inspected directory
+			size_t pos_to_check = 0, name_size = path_to_check.second.size();
+			int64_t remaining_path_size = name_size;
+			std::filesystem::path local_path(path_to_check.first);
+			do {
+				size_t pos = path_to_check.second.find_first_of('\\', pos_to_check);
+				pos = std::min(pos, name_size);
+				util::xbox_string_view xbox_name(util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(std::string_view(&path_to_check.second[pos_to_check], pos - pos_to_check)));
+				for (const auto &directory_entry : std::filesystem::directory_iterator(local_path)) {
+					std::string host_name(directory_entry.path().filename().string());
+					util::xbox_string xbox_host_name(util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(host_name));
+					if (xbox_name.compare(xbox_host_name) == 0) {
+						local_path /= host_name;
+						pos_to_check = pos + 1;
+						remaining_path_size = name_size - pos_to_check;
+						goto found_name;
+					}
+				}
+				return false;
+
+				// NOTE: labels belong to statements, so the final semicolon is required. This restriction is lifted in C++23
+			found_name: ;
+			} while (remaining_path_size > 0);
+
+			resolved_path = local_path;
+		}
+		return true;
 	}
 	catch (const std::filesystem::filesystem_error &e) {
-		loggerex1(info, "Failed to check existence of path %s, the error was %s", path.string().c_str(), e.what());
+		loggerex1(info, "Failed to check existence of path %s, the error was %s", resolved_path.string().c_str(), e.what());
 	}
 	catch (const std::bad_alloc &e) {
-		loggerex1(info, "Failed to check existence of path %s, the error was %s", path.string().c_str(), e.what());
+		loggerex1(info, "Failed to check existence of path %s, the error was %s", resolved_path.string().c_str(), e.what());
 	}
 
 	return false;
 }
 
 bool
-file_exists(std::filesystem::path path, bool *is_directory)
+file_exists(std::pair<std::filesystem::path, std::string> path_to_check, std::filesystem::path &resolved_path, bool *is_directory)
 {
-	if (file_exists(path)) {
+	if (file_exists(path_to_check, resolved_path)) {
 		try {
-			*is_directory = std::filesystem::is_directory(path);
+			*is_directory = std::filesystem::is_directory(resolved_path);
 			return true;
 		}
 		catch (const std::filesystem::filesystem_error &e) {
-			loggerex1(info, "Failed to determine the file type of path %s, the error was %s", path.string().c_str(), e.what());
+			loggerex1(info, "Failed to determine the file type of path %s, the error was %s", resolved_path.string().c_str(), e.what());
 		}
 		catch (const std::bad_alloc &e) {
-			loggerex1(info, "Failed to determine the file type of path %s, the error was %s", path.string().c_str(), e.what());
+			loggerex1(info, "Failed to determine the file type of path %s, the error was %s", resolved_path.string().c_str(), e.what());
 		}
+	}
+
+	return false;
+}
+
+bool
+file_exists(std::filesystem::path path)
+{
+	try {
+		return std::filesystem::exists(path);
+	}
+	catch (const std::filesystem::filesystem_error &e) {
+		loggerex1(info, "Failed to determine the file type of path %s, the error was %s", path.string().c_str(), e.what());
+	}
+	catch (const std::bad_alloc &e) {
+		loggerex1(info, "Failed to determine the file type of path %s, the error was %s", path.string().c_str(), e.what());
 	}
 
 	return false;

@@ -195,7 +195,7 @@ namespace io {
 		return true;
 	}
 
-	static std::filesystem::path
+	static std::pair<std::filesystem::path, std::string>
 	parse_path(io_request *curr_io_request)
 	{
 		// NOTE1: Paths from the kernel should have the form "\device\<device name>\<partition number (optional)>\<file name>"
@@ -215,16 +215,17 @@ namespace io {
 		else {
 			resolved_path = hdd_path;
 			size_t pos2 = path.find_first_of('\\', pos + 1);
-			assert(pos != std::string_view::npos);
-			std::string_view partition = path.substr(pos + 1, pos2 - pos - 1); // extracts partition number
+			assert(pos2 != std::string_view::npos);
+			unsigned partition_num = std::strtoul(&path[pos2 - 1], nullptr, 10);
+			assert(partition_num < XBOX_NUM_OF_PARTITIONS);
+			std::string partition = "Partition" + std::to_string(partition_num); // extracts partition number
 			resolved_path /= partition;
 			pos = pos2;
 		}
 		std::string name(path.substr(pos + 1));
 		xbox_to_host_separator(name);
-		resolved_path /= name;
 
-		return resolved_path;
+		return std::make_pair(resolved_path, name);
 	}
 
 	static void
@@ -266,13 +267,13 @@ namespace io {
 			if (io_type == open) {
 				// This code opens/creates the file according to the CreateDisposition parameter used by NtCreate/OpenFile
 
-				std::filesystem::path resolved_path = parse_path(curr_io_request.get());
+				auto path_pair = parse_path(curr_io_request.get());
 				io_info_block io_result(error, no_data, 0);
 				uint32_t disposition = IO_GET_DISPOSITION(curr_io_request->type);
 				uint32_t flags = IO_GET_FLAGS(curr_io_request->type);
 				bool host_is_directory, is_directory = flags & io_flags::is_directory;
 
-				const auto add_to_map = [&curr_io_request, &resolved_path, dev](auto &&opt, io_info_block *io_result) {
+				const auto add_to_map = [&curr_io_request, dev](auto &&opt, io_info_block *io_result, std::filesystem::path resolved_path) {
 					// NOTE: this insertion will fail when the guest creates a new handle to the same file. This, because it will pass the same host handle, and std::unordered_map
 					// doesn't allow duplicated keys. This is ok though, because we can reuse the same std::fstream for the same file and it will have the same path too
 					loggerex1(info, "Opened %s with handle %" PRIu64 " and path %s", opt->is_open() ? "file" : "directory", curr_io_request->handle_oc, resolved_path.string().c_str());
@@ -293,7 +294,8 @@ namespace io {
 					}
 					};
 
-				if (file_exists(resolved_path, &host_is_directory)) {
+				std::filesystem::path resolved_path;
+				if (file_exists(path_pair, resolved_path, &host_is_directory)) {
 					io_result.info = exists;
 					if (disposition == IO_CREATE) {
 						// Create if doesn't exist - FILE_CREATE
@@ -307,13 +309,13 @@ namespace io {
 							if (is_directory) {
 								// Open directory: nothing to do
 								io_result.info = opened;
-								add_to_map(std::make_optional<std::fstream>(), &io_result);
+								add_to_map(std::make_optional<std::fstream>(), &io_result, resolved_path);
 							}
 							else {
 								// Open file
 								if (auto opt = open_file(resolved_path, &io_result.info2_or_id); opt) {
 									io_result.info = opened;
-									add_to_map(opt, &io_result);
+									add_to_map(opt, &io_result, resolved_path);
 								}
 							}
 						}
@@ -326,13 +328,13 @@ namespace io {
 							if (is_directory) {
 								// Create directory: already exists
 								io_result.info = exists;
-								add_to_map(std::make_optional<std::fstream>(), &io_result);
+								add_to_map(std::make_optional<std::fstream>(), &io_result, resolved_path);
 							}
 							else {
 								// Create file
 								if (auto opt = create_file(resolved_path, curr_io_request->initial_size); opt) {
 									io_result.info = (disposition == IO_SUPERSEDE) ? superseded : overwritten;
-									add_to_map(opt, &io_result);
+									add_to_map(opt, &io_result, resolved_path);
 								}
 							}
 						}
@@ -349,14 +351,14 @@ namespace io {
 							// Create directory
 							if (::create_directory(resolved_path)) {
 								io_result.info = created;
-								add_to_map(std::make_optional<std::fstream>(), &io_result);
+								add_to_map(std::make_optional<std::fstream>(), &io_result, resolved_path);
 							}
 						}
 						else {
 							// Create file
 							if (auto opt = create_file(resolved_path, curr_io_request->initial_size); opt) {
 								io_result.info = created;
-								add_to_map(opt, &io_result);
+								add_to_map(opt, &io_result, resolved_path);
 							}
 						}
 					}
