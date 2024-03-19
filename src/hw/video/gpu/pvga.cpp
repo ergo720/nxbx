@@ -125,7 +125,7 @@ pvga::update_io(bool is_update)
 			.fnw16 = enable ? cpu_write<pvga, uint16_t, &pvga::io_write16_logger, NV_PRMVIO_BASE> : cpu_write<pvga, uint16_t, &pvga::io_write16, NV_PRMVIO_BASE>
 		},
 		this, is_update, is_update))) {
-		loggerex1(error, "Failed to update mmio region");
+		logger_en(error, "Failed to update mmio region");
 		return false;
 	}
 
@@ -137,7 +137,7 @@ pvga::update_io(bool is_update)
 			.fnw16 = enable ? cpu_write<pvga, uint16_t, &pvga::io_write16_logger, NV_PRMCIO_BASE> : cpu_write<pvga, uint16_t, &pvga::io_write16, NV_PRMCIO_BASE>
 		},
 		this, is_update, is_update))) {
-		loggerex1(error, "Failed to update mmio region");
+		logger_en(error, "Failed to update mmio region");
 		return false;
 	}
 
@@ -149,7 +149,7 @@ pvga::update_io(bool is_update)
 			.fnw16 = enable ? cpu_write<pvga, uint16_t, &pvga::io_write16_logger, NV_PRMDIO_BASE> : cpu_write<pvga, uint16_t, &pvga::io_write16, NV_PRMDIO_BASE>
 		},
 		this, is_update, is_update))) {
-		loggerex1(error, "Failed to update mmio region");
+		logger_en(error, "Failed to update mmio region");
 		return false;
 	}
 
@@ -162,7 +162,7 @@ pvga::update_io(bool is_update)
 			.fnw16 = enable ? cpu_write<pvga, uint16_t, &pvga::mem_write16_logger, NV_PRMVGA_BASE> : cpu_write<pvga, uint16_t, &pvga::mem_write16, NV_PRMVGA_BASE>
 		},
 		this, is_update, is_update))) {
-		loggerex1(error, "Failed to update mmio region");
+		logger_en(error, "Failed to update mmio region");
 		return false;
 	}
 

@@ -146,7 +146,7 @@ pit::update_io(bool is_update)
 		.fnw8 = enable ? cpu_write<pit, uint8_t, &pit::write_handler_logger> : cpu_write<pit, uint8_t, &pit::write_handler>
 		},
 		this, is_update, is_update))) {
-		loggerex1(error, "Failed to update io ports");
+		logger_en(error, "Failed to update io ports");
 		return false;
 	}
 

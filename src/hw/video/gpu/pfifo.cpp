@@ -88,7 +88,7 @@ pfifo::update_io(bool is_update)
 			.fnw32 = enable ? cpu_write<pfifo, uint32_t, &pfifo::write_logger> : cpu_write<pfifo, uint32_t, &pfifo::write>
 		},
 		this, is_update, is_update))) {
-		loggerex1(error, "Failed to update mmio region");
+		logger_en(error, "Failed to update mmio region");
 		return false;
 	}
 

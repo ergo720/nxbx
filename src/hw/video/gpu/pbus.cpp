@@ -185,7 +185,7 @@ pbus::update_io(bool is_update)
 			.fnw32 = enable ? cpu_write<pbus, uint32_t, &pbus::write_logger> : cpu_write<pbus, uint32_t, &pbus::write>
 		},
 		this, is_update, is_update))) {
-		loggerex1(error, "Failed to update mmio region");
+		logger_en(error, "Failed to update mmio region");
 		return false;
 	}
 
@@ -195,7 +195,7 @@ pbus::update_io(bool is_update)
 			.fnw32 = enable ? cpu_write<pbus, uint32_t, &pbus::pci_write_logger> : cpu_write<pbus, uint32_t, &pbus::pci_write>
 		},
 		this, is_update, is_update))) {
-		loggerex1(error, "Failed to update pci mmio region");
+		logger_en(error, "Failed to update pci mmio region");
 		return false;
 	}
 

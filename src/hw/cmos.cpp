@@ -224,7 +224,7 @@ cmos::write_handler(uint32_t addr, const uint8_t data)
 
 			default:
 				if (reg_idx >= sizeof(ram)) {
-					loggerex1(warn, "CMOS write: unknown register %u", reg_idx);
+					logger_en(warn, "CMOS write: unknown register %u", reg_idx);
 					return;
 				}
 			}
@@ -281,7 +281,7 @@ cmos::update_io(bool is_update)
 			.fnw8 = enable ? cpu_write<cmos, uint8_t, &cmos::write_handler_logger> : cpu_write<cmos, uint8_t, &cmos::write_handler>
 		},
 		this, is_update, is_update))) {
-		loggerex1(error, "Failed to update io ports");
+		logger_en(error, "Failed to update io ports");
 		return false;
 	}
 

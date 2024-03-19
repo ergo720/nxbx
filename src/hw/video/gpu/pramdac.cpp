@@ -123,7 +123,7 @@ pramdac::update_io(bool is_update)
 			.fnw32 = enable ? cpu_write<pramdac, uint32_t, &pramdac::write32_logger> : cpu_write<pramdac, uint32_t, &pramdac::write32>
 		},
 		this, is_update, is_update))) {
-		loggerex1(error, "Failed to update mmio region");
+		logger_en(error, "Failed to update mmio region");
 		return false;
 	}
 

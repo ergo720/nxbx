@@ -100,7 +100,7 @@ pcrtc::update_io(bool is_update)
 			.fnw32 = enable ? cpu_write<pcrtc, uint32_t, &pcrtc::write_logger> : cpu_write<pcrtc, uint32_t, &pcrtc::write>
 		},
 		this, is_update, is_update))) {
-		loggerex1(error, "Failed to update mmio region");
+		logger_en(error, "Failed to update mmio region");
 		return false;
 	}
 

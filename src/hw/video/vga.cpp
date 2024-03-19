@@ -175,7 +175,7 @@ vga::update_mem_access()
 	}
 
 	write_mode = gfx[5] & 3;
-	loggerex1(debug, "Updating Memory Access Constants: write=%" PRIu8 " [mode=%" PRIu8 "], read=%" PRIu8, write_access, write_mode, read_access);
+	logger_en(debug, "Updating Memory Access Constants: write=%" PRIu8 " [mode=%" PRIu8 "], read=%" PRIu8, write_access, write_mode, read_access);
 }
 
 void
@@ -225,7 +225,7 @@ vga::change_renderer()
 	else {
 		renderer = BLANK_RENDERER;
 	}
-	loggerex1(debug, "Change renderer to: %" PRId32, renderer);
+	logger_en(debug, "Change renderer to: %" PRId32, renderer);
 	renderer |= (seq[1] >> 3 & 1);
 	complete_redraw();
 }
@@ -264,7 +264,7 @@ void
 vga::io_write8(uint32_t addr, const uint8_t data)
 {
 	if ((addr >= 0x3B0 && addr <= 0x3BF && (misc & 1)) || (addr >= 0x3D0 && addr <= 0x3DF && !(misc & 1))) {
-		loggerex1(warn, "Ignoring unsupported write to addr=%04" PRIX32 " data=%02" PRIX8 " misc=%02" PRIX8, addr, data, misc);
+		logger_en(warn, "Ignoring unsupported write to addr=%04" PRIX32 " data=%02" PRIX8 " misc=%02" PRIX8, addr, data, misc);
 		return;
 	}
 
@@ -345,15 +345,15 @@ bit   0  Graphics mode if set, Alphanumeric mode else.
 						) {
 						complete_redraw();
 					}
-					loggerex1(debug, "Mode Control Register: %02" PRIX8, data);
+					logger_en(debug, "Mode Control Register: %02" PRIX8, data);
 					break;
 
 				case 17: // Overscan color register break;
-					loggerex1(debug, "Overscan color (currently unused): %02" PRIX8, data);
+					logger_en(debug, "Overscan color (currently unused): %02" PRIX8, data);
 					break;
 
 				case 18: // Color Plane Enable
-					loggerex1(debug, "Color plane enable: %02" PRIX8, data);
+					logger_en(debug, "Color plane enable: %02" PRIX8, data);
 					attr[18] &= 0x0F;
 					break;
 
@@ -383,11 +383,11 @@ bit   0  Graphics mode if set, Alphanumeric mode else.
 					else {
 						pixel_panning = (data & 7) + (char_width & 1);
 					}
-					loggerex1(debug, "Pixel panning: %" PRIX8 " [raw], %" PRIX8 " [effective value]", data, pixel_panning);
+					logger_en(debug, "Pixel panning: %" PRIX8 " [raw], %" PRIX8 " [effective value]", data, pixel_panning);
 					break;
 
 				case 20: // Color Select Register
-					loggerex1(debug, "Color select register: %02" PRIX8, data);
+					logger_en(debug, "Color select register: %02" PRIX8, data);
 					if (diffxor & 15) {
 						for (int i = 0; i < 16; i++) {
 							change_attr_cache(i);
@@ -401,7 +401,7 @@ bit   0  Graphics mode if set, Alphanumeric mode else.
 		break;
 
 	case 0x3C2: // Miscellaneous Output Register
-		loggerex1(debug, "Write VGA miscellaneous register: 0x%02" PRIX8, data);
+		logger_en(debug, "Write VGA miscellaneous register: 0x%02" PRIX8, data);
 		/*
 bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 		 Address=3Bxh.
@@ -429,7 +429,7 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 	case 0x3DA:
 	case 0x3D8:
 	case 0x3CD:
-		loggerex1(warn, "Unknown write to %x: %02" PRIX8, addr, data);
+		logger_en(warn, "Unknown write to %x: %02" PRIX8, addr, data);
 		break;
 
 	case 0x3C4: // Sequencer Index
@@ -455,11 +455,11 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 			switch (seq_index)
 			{
 			case 0: // Sequencer Reset
-				loggerex1(debug, "SEQ: Resetting sequencer");
+				logger_en(debug, "SEQ: Resetting sequencer");
 				break;
 
 			case 1: // Clocking Mode
-				loggerex1(debug, "SEQ: Setting Clocking Mode to 0x%02" PRIX8, data1);
+				logger_en(debug, "SEQ: Setting Clocking Mode to 0x%02" PRIX8, data1);
 				if (diffxor & 0x20) { // Screen Off
 					change_renderer();
 				}
@@ -475,18 +475,18 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 				break;
 
 			case 2: // Memory Write Access
-				loggerex1(debug, "SEQ: Memory plane write access: 0x%02" PRIX8, data1);
+				logger_en(debug, "SEQ: Memory plane write access: 0x%02" PRIX8, data1);
 				break;
 
 			case 3: // Character Map Select
 				// Note these are font addresses in plane 2
-				loggerex1(debug, "SEQ: Memory plane write access: 0x%02" PRIX8, data1);
+				logger_en(debug, "SEQ: Memory plane write access: 0x%02" PRIX8, data1);
 				character_map[0] = char_map_address((data1 >> 5 & 1) | (data1 >> 1 & 6));
 				character_map[1] = char_map_address((data1 >> 4 & 1) | (data1 << 1 & 6));
 				break;
 
 			case 4: // Memory Mode
-				loggerex1(debug, "SEQ: Memory Mode: 0x%02" PRIX8, data1);
+				logger_en(debug, "SEQ: Memory Mode: 0x%02" PRIX8, data1);
 				if (diffxor & 0b1100) {
 					update_mem_access();
 				}
@@ -554,27 +554,27 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 			switch (gfx_index)
 			{
 			case 0: // Set/Reset Plane
-				loggerex1(debug, "Set/Reset Plane: %02" PRIX8, data1);
+				logger_en(debug, "Set/Reset Plane: %02" PRIX8, data1);
 				break;
 
 			case 1: // Enable Set/Reset Plane
-				loggerex1(debug, "Enable Set/Reset Plane: %02" PRIX8, data1);
+				logger_en(debug, "Enable Set/Reset Plane: %02" PRIX8, data1);
 				break;
 
 			case 2: // Color Comare
-				loggerex1(debug, "Color Compare: %02" PRIX8, data1);
+				logger_en(debug, "Color Compare: %02" PRIX8, data1);
 				break;
 
 			case 3: // Data Rotate/ALU Operation Select
-				loggerex1(debug, "Data Rotate: %02" PRIX8, data1);
+				logger_en(debug, "Data Rotate: %02" PRIX8, data1);
 				break;
 
 			case 4: // Read Plane Select
-				loggerex1(debug, "Read Plane Select: %02" PRIX8, data1);
+				logger_en(debug, "Read Plane Select: %02" PRIX8, data1);
 				break;
 
 			case 5: //  Graphics Mode
-				loggerex1(debug, "Graphics Mode: %02" PRIX8, data1);
+				logger_en(debug, "Graphics Mode: %02" PRIX8, data1);
 				if (diffxor & (3 << 5)) { // Shift Register Control
 					change_renderer();
 				}
@@ -584,7 +584,7 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 				break;
 
 			case 6: // Miscellaneous Register
-				loggerex1(debug, "Miscellaneous Register: %02" PRIX8, data);
+				logger_en(debug, "Miscellaneous Register: %02" PRIX8, data);
 				switch (data >> 2 & 3)
 				{
 				case 0:
@@ -613,11 +613,11 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 				break;
 
 			case 7:
-				loggerex1(debug, "Color Don't Care: %02" PRIX8, data1);
+				logger_en(debug, "Color Don't Care: %02" PRIX8, data1);
 				break;
 
 			case 8:
-				loggerex1(debug, "Bit Mask Register: %02" PRIX8, data1);
+				logger_en(debug, "Bit Mask Register: %02" PRIX8, data1);
 				break;
 			}
 		}
@@ -692,22 +692,22 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 			switch (crt_index)
 			{
 			case 1:
-				loggerex1(debug, "End Horizontal Display: %02" PRIX8, data1);
+				logger_en(debug, "End Horizontal Display: %02" PRIX8, data1);
 				update_size();
 				break;
 
 			case 2:
-				loggerex1(debug, "Start Horizontal Blanking: %02" PRIX8, data1);
+				logger_en(debug, "Start Horizontal Blanking: %02" PRIX8, data1);
 				update_size();
 				break;
 
 			case 7:
-				loggerex1(debug, "CRT Overflow: %02" PRIX8, data1);
+				logger_en(debug, "CRT Overflow: %02" PRIX8, data1);
 				update_size();
 				break;
 
 			case 9:
-				loggerex1(debug, "Start Horizontal Blanking: %02" PRIX8, data1);
+				logger_en(debug, "Start Horizontal Blanking: %02" PRIX8, data1);
 				if (diffxor & 0x20) {
 					update_size();
 				}
@@ -725,12 +725,12 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 				break;
 
 			case 0x12:
-				loggerex1(debug, "Vertical Display End: %02" PRIX8, data1);
+				logger_en(debug, "Vertical Display End: %02" PRIX8, data1);
 				update_size();
 				break;
 
 			case 0x15:
-				loggerex1(debug, "Start Vertical Blanking: %02" PRIX8, data1);
+				logger_en(debug, "Start Vertical Blanking: %02" PRIX8, data1);
 				update_size();
 				break;
 			}
@@ -738,7 +738,7 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 		break;
 	}
 	default:
-		loggerex1(warn, "VGA write: 0x%08" PRIX32 " [data: 0x%02" PRIX8 "]", addr, data);
+		logger_en(warn, "VGA write: 0x%08" PRIX32 " [data: 0x%02" PRIX8 "]", addr, data);
 	}
 }
 
@@ -822,7 +822,7 @@ vga::io_read8(uint32_t addr)
 		return crt[crt_index];
 
 	default:
-		loggerex1(warn, "Unknown read: 0x%" PRIX32, addr);
+		logger_en(warn, "Unknown read: 0x%" PRIX32, addr);
 		return -1;
 	}
 }

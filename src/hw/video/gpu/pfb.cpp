@@ -97,7 +97,7 @@ pfb::update_io(bool is_update)
 			.fnw32 = enable ? cpu_write<pfb, uint32_t, &pfb::write_logger> : cpu_write<pfb, uint32_t, &pfb::write>
 		},
 		this, is_update, is_update))) {
-		loggerex1(error, "Failed to update mmio region");
+		logger_en(error, "Failed to update mmio region");
 		return false;
 	}
 

@@ -324,7 +324,7 @@ pic::update_io(bool is_update)
 				.fnw8 = enable ? cpu_write<pic, uint8_t, &pic::write_handler_logger> : cpu_write<pic, uint8_t, &pic::write_handler>
 			},
 			this, is_update, is_update))) {
-			loggerex1(error, "Failed to update io ports");
+			logger_en(error, "Failed to update io ports");
 			return false;
 		}
 
@@ -334,7 +334,7 @@ pic::update_io(bool is_update)
 				.fnw8 = enable ? cpu_write<pic, uint8_t, &pic::elcr_write_handler_logger> : cpu_write<pic, uint8_t, &pic::elcr_write_handler>
 			},
 			this, is_update, is_update))) {
-			loggerex1(error, "Failed to update elcr io ports");
+			logger_en(error, "Failed to update elcr io ports");
 			return false;
 		}
 	}
@@ -345,7 +345,7 @@ pic::update_io(bool is_update)
 				.fnw8 = enable ? cpu_write<pic, uint8_t, &pic::write_handler_logger> : cpu_write<pic, uint8_t, &pic::write_handler>
 			},
 			this, is_update, is_update))) {
-			loggerex1(error, "Failed to update pic io ports");
+			logger_en(error, "Failed to update pic io ports");
 			return false;
 		}
 
@@ -355,7 +355,7 @@ pic::update_io(bool is_update)
 				.fnw8 = enable ? cpu_write<pic, uint8_t, &pic::elcr_write_handler_logger> : cpu_write<pic, uint8_t, &pic::elcr_write_handler>
 			},
 			this, is_update, is_update))) {
-			loggerex1(error, "Failed to update elcr io ports");
+			logger_en(error, "Failed to update elcr io ports");
 			return false;
 		}
 	}

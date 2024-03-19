@@ -23,7 +23,7 @@ pci::write8(uint32_t addr, const uint8_t data)
 		configuration_address_register |= data << offset;
 
 		if (configuration_address_register & 0x7F000003) {
-			loggerex1(info, "Setting reserved bits of configuration address register");
+			logger_en(info, "Setting reserved bits of configuration address register");
 		}
 		configuration_address_register &= ~0x7F000003;
 		configuration_cycle = configuration_address_register >> 31;
@@ -186,7 +186,7 @@ pci::create_device(uint32_t bus, uint32_t device, uint32_t function, pci_conf_wr
 
 	int bdf = (bus << 8) | (device << 3) | function;
 	configuration_modification.emplace(bdf, std::make_pair(cb, opaque));
-	loggerex1(info, "Registering device at bus=%" PRIu32 " device=%" PRIu32 " function=%" PRIu32, bus, device, function);
+	logger_en(info, "Registering device at bus=%" PRIu32 " device=%" PRIu32 " function=%" PRIu32, bus, device, function);
 
 	return (configuration_address_spaces[bdf] = std::make_unique<uint8_t[]>(256)).get();
 }
@@ -230,7 +230,7 @@ pci::update_io(bool is_update)
 			.fnw32 = enable ? cpu_write<pci, uint32_t, &pci::write32_logger> : cpu_write<pci, uint32_t, &pci::write32>
 		},
 		this, is_update, is_update))) {
-		loggerex1(error, "Failed to update io ports");
+		logger_en(error, "Failed to update io ports");
 		return false;
 	}
 

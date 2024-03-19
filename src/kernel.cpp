@@ -69,7 +69,7 @@ namespace kernel {
 			return acpi_time >> 32;
 
 		default:
-			loggerex1(warn, "%s: unexpected I/O read at port 0x%" PRIX16, __func__, addr);
+			logger_en(warn, "%s: unexpected I/O read at port 0x%" PRIX16, __func__, addr);
 		}
 
 		return 0;
@@ -85,7 +85,7 @@ namespace kernel {
 			// Also, they might not be contiguous in physical memory, so we use mem_read_block_virt to avoid issues with allocations spanning pages
 			uint8_t buff[512];
 			mem_read_block_virt(static_cast<cpu_t *>(opaque), data, sizeof(buff), buff);
-			loggerex1(info, "%s", buff);
+			logger_en(info, "%s", buff);
 		}
 		break;
 
@@ -110,7 +110,7 @@ namespace kernel {
 			break;
 
 		default:
-			loggerex1(warn, "unexpected io write at port 0x%" PRIX16, addr);
+			logger_en(warn, "unexpected io write at port 0x%" PRIX16, addr);
 		}
 	}
 
