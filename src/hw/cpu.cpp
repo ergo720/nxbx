@@ -40,7 +40,7 @@ cpu_logger(log_level lv, const unsigned count, const char *msg, ...)
 bool
 cpu::update_io(bool is_update)
 {
-	bool enable = module_enabled();
+	bool enable = check_if_enabled<log_module::kernel>();
 	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, kernel::IO_BASE, kernel::IO_SIZE, true,
 		{
 			.fnr32 = enable ? kernel::read_handler_logger : kernel::read_handler,
