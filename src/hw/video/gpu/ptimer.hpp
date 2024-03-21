@@ -16,20 +16,21 @@ public:
 	ptimer(machine *machine) : m_machine(machine) {}
 	bool init();
 	void reset();
-	void update_io_logging() { update_io(true); }
+	void update_io() { update_io(true); }
 	uint64_t get_next_alarm_time(uint64_t now);
-	template<bool log = false>
+	template<bool log = false, bool enabled = true>
 	uint32_t read(uint32_t addr);
-	template<bool log = false>
+	template<bool log = false, bool enabled = true>
 	void write(uint32_t addr, const uint32_t data);
 
 private:
 	bool update_io(bool is_update);
+	template<bool is_write>
+	auto get_io_func(bool log, bool enabled);
+	uint64_t counter_to_us();
 
 	friend class pmc;
 	friend class pramdac;
-	uint64_t counter_to_us();
-
 	machine *const m_machine;
 	// Host time when the last alarm interrupt was triggered
 	uint64_t last_alarm_time;

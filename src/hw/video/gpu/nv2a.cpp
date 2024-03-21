@@ -50,14 +50,14 @@ nv2a::get_next_update_time(uint64_t now)
 void
 nv2a::apply_log_settings()
 {
-	m_pmc.update_io_logging();
-	m_pcrtc.update_io_logging();
-	m_pramdac.update_io_logging();
-	m_ptimer.update_io_logging();
-	m_pfb.update_io_logging();
-	m_pbus.update_io_logging();
-	m_pramin.update_io_logging();
-	m_pfifo.update_io_logging();
-	m_pvga.update_io_logging();
-	m_pvideo.update_io_logging();
+	m_pmc.update_io();
+	m_pcrtc.update_io();
+	m_pramdac.update_io();
+	m_ptimer.update_io();
+	m_pfb.update_io();
+	m_pbus.update_io();
+	m_pramin.update_io();
+	m_pfifo.update_io();
+	m_pvga.update_io();
+	m_pvideo.update_io();
 }

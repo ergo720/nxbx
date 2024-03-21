@@ -15,9 +15,12 @@
 #define NV_PFIFO_RAMRO (NV2A_REGISTER_BASE + 0x00002218)
 
 
-template<bool log>
+template<bool log, bool enabled>
 void pfifo::write(uint32_t addr, const uint32_t data)
 {
+	if constexpr (!enabled) {
+		return;
+	}
 	if constexpr (log) {
 		log_io_write();
 	}
@@ -41,9 +44,13 @@ void pfifo::write(uint32_t addr, const uint32_t data)
 	}
 }
 
-template<bool log>
+template<bool log, bool enabled>
 uint32_t pfifo::read(uint32_t addr)
 {
+	if constexpr (!enabled) {
+		return 0;
+	}
+
 	uint32_t value = 0;
 
 	switch (addr)
@@ -71,14 +78,46 @@ uint32_t pfifo::read(uint32_t addr)
 	return value;
 }
 
+template<bool is_write>
+auto pfifo::get_io_func(bool log, bool enabled)
+{
+	if constexpr (is_write) {
+		if (enabled) {
+			if (log) {
+				return cpu_write<pfifo, uint32_t, &pfifo::write<true>>;
+			}
+			else {
+				return cpu_write<pfifo, uint32_t, &pfifo::write<false>>;
+			}
+		}
+		else {
+			return cpu_write<pfifo, uint32_t, &pfifo::write<false, false>>;
+		}
+	}
+	else {
+		if (enabled) {
+			if (log) {
+				return cpu_read<pfifo, uint32_t, &pfifo::read<true>>;
+			}
+			else {
+				return cpu_read<pfifo, uint32_t, &pfifo::read<false>>;
+			}
+		}
+		else {
+			return cpu_read<pfifo, uint32_t, &pfifo::read<false, false>>;
+		}
+	}
+}
+
 bool
 pfifo::update_io(bool is_update)
 {
 	bool log = module_enabled();
+	bool enabled = m_machine->get<pmc>().engine_enabled & NV_PMC_ENABLE_PFIFO;
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PFIFO_BASE, NV_PFIFO_SIZE, false,
 		{
-			.fnr32 = log ? cpu_read<pfifo, uint32_t, &pfifo::read<true>> : cpu_read<pfifo, uint32_t, &pfifo::read<false>>,
-			.fnw32 = log ? cpu_write<pfifo, uint32_t, &pfifo::write<true>> : cpu_write<pfifo, uint32_t, &pfifo::write<false>>
+			.fnr32 = get_io_func<false>(log, enabled),
+			.fnw32 = get_io_func<true>(log, enabled)
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update mmio region");

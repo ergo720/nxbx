@@ -32,10 +32,6 @@
 #define NV_PMC_INTR_EN_0_INTA_DISABLED 0x00000000
 #define NV_PMC_INTR_EN_0_INTA_HARDWARE 0x00000001
 #define NV_PMC_INTR_EN_0_INTA_SOFTWARE 0x00000002
-#define NV_PMC_ENABLE (NV2A_REGISTER_BASE + 0x00000200)
-#define NV_PMC_ENABLE_PTIMER (1 << 16)
-#define NV_PMC_ENABLE_PFB (1 << 20)
-#define NV_PMC_ENABLE_PCRTC (1 << 24)
 
 
 template<bool log>
@@ -76,7 +72,11 @@ void pmc::write(uint32_t addr, const uint32_t data)
 
 	case NV_PMC_ENABLE: {
 		bool has_int_state_changed = false;
+		uint32_t old_state = engine_enabled;
 		engine_enabled = data;
+		if ((data & NV_PMC_ENABLE_PFIFO) == 0) {
+			m_machine->get<pfifo>().reset();
+		}
 		if ((data & NV_PMC_ENABLE_PTIMER) == 0) {
 			m_machine->get<ptimer>().reset();
 			has_int_state_changed = true;
@@ -87,6 +87,17 @@ void pmc::write(uint32_t addr, const uint32_t data)
 		if ((data & NV_PMC_ENABLE_PCRTC) == 0) {
 			m_machine->get<pcrtc>().reset();
 			has_int_state_changed = true;
+		}
+		if ((data & NV_PMC_ENABLE_PVIDEO) == 0) {
+			m_machine->get<pvideo>().reset();
+		}
+		if ((old_state ^ engine_enabled) & NV_PMC_ENABLE_MASK) {
+			m_machine->get<pfifo>().update_io();
+			m_machine->get<ptimer>().update_io();
+			m_machine->get<pfb>().update_io();
+			m_machine->get<pcrtc>().update_io();
+			m_machine->get<pvideo>().update_io();
+			mem_init_region_io(m_machine->get<cpu_t *>(), 0, 0, true, {}, m_machine->get<cpu_t *>(), true, 3); // trigger the update in lib86cpu too
 		}
 		if (has_int_state_changed) {
 			update_irq();
@@ -205,10 +216,11 @@ pmc::update_io(bool is_update)
 void
 pmc::reset()
 {
+	// Values dumped from a Retail 1.0 xbox
 	endianness = NV_PMC_BOOT_1_ENDIAN0_LITTLE_MASK | NV_PMC_BOOT_1_ENDIAN24_LITTLE_MASK;
 	int_status = NV_PMC_INTR_0_NOT_PENDING;
 	int_enabled = NV_PMC_INTR_EN_0_INTA_DISABLED;
-	engine_enabled = 0;
+	engine_enabled = NV_PMC_ENABLE_PTIMER | NV_PMC_ENABLE_PFB | NV_PMC_ENABLE_PCRTC;
 }
 
 bool

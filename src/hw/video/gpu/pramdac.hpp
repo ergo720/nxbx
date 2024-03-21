@@ -15,7 +15,7 @@ public:
 	pramdac(machine *machine) : m_machine(machine) {}
 	bool init();
 	void reset();
-	void update_io_logging() { update_io(true); }
+	void update_io() { update_io(true); }
 	template<bool log = false>
 	uint8_t read8(uint32_t addr);
 	template<bool log = false>

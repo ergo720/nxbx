@@ -17,9 +17,12 @@
 #define NV_PCRTC_UNKNOWN0 (NV2A_REGISTER_BASE + 0x00600804)
 
 
-template<bool log>
+template<bool log, bool enabled>
 void pcrtc::write(uint32_t addr, const uint32_t data)
 {
+	if constexpr (!enabled) {
+		return;
+	}
 	if constexpr (log) {
 		log_io_write();
 	}
@@ -49,9 +52,13 @@ void pcrtc::write(uint32_t addr, const uint32_t data)
 	}
 }
 
-template<bool log>
+template<bool log, bool enabled>
 uint32_t pcrtc::read(uint32_t addr)
 {
+	if constexpr (!enabled) {
+		return 0;
+	}
+
 	uint32_t value = 0;
 
 	switch (addr)
@@ -83,14 +90,46 @@ uint32_t pcrtc::read(uint32_t addr)
 	return value;
 }
 
+template<bool is_write>
+auto pcrtc::get_io_func(bool log, bool enabled)
+{
+	if constexpr (is_write) {
+		if (enabled) {
+			if (log) {
+				return cpu_write<pcrtc, uint32_t, &pcrtc::write<true>>;
+			}
+			else {
+				return cpu_write<pcrtc, uint32_t, &pcrtc::write<false>>;
+			}
+		}
+		else {
+			return cpu_write<pcrtc, uint32_t, &pcrtc::write<false, false>>;
+		}
+	}
+	else {
+		if (enabled) {
+			if (log) {
+				return cpu_read<pcrtc, uint32_t, &pcrtc::read<true>>;
+			}
+			else {
+				return cpu_read<pcrtc, uint32_t, &pcrtc::read<false>>;
+			}
+		}
+		else {
+			return cpu_read<pcrtc, uint32_t, &pcrtc::read<false, false>>;
+		}
+	}
+}
+
 bool
 pcrtc::update_io(bool is_update)
 {
 	bool log = module_enabled();
+	bool enabled = m_machine->get<pmc>().engine_enabled & NV_PMC_ENABLE_PCRTC;
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PCRTC_BASE, NV_PCRTC_SIZE, false,
 		{
-			.fnr32 = log ? cpu_read<pcrtc, uint32_t, &pcrtc::read<true>> : cpu_read<pcrtc, uint32_t, &pcrtc::read<false>>,
-			.fnw32 = log ? cpu_write<pcrtc, uint32_t, &pcrtc::write<true>> : cpu_write<pcrtc, uint32_t, &pcrtc::write<false>>
+			.fnr32 = get_io_func<false>(log, enabled),
+			.fnw32 = get_io_func<true>(log, enabled)
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update mmio region");

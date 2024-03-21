@@ -14,7 +14,7 @@ public:
 	pbus(machine *machine) : m_machine(machine), m_pci_conf(nullptr) {}
 	bool init();
 	void reset();
-	void update_io_logging() { update_io(true); }
+	void update_io() { update_io(true); }
 	template<bool log = false>
 	uint32_t read(uint32_t addr);
 	template<bool log = false>

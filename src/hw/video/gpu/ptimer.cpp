@@ -62,9 +62,12 @@ ptimer::get_next_alarm_time(uint64_t now)
 	return std::numeric_limits<uint64_t>::max();
 }
 
-template<bool log>
+template<bool log, bool enabled>
 void ptimer::write(uint32_t addr, const uint32_t data)
 {
+	if constexpr (!enabled) {
+		return;
+	}
 	if constexpr (log) {
 		log_io_write();
 	}
@@ -145,9 +148,13 @@ void ptimer::write(uint32_t addr, const uint32_t data)
 	}
 }
 
-template<bool log>
+template<bool log, bool enabled>
 uint32_t ptimer::read(uint32_t addr)
 {
+	if constexpr (!enabled) {
+		return 0;
+	}
+
 	uint32_t value = 0;
 
 	switch (addr)
@@ -197,14 +204,46 @@ uint32_t ptimer::read(uint32_t addr)
 	return value;
 }
 
+template<bool is_write>
+auto ptimer::get_io_func(bool log, bool enabled)
+{
+	if constexpr (is_write) {
+		if (enabled) {
+			if (log) {
+				return cpu_write<ptimer, uint32_t, &ptimer::write<true>>;
+			}
+			else {
+				return cpu_write<ptimer, uint32_t, &ptimer::write<false>>;
+			}
+		}
+		else {
+			return cpu_write<ptimer, uint32_t, &ptimer::write<false, false>>;
+		}
+	}
+	else {
+		if (enabled) {
+			if (log) {
+				return cpu_read<ptimer, uint32_t, &ptimer::read<true>>;
+			}
+			else {
+				return cpu_read<ptimer, uint32_t, &ptimer::read<false>>;
+			}
+		}
+		else {
+			return cpu_read<ptimer, uint32_t, &ptimer::read<false, false>>;
+		}
+	}
+}
+
 bool
 ptimer::update_io(bool is_update)
 {
 	bool log = module_enabled();
+	bool enabled = m_machine->get<pmc>().engine_enabled & NV_PMC_ENABLE_PTIMER;
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PTIMER_BASE, NV_PTIMER_SIZE, false,
 		{
-			.fnr32 = log ? cpu_read<ptimer, uint32_t, &ptimer::read<true>> : cpu_read<ptimer, uint32_t, &ptimer::read<false>>,
-			.fnw32 = log ? cpu_write<ptimer, uint32_t, &ptimer::write<true>> : cpu_write<ptimer, uint32_t, &ptimer::write<false>>
+			.fnr32 = get_io_func<false>(log, enabled),
+			.fnw32 = get_io_func<true>(log, enabled)
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update mmio region");
@@ -223,10 +262,11 @@ ptimer::reset()
 	multiplier = 0x00001DCD;
 	divider = 0x0000DE86;
 	alarm = 0xFFFFFFE0;
-	counter_period = 0;
+	counter_period = counter_to_us();
 	counter_active = COUNTER_ON;
 	counter_offset = 0;
 	counter_bias = 0;
+	cpu_set_timeout(m_machine->get<cpu_t *>(), m_machine->get<cpu>().check_periodic_events(timer::get_now()));
 }
 
 bool
