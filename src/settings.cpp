@@ -53,7 +53,8 @@ settings::load_config_values()
 	}
 	if (m_core.log_version == m_log_version) {
 		// If the log version matches with the one used by this build of the emulator, then we can safely process the log modules
-		m_core.log_modules[0] = m_ini.GetLongValue(m_core_str.name, m_core_str.log_modules1, default_log_modules1);
+		// NOTE: don't use m_ini.GetLongValue here, since that will convert 0xFFFFFFFF to 0x7FFFFFFF because of the call to strtol that it uses internally
+		m_core.log_modules[0] = get_uint32_value(m_core_str.name, m_core_str.log_modules1, default_log_modules1);
 	}
 	else {
 		// ...otherwise, use default log module settings
@@ -68,9 +69,9 @@ settings::save_config_values()
 	// core settings
 	m_ini.SetLongValue(m_core_str.name, m_core_str.version, m_core.version, nullptr, false, true);
 	m_ini.SetLongValue(m_core_str.name, m_core_str.log_version, m_log_version, nullptr, false, true);
-	set_int64_value(m_core_str.name, m_core_str.sys_time_bias, m_core.sys_time_bias);
+	set_int64_value(m_core_str.name, m_core_str.sys_time_bias, m_core.sys_time_bias, false);
 	m_ini.SetLongValue(m_core_str.name, m_core_str.log_level, (int32_t)m_core.log_level, nullptr, false, true);
-	m_ini.SetLongValue(m_core_str.name, m_core_str.log_modules1, m_core.log_modules[0], nullptr, false, true);
+	set_uint32_value(m_core_str.name, m_core_str.log_modules1, m_core.log_modules[0], true);
 
 	return m_ini.SaveFile(m_ini_path.c_str()) >= 0;
 }
@@ -97,11 +98,38 @@ settings::get_int64_value(const char *a_pSection, const char *a_pKey, int64_t a_
 }
 
 SI_Error
-settings::set_int64_value(const char *a_pSection, const char *a_pKey, int64_t a_pValue)
+settings::set_int64_value(const char *a_pSection, const char *a_pKey, int64_t a_pValue, bool a_bUseHex)
 {
 	// SimpleIni doesn't implement an api to write keys with 64 bit integer values, so we do it ourselves here
 	// TODO: perhaps upstream this?
 	
-	std::string value_str = std::to_string(a_pValue);
-	return m_ini.SetValue(a_pSection, a_pKey, value_str.c_str(), nullptr, true);
+	char szInput[64];
+	std::snprintf(szInput, sizeof(szInput), a_bUseHex ? "0x%" PRIx64 : "%" PRId64, a_pValue);
+	return m_ini.SetValue(a_pSection, a_pKey, szInput, nullptr, true);
+}
+
+uint32_t
+settings::get_uint32_value(const char *a_pSection, const char *a_pKey, uint32_t a_nDefault)
+{
+	const char *pszValue = m_ini.GetValue(a_pSection, a_pKey, nullptr, nullptr);
+	if (!pszValue || !*pszValue) {
+		return a_nDefault;
+	}
+
+	try {
+		return static_cast<uint32_t>(std::strtoul(pszValue, nullptr, 0));
+	}
+	catch (const std::exception &e) {
+		logger("Failed to parse value \"%s\" option. The error was: %s", pszValue, e.what());
+	}
+
+	return a_nDefault;
+}
+
+SI_Error
+settings::set_uint32_value(const char *a_pSection, const char *a_pKey, uint32_t a_pValue, bool a_bUseHex)
+{
+	char szInput[64];
+	std::snprintf(szInput, sizeof(szInput), a_bUseHex ? "0x%" PRIx32 : "%" PRIu32, a_pValue);
+	return m_ini.SetValue(a_pSection, a_pKey, szInput, nullptr, true);
 }

@@ -28,7 +28,9 @@ private:
 	void load_config_values();
 	bool save_config_values();
 	int64_t get_int64_value(const char *a_pSection, const char *a_pKey, int64_t a_nDefault = 0);
-	SI_Error set_int64_value(const char *a_pSection, const char *a_pKey, int64_t a_pValue);
+	SI_Error set_int64_value(const char *a_pSection, const char *a_pKey, int64_t a_pValue, bool a_bUseHex);
+	uint32_t get_uint32_value(const char *a_pSection, const char *a_pKey, uint32_t a_nDefault = 0);
+	SI_Error set_uint32_value(const char *a_pSection, const char *a_pKey, uint32_t a_pValue, bool a_bUseHex);
 
 	CSimpleIniA m_ini;
 	struct core_str {
