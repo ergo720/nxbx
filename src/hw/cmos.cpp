@@ -4,7 +4,6 @@
 
 #include "machine.hpp"
 #include "../clock.hpp"
-#include <assert.h>
 
 #define MODULE_NAME cmos
 
@@ -44,9 +43,11 @@ cmos::update_time(uint64_t elapsed_us)
 	lost_us -= (actual_elapsed_sec * timer::ticks_per_second);
 }
 
-uint8_t
-cmos::read_handler(uint32_t addr)
+template<bool log>
+uint8_t cmos::read(uint32_t addr)
 {
+	uint8_t value = 0;
+
 	if (addr == 0x71) {
 		if ((reg_idx < 0xA) || (reg_idx == 0x7F)) {
 			tm *local_time;
@@ -60,49 +61,58 @@ cmos::read_handler(uint32_t addr)
 			case 1:
 			case 3:
 			case 5:
-				return ram[reg_idx];
+				value = ram[reg_idx];
+				break;
 
 			case 0:
-				return to_bcd(local_time->tm_sec);
+				value = to_bcd(local_time->tm_sec);
+				break;
 
 			case 2:
-				return to_bcd(local_time->tm_min);
+				value = to_bcd(local_time->tm_min);
+				break;
 
 			case 4:
 				if (!(ram[0xB] & 2)) {
 					// 12 hour format enabled
 					if (local_time->tm_hour == 0) {
-						return to_bcd(12);
+						value = to_bcd(12);
 					}
 					else if (local_time->tm_hour > 11) {
 						// time is pm
 						if (local_time->tm_hour != 12) {
-							return to_bcd(local_time->tm_hour - 12) | 0x80;
+							value = to_bcd(local_time->tm_hour - 12) | 0x80;
 						}
-						return to_bcd(local_time->tm_hour) | 0x80;
+						else {
+							value = to_bcd(local_time->tm_hour) | 0x80;
+						}
 					}
 				}
-				return to_bcd(local_time->tm_hour);
+				else {
+					value = to_bcd(local_time->tm_hour);
+				}
+				break;
 
 			case 6:
-				return to_bcd(local_time->tm_wday + 1);
+				value = to_bcd(local_time->tm_wday + 1);
+				break;
 
 			case 7:
-				return to_bcd(local_time->tm_mday);
+				value = to_bcd(local_time->tm_mday);
+				break;
 
 			case 8:
-				return to_bcd(local_time->tm_mon + 1);
+				value = to_bcd(local_time->tm_mon + 1);
+				break;
 
 			case 9:
-				return to_bcd(local_time->tm_year % 100);
+				value = to_bcd(local_time->tm_year % 100);
+				break;
 
 			case 0x7F:
-				return to_bcd((local_time->tm_year + 1900) / 100);
+				value = to_bcd((local_time->tm_year + 1900) / 100);
+				break;
 			}
-
-			assert(0);
-
-			return 0;
 		}
 		else if (reg_idx == 0xC) {
 			ram[0x0C] = 0x00; // clears all interrupt flags
@@ -111,15 +121,23 @@ cmos::read_handler(uint32_t addr)
 			ram[0xD] = 0x80; // set VRT
 		}
 
-		return ram[reg_idx];
+		value = ram[reg_idx];
 	}
 
-	return 0xFF;
+	if constexpr (log) {
+		log_io_read();
+	}
+
+	return value;
 }
 
-void
-cmos::write_handler(uint32_t addr, const uint8_t data)
+template<bool log>
+void cmos::write(uint32_t addr, const uint8_t data)
 {
+	if constexpr (log) {
+		log_io_write();
+	}
+
 	uint8_t data1 = data;
 
 	switch (addr)
@@ -235,21 +253,6 @@ cmos::write_handler(uint32_t addr, const uint8_t data)
 	}
 }
 
-uint8_t
-cmos::read_handler_logger(uint32_t addr)
-{
-	uint8_t data = read_handler(addr);
-	log_io_read();
-	return data;
-}
-
-void
-cmos::write_handler_logger(uint32_t addr, const uint8_t data)
-{
-	log_io_write();
-	write_handler(addr, data);
-}
-
 uint64_t
 cmos::get_next_update_time(uint64_t now)
 {
@@ -274,11 +277,11 @@ cmos::get_next_update_time(uint64_t now)
 bool
 cmos::update_io(bool is_update)
 {
-	bool enable = module_enabled();
+	bool log = module_enabled();
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x70, 2, true,
 		{
-			.fnr8 = enable ? cpu_read<cmos, uint8_t, &cmos::read_handler_logger> : cpu_read<cmos, uint8_t, &cmos::read_handler>,
-			.fnw8 = enable ? cpu_write<cmos, uint8_t, &cmos::write_handler_logger> : cpu_write<cmos, uint8_t, &cmos::write_handler>
+			.fnr8 = log ? cpu_read<cmos, uint8_t, &cmos::read<true>> : cpu_read<cmos, uint8_t, &cmos::read<false>>,
+			.fnw8 = log ? cpu_write<cmos, uint8_t, &cmos::write<true>> : cpu_write<cmos, uint8_t, &cmos::write<false>>
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update io ports");

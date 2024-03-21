@@ -140,10 +140,10 @@ pit::channel_reset(uint8_t channel)
 bool
 pit::update_io(bool is_update)
 {
-	bool enable = module_enabled();
+	bool log = module_enabled();
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x40, 4, true,
 		{
-		.fnw8 = enable ? cpu_write<pit, uint8_t, &pit::write_handler_logger> : cpu_write<pit, uint8_t, &pit::write_handler>
+		.fnw8 = log ? cpu_write<pit, uint8_t, &pit::write_handler_logger> : cpu_write<pit, uint8_t, &pit::write_handler>
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update io ports");

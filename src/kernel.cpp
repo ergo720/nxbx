@@ -32,52 +32,69 @@ namespace kernel {
 		return actual_clock_increment;
 	}
 
-	uint32_t
-	read_handler(addr_t addr, void *opaque)
+	template<bool log>
+	uint32_t read(addr_t addr, void *opaque)
 	{
 		static uint64_t acpi_time, curr_clock_increment;
+		uint32_t value = 0;
 
 		switch (addr)
 		{
 		case SYS_TYPE:
 			// For now, we always want an xbox system. 0: xbox, 1: chihiro, 2: devkit
-			return 0;
+			value = 0;
+			break;
 
 		case CLOCK_INCREMENT_LOW:
 			// These three are read in succession from the clock isr with interrupts disabled, so we can read the boot time only once instead of three times
 			curr_clock_increment = calculate_clock_increment();
-			return static_cast<uint32_t>(curr_clock_increment);
+			value = static_cast<uint32_t>(curr_clock_increment);
+			break;
 
 		case CLOCK_INCREMENT_HIGH:
-			return curr_clock_increment >> 32;
+			value = curr_clock_increment >> 32;
+			break;
 
 		case BOOT_TIME_MS:
-			return static_cast<uint32_t>(curr_us / 1000);
+			value = static_cast<uint32_t>(curr_us / 1000);
+			break;
 
 		case IO_CHECK_ENQUEUE:
-			return io::pending_packets;
+			value = io::pending_packets;
+			break;
 
 		case XE_DVD_XBE_LENGTH:
-			return (uint32_t)io::xbe_path.size();
+			value = (uint32_t)io::xbe_path.size();
+			break;
 
 		case ACPI_TIME_LOW:
 			// These two are read in succession from KeQueryPerformanceCounter with interrupts disabled, so we can read the ACPI time only once instead of two times
 			acpi_time = timer::get_acpi_now();
-			return static_cast<uint32_t>(acpi_time);
+			value = static_cast<uint32_t>(acpi_time);
+			break;
 
 		case ACPI_TIME_HIGH:
-			return acpi_time >> 32;
+			value = acpi_time >> 32;
+			break;
 
 		default:
 			logger_en(warn, "%s: unexpected I/O read at port 0x%" PRIX16, __func__, addr);
 		}
 
-		return 0;
+		if constexpr (log) {
+			log_io_read();
+		}
+
+		return value;
 	}
 
-	void
-	write_handler(addr_t addr, const uint32_t data, void *opaque)
+	template<bool log>
+	void write(addr_t addr, const uint32_t data, void *opaque)
 	{
+		if constexpr (log) {
+			log_io_write();
+		}
+
 		switch (addr)
 		{
 		case DBG_STR: {
@@ -114,18 +131,8 @@ namespace kernel {
 		}
 	}
 
-	uint32_t
-	read_handler_logger(addr_t addr, void *opaque)
-	{
-		uint32_t data = read_handler(addr, opaque);
-		log_io_read();
-		return data;
-	}
-
-	void
-	write_handler_logger(addr_t addr, const uint32_t data, void *opaque)
-	{
-		log_io_write();
-		write_handler(addr, data, opaque);
-	}
+	template uint32_t read<true>(addr_t addr, void *opaque);
+	template uint32_t read<false>(addr_t addr, void *opaque);
+	template void write<true>(addr_t addr, const uint32_t data, void *opaque);
+	template void write<false>(addr_t addr, const uint32_t data, void *opaque);
 }

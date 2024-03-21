@@ -15,9 +15,13 @@
 #define NV_PFIFO_RAMRO (NV2A_REGISTER_BASE + 0x00002218)
 
 
-void
-pfifo::write(uint32_t addr, const uint32_t data)
+template<bool log>
+void pfifo::write(uint32_t addr, const uint32_t data)
 {
+	if constexpr (log) {
+		log_io_write();
+	}
+
 	switch (addr)
 	{
 	case NV_PFIFO_RAMHT:
@@ -37,8 +41,8 @@ pfifo::write(uint32_t addr, const uint32_t data)
 	}
 }
 
-uint32_t
-pfifo::read(uint32_t addr)
+template<bool log>
+uint32_t pfifo::read(uint32_t addr)
 {
 	uint32_t value = 0;
 
@@ -60,32 +64,21 @@ pfifo::read(uint32_t addr)
 		nxbx_fatal("Unhandled read at address 0x%" PRIX32, addr);
 	}
 
+	if constexpr (log) {
+		log_io_read();
+	}
+
 	return value;
-}
-
-uint32_t
-pfifo::read_logger(uint32_t addr)
-{
-	uint32_t data = read(addr);
-	log_io_read();
-	return data;
-}
-
-void
-pfifo::write_logger(uint32_t addr, const uint32_t data)
-{
-	log_io_write();
-	write(addr, data);
 }
 
 bool
 pfifo::update_io(bool is_update)
 {
-	bool enable = module_enabled();
+	bool log = module_enabled();
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PFIFO_BASE, NV_PFIFO_SIZE, false,
 		{
-			.fnr32 = enable ? cpu_read<pfifo, uint32_t, &pfifo::read_logger> : cpu_read<pfifo, uint32_t, &pfifo::read>,
-			.fnw32 = enable ? cpu_write<pfifo, uint32_t, &pfifo::write_logger> : cpu_write<pfifo, uint32_t, &pfifo::write>
+			.fnr32 = log ? cpu_read<pfifo, uint32_t, &pfifo::read<true>> : cpu_read<pfifo, uint32_t, &pfifo::read<false>>,
+			.fnw32 = log ? cpu_write<pfifo, uint32_t, &pfifo::write<true>> : cpu_write<pfifo, uint32_t, &pfifo::write<false>>
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update mmio region");

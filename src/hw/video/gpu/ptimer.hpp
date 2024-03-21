@@ -18,10 +18,10 @@ public:
 	void reset();
 	void update_io_logging() { update_io(true); }
 	uint64_t get_next_alarm_time(uint64_t now);
+	template<bool log = false>
 	uint32_t read(uint32_t addr);
+	template<bool log = false>
 	void write(uint32_t addr, const uint32_t data);
-	uint32_t read_logger(uint32_t addr);
-	void write_logger(uint32_t addr, const uint32_t data);
 
 private:
 	bool update_io(bool is_update);

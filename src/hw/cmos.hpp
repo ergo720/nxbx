@@ -17,10 +17,10 @@ public:
 	void deinit();
 	void reset();
 	void update_io_logging() { update_io(true); }
-	uint8_t read_handler(uint32_t addr);
-	void write_handler(uint32_t addr, const uint8_t data);
-	uint8_t read_handler_logger(uint32_t addr);
-	void write_handler_logger(uint32_t addr, const uint8_t data);
+	template<bool log = false>
+	uint8_t read(uint32_t addr);
+	template<bool log = false>
+	void write(uint32_t addr, const uint8_t data);
 	uint64_t get_next_update_time(uint64_t now);
 
 private:

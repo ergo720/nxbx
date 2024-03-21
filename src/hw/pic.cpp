@@ -231,9 +231,13 @@ pic::write_icw(unsigned idx, uint8_t value)
 	}
 }
 
-void
-pic::write_handler(uint32_t addr, const uint8_t data)
+template<bool log>
+void pic::write(uint32_t addr, const uint8_t data)
 {
+	if constexpr (log) {
+		log_io_write();
+	}
+
 	if ((addr & 1) == 0) {
 		switch (data >> 3 & 3)
 		{
@@ -260,68 +264,56 @@ pic::write_handler(uint32_t addr, const uint8_t data)
 	}
 }
 
-uint8_t
-pic::read_handler(uint32_t addr)
+template<bool log>
+uint8_t pic::read(uint32_t addr)
 {
+	uint8_t value;
+
 	if (addr & 1) {
-		return imr;
+		value = imr;
 	}
 	else {
-		return read_isr ? isr : irr;
+		value = read_isr ? isr : irr;
 	}
+
+	if constexpr (log) {
+		log_io_read();
+	}
+
+	return value;
 }
 
-void
-pic::write_handler_logger(uint32_t addr, const uint8_t data)
+template<bool log>
+void pic::write_elcr(uint32_t addr, const uint8_t data)
 {
-	log_io_write();
-	write_handler(addr, data);
-}
+	if constexpr (log) {
+		log_io_write();
+	}
 
-uint8_t
-pic::read_handler_logger(uint32_t addr)
-{
-	uint8_t data = read_handler(addr);
-	log_io_read();
-	return data;
-}
-
-void
-pic::elcr_write_handler(uint32_t addr, const uint8_t data)
-{
 	elcr = data;
 }
 
-uint8_t
-pic::elcr_read_handler(uint32_t addr)
+template<bool log>
+uint8_t pic::read_elcr(uint32_t addr)
 {
-	return elcr;
-}
+	uint8_t value = elcr;
 
-void
-pic::elcr_write_handler_logger(uint32_t addr, const uint8_t data)
-{
-	log_io_write();
-	elcr_write_handler(addr, data);
-}
+	if constexpr (log) {
+		log_io_read();
+	}
 
-uint8_t
-pic::elcr_read_handler_logger(uint32_t addr)
-{
-	uint8_t data = elcr_read_handler(addr);
-	log_io_read();
-	return data;
+	return value;
 }
 
 bool
 pic::update_io(bool is_update)
 {
-	bool enable = module_enabled();
+	bool log = module_enabled();
 	if (idx == 0) {
 		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x20, 2, true,
 			{
-				.fnr8 = enable ? cpu_read<pic, uint8_t, &pic::read_handler_logger> : cpu_read<pic, uint8_t, &pic::read_handler>,
-				.fnw8 = enable ? cpu_write<pic, uint8_t, &pic::write_handler_logger> : cpu_write<pic, uint8_t, &pic::write_handler>
+				.fnr8 = log ? cpu_read<pic, uint8_t, &pic::read<true>> : cpu_read<pic, uint8_t, &pic::read<false>>,
+				.fnw8 = log ? cpu_write<pic, uint8_t, &pic::write<true>> : cpu_write<pic, uint8_t, &pic::write<false>>
 			},
 			this, is_update, is_update))) {
 			logger_en(error, "Failed to update io ports");
@@ -330,8 +322,8 @@ pic::update_io(bool is_update)
 
 		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x4D0, 1, true,
 			{
-				.fnr8 = enable ? cpu_read<pic, uint8_t, &pic::elcr_read_handler_logger> : cpu_read<pic, uint8_t, &pic::elcr_read_handler>,
-				.fnw8 = enable ? cpu_write<pic, uint8_t, &pic::elcr_write_handler_logger> : cpu_write<pic, uint8_t, &pic::elcr_write_handler>
+				.fnr8 = log ? cpu_read<pic, uint8_t, &pic::read_elcr<true>> : cpu_read<pic, uint8_t, &pic::read_elcr<false>>,
+				.fnw8 = log ? cpu_write<pic, uint8_t, &pic::write_elcr<true>> : cpu_write<pic, uint8_t, &pic::write_elcr<false>>
 			},
 			this, is_update, is_update))) {
 			logger_en(error, "Failed to update elcr io ports");
@@ -341,8 +333,8 @@ pic::update_io(bool is_update)
 	else {
 		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0xA0, 2, true,
 			{
-				.fnr8 = enable ? cpu_read<pic, uint8_t, &pic::read_handler_logger> : cpu_read<pic, uint8_t, &pic::read_handler>,
-				.fnw8 = enable ? cpu_write<pic, uint8_t, &pic::write_handler_logger> : cpu_write<pic, uint8_t, &pic::write_handler>
+				.fnr8 = log ? cpu_read<pic, uint8_t, &pic::read<true>> : cpu_read<pic, uint8_t, &pic::read<false>>,
+				.fnw8 = log ? cpu_write<pic, uint8_t, &pic::write<true>> : cpu_write<pic, uint8_t, &pic::write<false>>
 			},
 			this, is_update, is_update))) {
 			logger_en(error, "Failed to update pic io ports");
@@ -351,8 +343,8 @@ pic::update_io(bool is_update)
 
 		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x4D1, 1, true,
 			{
-				.fnr8 = enable ? cpu_read<pic, uint8_t, &pic::elcr_read_handler_logger> : cpu_read<pic, uint8_t, &pic::elcr_read_handler>,
-				.fnw8 = enable ? cpu_write<pic, uint8_t, &pic::elcr_write_handler_logger> : cpu_write<pic, uint8_t, &pic::elcr_write_handler>
+				.fnr8 = log ? cpu_read<pic, uint8_t, &pic::read_elcr<true>> : cpu_read<pic, uint8_t, &pic::read_elcr<false>>,
+				.fnw8 = log ? cpu_write<pic, uint8_t, &pic::write_elcr<true>> : cpu_write<pic, uint8_t, &pic::write_elcr<false>>
 			},
 			this, is_update, is_update))) {
 			logger_en(error, "Failed to update elcr io ports");

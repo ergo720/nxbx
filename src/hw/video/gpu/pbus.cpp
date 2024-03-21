@@ -90,9 +90,13 @@ nv2a_pci_write(uint8_t *ptr, uint8_t addr, uint8_t data, void *opaque)
 	return 0; // pass-through the write
 }
 
-void
-pbus::write(uint32_t addr, const uint32_t data)
+template<bool should_log>
+void pbus::write(uint32_t addr, const uint32_t data)
 {
+	if constexpr (should_log) {
+		log_io_write();
+	}
+
 	switch (addr)
 	{
 	case NV_PBUS_FBIO_RAM:
@@ -104,8 +108,8 @@ pbus::write(uint32_t addr, const uint32_t data)
 	}
 }
 
-uint32_t
-pbus::read(uint32_t addr)
+template<bool should_log>
+uint32_t pbus::read(uint32_t addr)
 {
 	uint32_t value = 0;
 
@@ -119,51 +123,35 @@ pbus::read(uint32_t addr)
 		nxbx_fatal("Unhandled read at address 0x%" PRIX32, addr);
 	}
 
+	if constexpr (should_log) {
+		log_io_read();
+	}
+
 	return value;
 }
 
-void
-pbus::pci_write(uint32_t addr, const uint32_t data)
+template<bool should_log>
+void pbus::pci_write(uint32_t addr, const uint32_t data)
 {
+	if constexpr (should_log) {
+		log_io_write();
+	}
+
 	uint32_t *pci_conf = (uint32_t *)m_pci_conf;
 	pci_conf[(addr - NV_PBUS_PCI_BASE) / 4] = data;
 }
 
-uint32_t
-pbus::pci_read(uint32_t addr)
+template<bool should_log>
+uint32_t pbus::pci_read(uint32_t addr)
 {
 	uint32_t *pci_conf = (uint32_t *)m_pci_conf;
-	return pci_conf[(addr - NV_PBUS_PCI_BASE) / 4];
-}
+	uint32_t value = pci_conf[(addr - NV_PBUS_PCI_BASE) / 4];
 
-uint32_t
-pbus::read_logger(uint32_t addr)
-{
-	uint32_t data = read(addr);
-	log_io_read();
-	return data;
-}
+	if constexpr (should_log) {
+		log_io_read();
+	}
 
-void
-pbus::write_logger(uint32_t addr, const uint32_t data)
-{
-	log_io_write();
-	write(addr, data);
-}
-
-uint32_t
-pbus::pci_read_logger(uint32_t addr)
-{
-	uint32_t data = pci_read(addr);
-	log_io_read();
-	return data;
-}
-
-void
-pbus::pci_write_logger(uint32_t addr, const uint32_t data)
-{
-	log_io_write();
-	pci_write(addr, data);
+	return value;
 }
 
 void
@@ -178,11 +166,11 @@ pbus::pci_init()
 bool
 pbus::update_io(bool is_update)
 {
-	bool enable = module_enabled();
+	bool log = module_enabled();
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PBUS_BASE, NV_PBUS_SIZE, false,
 		{
-			.fnr32 = enable ? cpu_read<pbus, uint32_t, &pbus::read_logger> : cpu_read<pbus, uint32_t, &pbus::read>,
-			.fnw32 = enable ? cpu_write<pbus, uint32_t, &pbus::write_logger> : cpu_write<pbus, uint32_t, &pbus::write>
+			.fnr32 = log ? cpu_read<pbus, uint32_t, &pbus::read<true>> : cpu_read<pbus, uint32_t, &pbus::read<false>>,
+			.fnw32 = log ? cpu_write<pbus, uint32_t, &pbus::write<true>> : cpu_write<pbus, uint32_t, &pbus::write<false>>
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update mmio region");
@@ -191,8 +179,8 @@ pbus::update_io(bool is_update)
 
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PBUS_PCI_BASE, sizeof(default_pci_configuration), false,
 		{
-			.fnr32 = enable ? cpu_read<pbus, uint32_t, &pbus::pci_read_logger> : cpu_read<pbus, uint32_t, &pbus::pci_read>,
-			.fnw32 = enable ? cpu_write<pbus, uint32_t, &pbus::pci_write_logger> : cpu_write<pbus, uint32_t, &pbus::pci_write>
+			.fnr32 = log ? cpu_read<pbus, uint32_t, &pbus::pci_read<true>> : cpu_read<pbus, uint32_t, &pbus::pci_read<false>>,
+			.fnw32 = log ? cpu_write<pbus, uint32_t, &pbus::pci_write<true>> : cpu_write<pbus, uint32_t, &pbus::pci_write<false>>
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update pci mmio region");

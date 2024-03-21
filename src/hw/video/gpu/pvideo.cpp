@@ -23,9 +23,13 @@
 #define NV_PVIDEO_DEBUG_10 (NV2A_REGISTER_BASE + 0x000080A8)
 
 
-void
-pvideo::write(uint32_t addr, const uint32_t data)
+template<bool log>
+void pvideo::write(uint32_t addr, const uint32_t data)
 {
+	if constexpr (log) {
+		log_io_write();
+	}
+
 	switch (addr)
 	{
 	case NV_PVIDEO_DEBUG_0:
@@ -47,8 +51,8 @@ pvideo::write(uint32_t addr, const uint32_t data)
 	}
 }
 
-uint32_t
-pvideo::read(uint32_t addr)
+template<bool log>
+uint32_t pvideo::read(uint32_t addr)
 {
 	uint32_t value = 0;
 
@@ -72,32 +76,21 @@ pvideo::read(uint32_t addr)
 		nxbx_fatal("Unhandled read at address 0x%" PRIX32, addr);
 	}
 
+	if constexpr (log) {
+		log_io_read();
+	}
+
 	return value;
-}
-
-uint32_t
-pvideo::read_logger(uint32_t addr)
-{
-	uint32_t data = read(addr);
-	log_io_read();
-	return data;
-}
-
-void
-pvideo::write_logger(uint32_t addr, const uint32_t data)
-{
-	log_io_write();
-	write(addr, data);
 }
 
 bool
 pvideo::update_io(bool is_update)
 {
-	bool enable = module_enabled();
+	bool log = module_enabled();
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PVIDEO_BASE, NV_PVIDEO_SIZE, false,
 		{
-			.fnr32 = enable ? cpu_read<pvideo, uint32_t, &pvideo::read_logger> : cpu_read<pvideo, uint32_t, &pvideo::read>,
-			.fnw32 = enable ? cpu_write<pvideo, uint32_t, &pvideo::write_logger> : cpu_write<pvideo, uint32_t, &pvideo::write>
+			.fnr32 = log ? cpu_read<pvideo, uint32_t, &pvideo::read<true>> : cpu_read<pvideo, uint32_t, &pvideo::read<false>>,
+			.fnw32 = log ? cpu_write<pvideo, uint32_t, &pvideo::write<true>> : cpu_write<pvideo, uint32_t, &pvideo::write<false>>
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update mmio region");

@@ -16,12 +16,12 @@ public:
 	bool init();
 	void reset();
 	void update_io_logging() { update_io(true); }
+	template<bool log = false>
 	uint8_t read8(uint32_t addr);
+	template<bool log = false>
 	uint32_t read32(uint32_t addr);
+	template<bool log = false>
 	void write32(uint32_t addr, const uint32_t data);
-	uint8_t read8_logger(uint32_t addr);
-	uint32_t read32_logger(uint32_t addr);
-	void write32_logger(uint32_t addr, const uint32_t data);
 
 private:
 	bool update_io(bool is_update);

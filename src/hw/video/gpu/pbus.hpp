@@ -15,14 +15,14 @@ public:
 	bool init();
 	void reset();
 	void update_io_logging() { update_io(true); }
+	template<bool log = false>
 	uint32_t read(uint32_t addr);
+	template<bool log = false>
 	void write(uint32_t addr, const uint32_t data);
+	template<bool log = false>
 	uint32_t pci_read(uint32_t addr);
+	template<bool log = false>
 	void pci_write(uint32_t addr, const uint32_t data);
-	uint32_t read_logger(uint32_t addr);
-	void write_logger(uint32_t addr, const uint32_t data);
-	uint32_t pci_read_logger(uint32_t addr);
-	void pci_write_logger(uint32_t addr, const uint32_t data);
 
 private:
 	bool update_io(bool is_update);

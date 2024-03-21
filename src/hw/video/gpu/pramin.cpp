@@ -13,89 +13,74 @@
 #define RAMIN_UNIT_SIZE 64
 
 
-uint8_t
-pramin::read8(uint32_t addr)
+template<bool log>
+uint8_t pramin::read8(uint32_t addr)
 {
-	return m_ram[ramin_to_ram_addr(addr)];
+	uint8_t value = m_ram[ramin_to_ram_addr(addr)];
+
+	if constexpr (log) {
+		log_io_read();
+	}
+
+	return value;
 }
 
-uint16_t
-pramin::read16(uint32_t addr)
+template<bool log>
+uint16_t pramin::read16(uint32_t addr)
 {
 	uint8_t *ram_ptr = m_ram + ramin_to_ram_addr(addr);
-	return *(uint16_t *)ram_ptr;
+	uint16_t value = *(uint16_t *)ram_ptr;
+
+	if constexpr (log) {
+		log_io_read();
+	}
+
+	return value;
 }
 
-uint32_t
-pramin::read32(uint32_t addr)
+template<bool log>
+uint32_t pramin::read32(uint32_t addr)
 {
 	uint8_t *ram_ptr = m_ram + ramin_to_ram_addr(addr);
-	return *(uint32_t *)ram_ptr;
+	uint32_t value = *(uint32_t *)ram_ptr;
+
+	if constexpr (log) {
+		log_io_read();
+	}
+
+	return value;
 }
 
-void
-pramin::write8(uint32_t addr, const uint8_t data)
+template<bool log>
+void pramin::write8(uint32_t addr, const uint8_t data)
 {
+	if constexpr (log) {
+		log_io_write();
+	}
+
 	m_ram[ramin_to_ram_addr(addr)] = data;
 }
 
-void
-pramin::write16(uint32_t addr, const uint16_t data)
+template<bool log>
+void pramin::write16(uint32_t addr, const uint16_t data)
 {
+	if constexpr (log) {
+		log_io_write();
+	}
+
 	uint8_t *ram_ptr = m_ram + ramin_to_ram_addr(addr);
 	*(uint16_t *)ram_ptr = data;
 }
 
-void
-pramin::write32(uint32_t addr, const uint32_t data)
+template<bool log>
+void pramin::write32(uint32_t addr, const uint32_t data)
 {
+	if constexpr (log) {
+		log_io_write();
+	}
+
 	uint8_t *ram_ptr = m_ram + ramin_to_ram_addr(addr);
 	*(uint32_t *)ram_ptr = data;
-}
-
-uint8_t
-pramin::read8_logger(uint32_t addr)
-{
-	uint8_t data = read8(addr);
-	log_io_read();
-	return data;
-}
-
-uint16_t
-pramin::read16_logger(uint32_t addr)
-{
-	uint16_t data = read16(addr);
-	log_io_read();
-	return data;
-}
-
-uint32_t
-pramin::read32_logger(uint32_t addr)
-{
-	uint32_t data = read32(addr);
-	log_io_read();
-	return data;
-}
-
-void
-pramin::write8_logger(uint32_t addr, const uint8_t data)
-{
-	log_io_write();
-	write8(addr, data);
-}
-
-void
-pramin::write16_logger(uint32_t addr, const uint16_t data)
-{
-	log_io_write();
-	write16(addr, data);
-}
-
-void
-pramin::write32_logger(uint32_t addr, const uint32_t data)
-{
-	log_io_write();
-	write32(addr, data);
 }
 
 uint32_t
@@ -108,15 +93,15 @@ pramin::ramin_to_ram_addr(uint32_t ramin_addr)
 bool
 pramin::update_io(bool is_update)
 {
-	bool enable = module_enabled();
+	bool log = module_enabled();
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PRAMIN_BASE, NV_PRAMIN_SIZE, false,
 		{
-			.fnr8 =  enable ? cpu_read<pramin, uint8_t, &pramin::read8_logger> : cpu_read<pramin, uint8_t, &pramin::read8>,
-			.fnr16 = enable ? cpu_read<pramin, uint16_t, &pramin::read16_logger> : cpu_read<pramin, uint16_t, &pramin::read16>,
-			.fnr32 = enable ? cpu_read<pramin, uint32_t, &pramin::read32_logger> : cpu_read<pramin, uint32_t, &pramin::read32>,
-			.fnw8 = enable ? cpu_write<pramin, uint8_t, &pramin::write8_logger> : cpu_write<pramin, uint8_t, &pramin::write8>,
-			.fnw16 = enable ? cpu_write<pramin, uint16_t, &pramin::write16_logger> : cpu_write<pramin, uint16_t, &pramin::write16>,
-			.fnw32 = enable ? cpu_write<pramin, uint32_t, &pramin::write32_logger> : cpu_write<pramin, uint32_t, &pramin::write32>
+			.fnr8 = log ? cpu_read<pramin, uint8_t, &pramin::read8<true>> : cpu_read<pramin, uint8_t, &pramin::read8<false>>,
+			.fnr16 = log ? cpu_read<pramin, uint16_t, &pramin::read16<true>> : cpu_read<pramin, uint16_t, &pramin::read16<false>>,
+			.fnr32 = log ? cpu_read<pramin, uint32_t, &pramin::read32<true>> : cpu_read<pramin, uint32_t, &pramin::read32<false>>,
+			.fnw8 = log ? cpu_write<pramin, uint8_t, &pramin::write8<true>> : cpu_write<pramin, uint8_t, &pramin::write8<false>>,
+			.fnw16 = log ? cpu_write<pramin, uint16_t, &pramin::write16<true>> : cpu_write<pramin, uint16_t, &pramin::write16<false>>,
+			.fnw32 = log ? cpu_write<pramin, uint32_t, &pramin::write32<true>> : cpu_write<pramin, uint32_t, &pramin::write32<false>>
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update mmio region");

@@ -16,9 +16,13 @@
 #define NV_PFB_NVM (NV2A_REGISTER_BASE + 0x00100214)
 
 
-void
-pfb::write(uint32_t addr, const uint32_t data)
+template<bool log>
+void pfb::write(uint32_t addr, const uint32_t data)
 {
+	if constexpr (log) {
+		log_io_write();
+	}
+
 	switch (addr)
 	{
 	case NV_PFB_CFG0:
@@ -42,8 +46,8 @@ pfb::write(uint32_t addr, const uint32_t data)
 	}
 }
 
-uint32_t
-pfb::read(uint32_t addr)
+template<bool log>
+uint32_t pfb::read(uint32_t addr)
 {
 	uint32_t value = 0;
 
@@ -69,32 +73,21 @@ pfb::read(uint32_t addr)
 		nxbx_fatal("Unhandled read at address 0x%" PRIX32, addr);
 	}
 
+	if constexpr (log) {
+		log_io_read();
+	}
+
 	return value;
-}
-
-uint32_t
-pfb::read_logger(uint32_t addr)
-{
-	uint32_t data = read(addr);
-	log_io_read();
-	return data;
-}
-
-void
-pfb::write_logger(uint32_t addr, const uint32_t data)
-{
-	log_io_write();
-	write(addr, data);
 }
 
 bool
 pfb::update_io(bool is_update)
 {
-	bool enable = module_enabled();
+	bool log = module_enabled();
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PFB_BASE, NV_PFB_SIZE, false,
 		{
-			.fnr32 = enable ? cpu_read<pfb, uint32_t, &pfb::read_logger> : cpu_read<pfb, uint32_t, &pfb::read>,
-			.fnw32 = enable ? cpu_write<pfb, uint32_t, &pfb::write_logger> : cpu_write<pfb, uint32_t, &pfb::write>
+			.fnr32 = log ? cpu_read<pfb, uint32_t, &pfb::read<true>> : cpu_read<pfb, uint32_t, &pfb::read<false>>,
+			.fnw32 = log ? cpu_write<pfb, uint32_t, &pfb::write<true>> : cpu_write<pfb, uint32_t, &pfb::write<false>>
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update mmio region");

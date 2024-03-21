@@ -19,9 +19,13 @@
 #define NV_PRAMDAC_VPLL_COEFF (NV2A_REGISTER_BASE + 0x00680508)
 
 
-void
-pramdac::write32(uint32_t addr, const uint32_t data)
+template<bool log>
+void pramdac::write32(uint32_t addr, const uint32_t data)
 {
+	if constexpr (log) {
+		log_io_write();
+	}
+
 	switch (addr)
 	{
 	case NV_PRAMDAC_NVPLL_COEFF: {
@@ -51,8 +55,8 @@ pramdac::write32(uint32_t addr, const uint32_t data)
 	}
 }
 
-uint32_t
-pramdac::read32(uint32_t addr)
+template<bool log>
+uint32_t pramdac::read32(uint32_t addr)
 {
 	uint32_t value = 0;
 
@@ -74,53 +78,40 @@ pramdac::read32(uint32_t addr)
 		nxbx_fatal("Unhandled %s read at address 0x%" PRIX32, addr);
 	}
 
+	if constexpr (log) {
+		log_io_read();
+	}
+
 	return value;
 }
 
-uint8_t
-pramdac::read8(uint32_t addr)
+template<bool log>
+uint8_t pramdac::read8(uint32_t addr)
 {
 	// This handler is necessary because Direct3D_CreateDevice reads the n value by accessing the second byte of the register, even though the coefficient
 	// registers are supposed to be four bytes instead. This is probably due to compiler optimizations
 
 	uint32_t addr_base = addr & ~3;
 	uint32_t addr_offset = (addr & 3) << 3;
-	uint32_t value = read32(addr_base);
-	return uint8_t((value & (0xFF << addr_offset)) >> addr_offset);
-}
+	uint32_t value32 = read32<false>(addr_base);
+	uint8_t value = uint8_t((value32 & (0xFF << addr_offset)) >> addr_offset);
 
-uint8_t
-pramdac::read8_logger(uint32_t addr)
-{
-	uint8_t data = read8(addr);
-	log_io_read();
-	return data;
-}
+	if constexpr (log) {
+		log_io_read();
+	}
 
-uint32_t
-pramdac::read32_logger(uint32_t addr)
-{
-	uint32_t data = read32(addr);
-	log_io_read();
-	return data;
-}
-
-void
-pramdac::write32_logger(uint32_t addr, const uint32_t data)
-{
-	log_io_write();
-	write32(addr, data);
+	return value;
 }
 
 bool
 pramdac::update_io(bool is_update)
 {
-	bool enable = module_enabled();
+	bool log = module_enabled();
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PRAMDAC_BASE, NV_PRAMDAC_SIZE, false,
 		{
-			.fnr8 = enable ? cpu_read<pramdac, uint8_t, &pramdac::read8_logger> : cpu_read<pramdac, uint8_t, &pramdac::read8>,
-			.fnr32 = enable ? cpu_read<pramdac, uint32_t, &pramdac::read32_logger> : cpu_read<pramdac, uint32_t, &pramdac::read32>,
-			.fnw32 = enable ? cpu_write<pramdac, uint32_t, &pramdac::write32_logger> : cpu_write<pramdac, uint32_t, &pramdac::write32>
+			.fnr8 = log ? cpu_read<pramdac, uint8_t, &pramdac::read8<true>> : cpu_read<pramdac, uint8_t, &pramdac::read8<false>>,
+			.fnr32 = log ? cpu_read<pramdac, uint32_t, &pramdac::read32<true>> : cpu_read<pramdac, uint32_t, &pramdac::read32<false>>,
+			.fnw32 = log ? cpu_write<pramdac, uint32_t, &pramdac::write32<true>> : cpu_write<pramdac, uint32_t, &pramdac::write32<false>>
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update mmio region");

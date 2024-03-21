@@ -40,11 +40,11 @@ cpu_logger(log_level lv, const unsigned count, const char *msg, ...)
 bool
 cpu::update_io(bool is_update)
 {
-	bool enable = check_if_enabled<log_module::kernel>();
+	bool log = check_if_enabled<log_module::kernel>();
 	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, kernel::IO_BASE, kernel::IO_SIZE, true,
 		{
-			.fnr32 = enable ? kernel::read_handler_logger : kernel::read_handler,
-			.fnw32 = enable ? kernel::write_handler_logger : kernel::write_handler
+			.fnr32 = log ? kernel::read<true> : kernel::read<false>,
+			.fnw32 = log ? kernel::write<true> : kernel::write<false>
 		}, m_lc86cpu, is_update, is_update))) {
 		logger_en(error, "Failed to update kernel communication io ports");
 		return false;

@@ -10,9 +10,13 @@
 #define MODULE_NAME pci
 
 
-void
-pci::write8(uint32_t addr, const uint8_t data)
+template<bool log>
+void pci::write8(uint32_t addr, const uint8_t data)
 {
+	if constexpr (log) {
+		log_io_write();
+	}
+
 	int offset = addr & 3;
 	switch (addr & ~3)
 	{
@@ -53,15 +57,16 @@ pci::write8(uint32_t addr, const uint8_t data)
 	}
 }
 
-uint8_t
-pci::read8(uint32_t addr)
+template<bool log>
+uint8_t pci::read8(uint32_t addr)
 {
 	int offset = addr & 3;
-	uint32_t retval = -1;
+	uint32_t value = -1;
 	switch (addr & ~3)
 	{
 	case 0xCF8: // PCI Status Register
-		return configuration_address_register >> (offset * 8) & 0xFF;
+		value = configuration_address_register >> (offset * 8) & 0xFF;
+		break;
 
 	case 0xCFC: { // TODO: Type 0 / Type 1 configuration cycles
 		if (configuration_cycle) {
@@ -72,100 +77,81 @@ pci::read8(uint32_t addr)
 
 			const auto it = configuration_address_spaces.find((bus << 8) | (device << 3) | function);
 			if (it == configuration_address_spaces.end()) {
-				retval = -1;
+				value = -1;
 			}
 			else {
-				retval = it->second[offset | (addr & 3)];
+				value = it->second[offset | (addr & 3)];
 			}
-			//status_register = ~retval & 0x80000000; // ~(uint8_t value) & 0x80000000 == 0x80000000 and ~(-1) & 0x80000000 == 0
+			//status_register = ~value & 0x80000000; // ~(uint8_t value) & 0x80000000 == 0x80000000 and ~(-1) & 0x80000000 == 0
 		}
-		return retval;
+		break;
 	}
 
 	default:
 		nxbx_fatal("Read from unknown register - 0x%" PRIX32, addr);
-		return 0xFF;
+		return value;
 	}
+
+	if constexpr (log) {
+		log_io_read();
+	}
+
+	return value;
 }
 
 // XXX - provide native 16-bit and 32-bit functions instead of just wrapping around the 8-bit versions.
 // Although the PCI spec says that all ports are "Dword-sized," the BochS BIOS reads fractions of registers.
 
-uint16_t
-pci::read16(uint32_t addr)
+template<bool log>
+uint16_t pci::read16(uint32_t addr)
 {
-	uint16_t result = read8(addr);
-	result |= ((uint16_t)read8(addr + 1) << 8);
-	return result;
+	uint16_t value = read8(addr);
+	value |= ((uint16_t)read8(addr + 1) << 8);
+
+	if constexpr (log) {
+		log_io_read();
+	}
+
+	return value;
 }
 
-uint32_t
-pci::read32(uint32_t addr)
+template<bool log>
+uint32_t pci::read32(uint32_t addr)
 {
-	uint32_t result = read8(addr);
-	result |= ((uint32_t)read8(addr + 1) << 8);
-	result |= ((uint32_t)read8(addr + 2) << 16);
-	result |= ((uint32_t)read8(addr + 3) << 24);
-	return result;
+	uint32_t value = read8(addr);
+	value |= ((uint32_t)read8(addr + 1) << 8);
+	value |= ((uint32_t)read8(addr + 2) << 16);
+	value |= ((uint32_t)read8(addr + 3) << 24);
+
+	if constexpr (log) {
+		log_io_read();
+	}
+
+	return value;
 }
 
-void
-pci::write16(uint32_t addr, const uint16_t data)
+template<bool log>
+void pci::write16(uint32_t addr, const uint16_t data)
 {
+	if constexpr (log) {
+		log_io_write();
+	}
+
 	write8(addr, data & 0xFF);
 	write8(addr + 1, data >> 8 & 0xFF);
 }
 
-void
-pci::write32(uint32_t addr, const uint32_t data)
+template<bool log>
+void pci::write32(uint32_t addr, const uint32_t data)
 {
+	if constexpr (log) {
+		log_io_write();
+	}
+
 	write8(addr, data & 0xFF);
 	write8(addr + 1, data >> 8 & 0xFF);
 	write8(addr + 2, data >> 16 & 0xFF);
 	write8(addr + 3, data >> 24 & 0xFF);
-}
-
-uint8_t
-pci::read8_logger(uint32_t addr)
-{
-	uint8_t data = read8(addr);
-	log_io_read();
-	return data;
-}
-
-uint16_t
-pci::read16_logger(uint32_t addr)
-{
-	uint16_t data = read16(addr);
-	log_io_read();
-	return data;
-}
-
-uint32_t
-pci::read32_logger(uint32_t addr)
-{
-	uint32_t data = read32(addr);
-	log_io_read();
-	return data;
-}
-
-void
-pci::write8_logger(uint32_t addr, const uint8_t data)
-{
-	log_io_write();
-	write8(addr, data);
-}
-
-void pci::write16_logger(uint32_t addr, const uint16_t data)
-{
-	log_io_write();
-	write16(addr, data);
-}
-
-void pci::write32_logger(uint32_t addr, const uint32_t data)
-{
-	log_io_write();
-	write32(addr, data);
 }
 
 void *
@@ -219,15 +205,15 @@ pci::get_configuration_ptr(uint32_t bus, uint32_t device, uint32_t function)
 bool
 pci::update_io(bool is_update)
 {
-	bool enable = module_enabled();
+	bool log = module_enabled();
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0xCF8, 8, true,
 		{
-			.fnr8 = enable ? cpu_read<pci, uint8_t, &pci::read8_logger> : cpu_read<pci, uint8_t, &pci::read8>,
-			.fnr16 = enable ? cpu_read<pci, uint16_t, &pci::read16_logger> : cpu_read<pci, uint16_t, &pci::read16>,
-			.fnr32 = enable ? cpu_read<pci, uint32_t, &pci::read32_logger> : cpu_read<pci, uint32_t, &pci::read32>,
-			.fnw8 = enable ? cpu_write<pci, uint8_t, &pci::write8_logger> : cpu_write<pci, uint8_t, &pci::write8>,
-			.fnw16 = enable ? cpu_write<pci, uint16_t, &pci::write16_logger> : cpu_write<pci, uint16_t, &pci::write16>,
-			.fnw32 = enable ? cpu_write<pci, uint32_t, &pci::write32_logger> : cpu_write<pci, uint32_t, &pci::write32>
+			.fnr8 = log ? cpu_read<pci, uint8_t, &pci::read8<true>> : cpu_read<pci, uint8_t, &pci::read8<false>>,
+			.fnr16 = log ? cpu_read<pci, uint16_t, &pci::read16<true>> : cpu_read<pci, uint16_t, &pci::read16<false>>,
+			.fnr32 = log ? cpu_read<pci, uint32_t, &pci::read32<true>> : cpu_read<pci, uint32_t, &pci::read32<false>>,
+			.fnw8 = log ? cpu_write<pci, uint8_t, &pci::write8<true>> : cpu_write<pci, uint8_t, &pci::write8<false>>,
+			.fnw16 = log ? cpu_write<pci, uint16_t, &pci::write16<true>> : cpu_write<pci, uint16_t, &pci::write16<false>>,
+			.fnw32 = log ? cpu_write<pci, uint32_t, &pci::write32<true>> : cpu_write<pci, uint32_t, &pci::write32<false>>
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update io ports");
