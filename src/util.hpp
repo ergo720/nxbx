@@ -11,6 +11,7 @@
 
 namespace util {
 	uint64_t muldiv128(uint64_t a, uint64_t b, uint64_t c);
+	uint32_t byteswap(uint32_t value);
 	char xbox_toupper(char c);
 
 	// Case-insensitive variant of std::char_traits<char>, used to compare xbox strings

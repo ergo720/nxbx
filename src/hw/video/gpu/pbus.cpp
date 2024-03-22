@@ -90,9 +90,13 @@ nv2a_pci_write(uint8_t *ptr, uint8_t addr, uint8_t data, void *opaque)
 	return 0; // pass-through the write
 }
 
-template<bool should_log>
+template<bool should_log, bool is_be>
 void pbus::write(uint32_t addr, const uint32_t data)
 {
+	uint32_t value = data;
+	if constexpr (is_be) {
+		value = util::byteswap(value);
+	}
 	if constexpr (should_log) {
 		log_io_write();
 	}
@@ -100,15 +104,15 @@ void pbus::write(uint32_t addr, const uint32_t data)
 	switch (addr)
 	{
 	case NV_PBUS_FBIO_RAM:
-		fbio_ram = data;
+		fbio_ram = value;
 		break;
 
 	default:
-		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
+		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, value);
 	}
 }
 
-template<bool should_log>
+template<bool should_log, bool is_be>
 uint32_t pbus::read(uint32_t addr)
 {
 	uint32_t value = 0;
@@ -123,6 +127,9 @@ uint32_t pbus::read(uint32_t addr)
 		nxbx_fatal("Unhandled read at address 0x%" PRIX32, addr);
 	}
 
+	if constexpr (is_be) {
+		value = util::byteswap(value);
+	}
 	if constexpr (should_log) {
 		log_io_read();
 	}
@@ -130,23 +137,30 @@ uint32_t pbus::read(uint32_t addr)
 	return value;
 }
 
-template<bool should_log>
+template<bool should_log, bool is_be>
 void pbus::pci_write(uint32_t addr, const uint32_t data)
 {
+	uint32_t value = data;
+	if constexpr (is_be) {
+		value = util::byteswap(value);
+	}
 	if constexpr (should_log) {
 		log_io_write();
 	}
 
 	uint32_t *pci_conf = (uint32_t *)m_pci_conf;
-	pci_conf[(addr - NV_PBUS_PCI_BASE) / 4] = data;
+	pci_conf[(addr - NV_PBUS_PCI_BASE) / 4] = value;
 }
 
-template<bool should_log>
+template<bool should_log, bool is_be>
 uint32_t pbus::pci_read(uint32_t addr)
 {
 	uint32_t *pci_conf = (uint32_t *)m_pci_conf;
 	uint32_t value = pci_conf[(addr - NV_PBUS_PCI_BASE) / 4];
 
+	if constexpr (is_be) {
+		value = util::byteswap(value);
+	}
 	if constexpr (should_log) {
 		log_io_read();
 	}
@@ -163,14 +177,56 @@ pbus::pci_init()
 	m_pci_conf = pci_conf;
 }
 
+template<bool is_write, bool is_pci>
+auto pbus::get_io_func(bool log, bool is_be)
+{
+	if constexpr (is_pci) {
+		if constexpr (is_write) {
+			if (log) {
+				return is_be ? cpu_write<pbus, uint32_t, &pbus::pci_write<true, true>> : cpu_write<pbus, uint32_t, &pbus::pci_write<true>>;
+			}
+			else {
+				return is_be ? cpu_write<pbus, uint32_t, &pbus::pci_write<false, true>> : cpu_write<pbus, uint32_t, &pbus::pci_write<false>>;
+			}
+		}
+		else {
+			if (log) {
+				return is_be ? cpu_read<pbus, uint32_t, &pbus::pci_read<true, true>> : cpu_read<pbus, uint32_t, &pbus::pci_read<true>>;
+			}
+			else {
+				return is_be ? cpu_read<pbus, uint32_t, &pbus::pci_read<false, true>> : cpu_read<pbus, uint32_t, &pbus::pci_read<false>>;
+			}
+		}
+	}
+	else {
+		if constexpr (is_write) {
+			if (log) {
+				return is_be ? cpu_write<pbus, uint32_t, &pbus::write<true, true>> : cpu_write<pbus, uint32_t, &pbus::write<true>>;
+			}
+			else {
+				return is_be ? cpu_write<pbus, uint32_t, &pbus::write<false, true>> : cpu_write<pbus, uint32_t, &pbus::write<false>>;
+			}
+		}
+		else {
+			if (log) {
+				return is_be ? cpu_read<pbus, uint32_t, &pbus::read<true, true>> : cpu_read<pbus, uint32_t, &pbus::read<true>>;
+			}
+			else {
+				return is_be ? cpu_read<pbus, uint32_t, &pbus::read<false, true>> : cpu_read<pbus, uint32_t, &pbus::read<false>>;
+			}
+		}
+	}
+}
+
 bool
 pbus::update_io(bool is_update)
 {
 	bool log = module_enabled();
+	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK;
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PBUS_BASE, NV_PBUS_SIZE, false,
 		{
-			.fnr32 = log ? cpu_read<pbus, uint32_t, &pbus::read<true>> : cpu_read<pbus, uint32_t, &pbus::read<false>>,
-			.fnw32 = log ? cpu_write<pbus, uint32_t, &pbus::write<true>> : cpu_write<pbus, uint32_t, &pbus::write<false>>
+			.fnr32 = get_io_func<false, false>(log, is_be),
+			.fnw32 = get_io_func<true, false>(log, is_be)
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update mmio region");
@@ -179,8 +235,8 @@ pbus::update_io(bool is_update)
 
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PBUS_PCI_BASE, sizeof(default_pci_configuration), false,
 		{
-			.fnr32 = log ? cpu_read<pbus, uint32_t, &pbus::pci_read<true>> : cpu_read<pbus, uint32_t, &pbus::pci_read<false>>,
-			.fnw32 = log ? cpu_write<pbus, uint32_t, &pbus::pci_write<true>> : cpu_write<pbus, uint32_t, &pbus::pci_write<false>>
+			.fnr32 = get_io_func<false, true>(log, is_be),
+			.fnw32 = get_io_func<true, true>(log, is_be)
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update pci mmio region");

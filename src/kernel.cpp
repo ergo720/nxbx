@@ -92,6 +92,7 @@ namespace kernel {
 	void write(addr_t addr, const uint32_t data, void *opaque)
 	{
 		if constexpr (log) {
+			uint32_t value = data;
 			log_io_write();
 		}
 

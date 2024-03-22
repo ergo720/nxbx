@@ -18,15 +18,15 @@ public:
 	void reset();
 	void update_io() { update_io(true); }
 	uint64_t get_next_alarm_time(uint64_t now);
-	template<bool log = false, bool enabled = true>
+	template<bool log = false, bool enabled = true, bool is_be = false>
 	uint32_t read(uint32_t addr);
-	template<bool log = false, bool enabled = true>
+	template<bool log = false, bool enabled = true, bool is_be = false>
 	void write(uint32_t addr, const uint32_t data);
 
 private:
 	bool update_io(bool is_update);
 	template<bool is_write>
-	auto get_io_func(bool log, bool enabled);
+	auto get_io_func(bool log, bool enabled, bool is_be);
 	uint64_t counter_to_us();
 
 	friend class pmc;

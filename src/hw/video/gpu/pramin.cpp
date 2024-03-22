@@ -13,11 +13,15 @@
 #define RAMIN_UNIT_SIZE 64
 
 
-template<bool log>
-uint8_t pramin::read8(uint32_t addr)
+template<typename T, bool log, bool is_be>
+T pramin::read(uint32_t addr)
 {
-	uint8_t value = m_ram[ramin_to_ram_addr(addr)];
+	uint8_t *ram_ptr = m_ram + ramin_to_ram_addr(addr);
+	T value = *(T *)ram_ptr;
 
+	if constexpr (is_be) {
+		value = (T)util::byteswap(value);
+	}
 	if constexpr (log) {
 		log_io_read();
 	}
@@ -25,62 +29,19 @@ uint8_t pramin::read8(uint32_t addr)
 	return value;
 }
 
-template<bool log>
-uint16_t pramin::read16(uint32_t addr)
+template<typename T, bool log, bool is_be>
+void pramin::write(uint32_t addr, const T data)
 {
-	uint8_t *ram_ptr = m_ram + ramin_to_ram_addr(addr);
-	uint16_t value = *(uint16_t *)ram_ptr;
-
-	if constexpr (log) {
-		log_io_read();
+	T value = data;
+	if constexpr (is_be) {
+		value = (T)util::byteswap(value);
 	}
-
-	return value;
-}
-
-template<bool log>
-uint32_t pramin::read32(uint32_t addr)
-{
-	uint8_t *ram_ptr = m_ram + ramin_to_ram_addr(addr);
-	uint32_t value = *(uint32_t *)ram_ptr;
-
-	if constexpr (log) {
-		log_io_read();
-	}
-
-	return value;
-}
-
-template<bool log>
-void pramin::write8(uint32_t addr, const uint8_t data)
-{
-	if constexpr (log) {
-		log_io_write();
-	}
-
-	m_ram[ramin_to_ram_addr(addr)] = data;
-}
-
-template<bool log>
-void pramin::write16(uint32_t addr, const uint16_t data)
-{
 	if constexpr (log) {
 		log_io_write();
 	}
 
 	uint8_t *ram_ptr = m_ram + ramin_to_ram_addr(addr);
-	*(uint16_t *)ram_ptr = data;
-}
-
-template<bool log>
-void pramin::write32(uint32_t addr, const uint32_t data)
-{
-	if constexpr (log) {
-		log_io_write();
-	}
-
-	uint8_t *ram_ptr = m_ram + ramin_to_ram_addr(addr);
-	*(uint32_t *)ram_ptr = data;
+	*(T *)ram_ptr = value;
 }
 
 uint32_t
@@ -90,18 +51,40 @@ pramin::ramin_to_ram_addr(uint32_t ramin_addr)
 	return m_machine->get<pfb>().cstatus - (ramin_addr - (ramin_addr % RAMIN_UNIT_SIZE)) - RAMIN_UNIT_SIZE + (ramin_addr % RAMIN_UNIT_SIZE);
 }
 
+template<bool is_write, typename T>
+auto pramin::get_io_func(bool log, bool is_be)
+{
+	if constexpr (is_write) {
+		if (log) {
+			return is_be ? cpu_write<pramin, T, &pramin::write<T, true, true>> : cpu_write<pramin, T, &pramin::write<T, true>>;
+		}
+		else {
+			return is_be ? cpu_write<pramin, T, &pramin::write<T, false, true>> : cpu_write<pramin, T, &pramin::write<T, false>>;
+		}
+	}
+	else {
+		if (log) {
+			return is_be ? cpu_read<pramin, T, &pramin::read<T, true, true>> : cpu_read<pramin, T, &pramin::read<T, true>>;
+		}
+		else {
+			return is_be ? cpu_read<pramin, T, &pramin::read<T, false, true>> : cpu_read<pramin, T, &pramin::read<T, false>>;
+		}
+	}
+}
+
 bool
 pramin::update_io(bool is_update)
 {
 	bool log = module_enabled();
+	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK;
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PRAMIN_BASE, NV_PRAMIN_SIZE, false,
 		{
-			.fnr8 = log ? cpu_read<pramin, uint8_t, &pramin::read8<true>> : cpu_read<pramin, uint8_t, &pramin::read8<false>>,
-			.fnr16 = log ? cpu_read<pramin, uint16_t, &pramin::read16<true>> : cpu_read<pramin, uint16_t, &pramin::read16<false>>,
-			.fnr32 = log ? cpu_read<pramin, uint32_t, &pramin::read32<true>> : cpu_read<pramin, uint32_t, &pramin::read32<false>>,
-			.fnw8 = log ? cpu_write<pramin, uint8_t, &pramin::write8<true>> : cpu_write<pramin, uint8_t, &pramin::write8<false>>,
-			.fnw16 = log ? cpu_write<pramin, uint16_t, &pramin::write16<true>> : cpu_write<pramin, uint16_t, &pramin::write16<false>>,
-			.fnw32 = log ? cpu_write<pramin, uint32_t, &pramin::write32<true>> : cpu_write<pramin, uint32_t, &pramin::write32<false>>
+			.fnr8 = get_io_func<false, uint8_t>(log, is_be),
+			.fnr16 = get_io_func<false, uint16_t>(log, is_be),
+			.fnr32 = get_io_func<false, uint32_t>(log, is_be),
+			.fnw8 = get_io_func<true, uint8_t>(log, is_be),
+			.fnw16 = get_io_func<true, uint16_t>(log, is_be),
+			.fnw32 = get_io_func<true, uint32_t>(log, is_be),
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update mmio region");

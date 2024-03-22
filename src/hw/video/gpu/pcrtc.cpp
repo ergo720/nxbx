@@ -17,11 +17,15 @@
 #define NV_PCRTC_UNKNOWN0 (NV2A_REGISTER_BASE + 0x00600804)
 
 
-template<bool log, bool enabled>
+template<bool log, bool enabled, bool is_be>
 void pcrtc::write(uint32_t addr, const uint32_t data)
 {
 	if constexpr (!enabled) {
 		return;
+	}
+	uint32_t value = data;
+	if constexpr (is_be) {
+		value = util::byteswap(value);
 	}
 	if constexpr (log) {
 		log_io_write();
@@ -30,29 +34,29 @@ void pcrtc::write(uint32_t addr, const uint32_t data)
 	switch (addr)
 	{
 	case NV_PCRTC_INTR_0:
-		int_status &= ~data;
+		int_status &= ~value;
 		m_machine->get<pmc>().update_irq();
 		break;
 
 	case NV_PCRTC_INTR_EN_0:
-		int_enabled = data;
+		int_enabled = value;
 		m_machine->get<pmc>().update_irq();
 		break;
 
 	case NV_PCRTC_START:
-		fb_addr = data & 0x7FFFFFC; // fb is 4 byte aligned
+		fb_addr = value & 0x7FFFFFC; // fb is 4 byte aligned
 		break;
 
 	case NV_PCRTC_UNKNOWN0:
-		unknown[0] = data;
+		unknown[0] = value;
 		break;
 
 	default:
-		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
+		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, value);
 	}
 }
 
-template<bool log, bool enabled>
+template<bool log, bool enabled, bool is_be>
 uint32_t pcrtc::read(uint32_t addr)
 {
 	if constexpr (!enabled) {
@@ -83,6 +87,9 @@ uint32_t pcrtc::read(uint32_t addr)
 		nxbx_fatal("Unhandled read at address 0x%" PRIX32, addr);
 	}
 
+	if constexpr (is_be) {
+		value = util::byteswap(value);
+	}
 	if constexpr (log) {
 		log_io_read();
 	}
@@ -91,15 +98,15 @@ uint32_t pcrtc::read(uint32_t addr)
 }
 
 template<bool is_write>
-auto pcrtc::get_io_func(bool log, bool enabled)
+auto pcrtc::get_io_func(bool log, bool enabled, bool is_be)
 {
 	if constexpr (is_write) {
 		if (enabled) {
 			if (log) {
-				return cpu_write<pcrtc, uint32_t, &pcrtc::write<true>>;
+				return is_be ? cpu_write<pcrtc, uint32_t, &pcrtc::write<true, true, true>> : cpu_write<pcrtc, uint32_t, &pcrtc::write<true>>;
 			}
 			else {
-				return cpu_write<pcrtc, uint32_t, &pcrtc::write<false>>;
+				return is_be ? cpu_write<pcrtc, uint32_t, &pcrtc::write<false, true, true>> : cpu_write<pcrtc, uint32_t, &pcrtc::write<false>>;
 			}
 		}
 		else {
@@ -109,10 +116,10 @@ auto pcrtc::get_io_func(bool log, bool enabled)
 	else {
 		if (enabled) {
 			if (log) {
-				return cpu_read<pcrtc, uint32_t, &pcrtc::read<true>>;
+				return is_be ? cpu_read<pcrtc, uint32_t, &pcrtc::read<true, true, true>> : cpu_read<pcrtc, uint32_t, &pcrtc::read<true>>;
 			}
 			else {
-				return cpu_read<pcrtc, uint32_t, &pcrtc::read<false>>;
+				return is_be ? cpu_read<pcrtc, uint32_t, &pcrtc::read<false, true, true>> : cpu_read<pcrtc, uint32_t, &pcrtc::read<false>>;
 			}
 		}
 		else {
@@ -126,10 +133,11 @@ pcrtc::update_io(bool is_update)
 {
 	bool log = module_enabled();
 	bool enabled = m_machine->get<pmc>().engine_enabled & NV_PMC_ENABLE_PCRTC;
+	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK;
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PCRTC_BASE, NV_PCRTC_SIZE, false,
 		{
-			.fnr32 = get_io_func<false>(log, enabled),
-			.fnw32 = get_io_func<true>(log, enabled)
+			.fnr32 = get_io_func<false>(log, enabled, is_be),
+			.fnw32 = get_io_func<true>(log, enabled, is_be)
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update mmio region");

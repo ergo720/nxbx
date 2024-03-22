@@ -23,8 +23,8 @@ public:
 	void reset();
 	void update_io_logging() { update_io(true); }
 	uint64_t get_next_irq_time(uint64_t now);
-	void write_handler(uint32_t addr, const uint8_t data);
-	void write_handler_logger(uint32_t addr, const uint8_t data);
+	template<bool log = false>
+	void write(uint32_t addr, const uint8_t data);
 
 private:
 	bool update_io(bool is_update);

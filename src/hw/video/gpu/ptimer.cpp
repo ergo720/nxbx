@@ -62,11 +62,15 @@ ptimer::get_next_alarm_time(uint64_t now)
 	return std::numeric_limits<uint64_t>::max();
 }
 
-template<bool log, bool enabled>
+template<bool log, bool enabled, bool is_be>
 void ptimer::write(uint32_t addr, const uint32_t data)
 {
 	if constexpr (!enabled) {
 		return;
+	}
+	uint32_t value = data;
+	if constexpr (is_be) {
+		value = util::byteswap(value);
 	}
 	if constexpr (log) {
 		log_io_write();
@@ -75,17 +79,17 @@ void ptimer::write(uint32_t addr, const uint32_t data)
 	switch (addr)
 	{
 	case NV_PTIMER_INTR_0:
-		int_status &= ~data;
+		int_status &= ~value;
 		m_machine->get<pmc>().update_irq();
 		break;
 
 	case NV_PTIMER_INTR_EN_0:
-		int_enabled = data;
+		int_enabled = value;
 		m_machine->get<pmc>().update_irq();
 		break;
 
 	case NV_PTIMER_NUMERATOR:
-		divider = data & NV_PTIMER_NUMERATOR_MASK;
+		divider = value & NV_PTIMER_NUMERATOR_MASK;
 		if (counter_active) {
 			counter_period = counter_to_us();
 			cpu_set_timeout(m_machine->get<cpu_t *>(), m_machine->get<cpu>().check_periodic_events(timer::get_now()));
@@ -93,7 +97,7 @@ void ptimer::write(uint32_t addr, const uint32_t data)
 		break;
 
 	case NV_PTIMER_DENOMINATOR: {
-		multiplier = data & NV_PTIMER_DENOMINATOR_MASK;
+		multiplier = value & NV_PTIMER_DENOMINATOR_MASK;
 		if (multiplier > divider) [[unlikely]] {
 			// Testing on a Retail 1.0 xbox shows that, when this condition is hit, the console hangs. We don't actually want to freeze the emulator, so
 			// we will just terminate the emulation instead
@@ -114,11 +118,11 @@ void ptimer::write(uint32_t addr, const uint32_t data)
 
 		// Tested on a Retail 1.0 xbox: writing to the NV_PTIMER_TIME_0/1 registers causes the timer to start counting from the written value
 	case NV_PTIMER_TIME_0:
-		counter_offset = (counter_offset & (0xFFFFFFFFULL << 32)) | data;
+		counter_offset = (counter_offset & (0xFFFFFFFFULL << 32)) | value;
 		break;
 
 	case NV_PTIMER_TIME_1:
-		counter_offset = (counter_offset & 0xFFFFFFFFULL) | ((uint64_t)data << 32);
+		counter_offset = (counter_offset & 0xFFFFFFFFULL) | ((uint64_t)value << 32);
 		break;
 
 	case NV_PTIMER_ALARM_0: {
@@ -134,7 +138,7 @@ void ptimer::write(uint32_t addr, const uint32_t data)
 		                    a1                          n bias+ (period larger for one cycle)
 		*/
 		uint32_t old_alarm = alarm >> 5;
-		alarm = data & ~0x1F; // tested on hw: writes of 1s to the first five bits have no impact
+		alarm = value & ~0x1F; // tested on hw: writes of 1s to the first five bits have no impact
 		uint32_t new_alarm = alarm >> 5;
 		counter_bias = new_alarm - old_alarm;
 		if (counter_active) {
@@ -144,11 +148,11 @@ void ptimer::write(uint32_t addr, const uint32_t data)
 	break;
 
 	default:
-		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
+		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, value);
 	}
 }
 
-template<bool log, bool enabled>
+template<bool log, bool enabled, bool is_be>
 uint32_t ptimer::read(uint32_t addr)
 {
 	if constexpr (!enabled) {
@@ -197,6 +201,9 @@ uint32_t ptimer::read(uint32_t addr)
 		nxbx_fatal("Unhandled read at address 0x%" PRIX32, addr);
 	}
 
+	if constexpr (is_be) {
+		value = util::byteswap(value);
+	}
 	if constexpr (log) {
 		log_io_read();
 	}
@@ -205,15 +212,15 @@ uint32_t ptimer::read(uint32_t addr)
 }
 
 template<bool is_write>
-auto ptimer::get_io_func(bool log, bool enabled)
+auto ptimer::get_io_func(bool log, bool enabled, bool is_be)
 {
 	if constexpr (is_write) {
 		if (enabled) {
 			if (log) {
-				return cpu_write<ptimer, uint32_t, &ptimer::write<true>>;
+				return is_be ? cpu_write<ptimer, uint32_t, &ptimer::write<true, true, true>> : cpu_write<ptimer, uint32_t, &ptimer::write<true>>;
 			}
 			else {
-				return cpu_write<ptimer, uint32_t, &ptimer::write<false>>;
+				return is_be ? cpu_write<ptimer, uint32_t, &ptimer::write<false, true, true>> : cpu_write<ptimer, uint32_t, &ptimer::write<false>>;
 			}
 		}
 		else {
@@ -223,10 +230,10 @@ auto ptimer::get_io_func(bool log, bool enabled)
 	else {
 		if (enabled) {
 			if (log) {
-				return cpu_read<ptimer, uint32_t, &ptimer::read<true>>;
+				return is_be ? cpu_read<ptimer, uint32_t, &ptimer::read<true, true, true>> : cpu_read<ptimer, uint32_t, &ptimer::read<true>>;
 			}
 			else {
-				return cpu_read<ptimer, uint32_t, &ptimer::read<false>>;
+				return is_be ? cpu_read<ptimer, uint32_t, &ptimer::read<false, true, true>> : cpu_read<ptimer, uint32_t, &ptimer::read<false>>;
 			}
 		}
 		else {
@@ -240,10 +247,11 @@ ptimer::update_io(bool is_update)
 {
 	bool log = module_enabled();
 	bool enabled = m_machine->get<pmc>().engine_enabled & NV_PMC_ENABLE_PTIMER;
+	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK;
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PTIMER_BASE, NV_PTIMER_SIZE, false,
 		{
-			.fnr32 = get_io_func<false>(log, enabled),
-			.fnw32 = get_io_func<true>(log, enabled)
+			.fnr32 = get_io_func<false>(log, enabled, is_be),
+			.fnw32 = get_io_func<true>(log, enabled, is_be)
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update mmio region");

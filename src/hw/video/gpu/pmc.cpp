@@ -12,15 +12,6 @@
 
 #define NV_PMC_BOOT_0 (NV2A_REGISTER_BASE + 0x00000000)
 #define NV_PMC_BOOT_0_ID_NV2A_A3_DEVID0 0x02A000A3
-#define NV_PMC_BOOT_1 (NV2A_REGISTER_BASE + 0x00000004)
-#define NV_PMC_BOOT_1_ENDIAN00_LITTLE 0x00000000
-#define NV_PMC_BOOT_1_ENDIAN00_BIG 0x00000001
-#define NV_PMC_BOOT_1_ENDIAN24_LITTLE 0x00000000
-#define NV_PMC_BOOT_1_ENDIAN24_BIG 0x00000001
-#define NV_PMC_BOOT_1_ENDIAN0_LITTLE_MASK (0x00000000 << 0)
-#define NV_PMC_BOOT_1_ENDIAN0_BIG_MASK (0x00000001 << 0)
-#define NV_PMC_BOOT_1_ENDIAN24_LITTLE_MASK (0x00000000 << 24)
-#define NV_PMC_BOOT_1_ENDIAN24_BIG_MASK (0x00000001 << 24)
 #define NV_PMC_INTR_0 (NV2A_REGISTER_BASE + 0x00000100)
 #define NV_PMC_INTR_0_PTIMER 20
 #define NV_PMC_INTR_0_PCRTC 24
@@ -34,11 +25,15 @@
 #define NV_PMC_INTR_EN_0_INTA_SOFTWARE 0x00000002
 
 
-template<bool log>
+template<bool log, bool is_be>
 void pmc::write(uint32_t addr, const uint32_t data)
 {
+	uint32_t value = data;
 	if constexpr (log) {
 		log_io_write();
+	}
+	if constexpr (is_be) {
+		value = util::byteswap(value);
 	}
 
 	switch (addr)
@@ -48,47 +43,54 @@ void pmc::write(uint32_t addr, const uint32_t data)
 		break;
 
 	case NV_PMC_BOOT_1: {
-		// This register switches the endianness of all accesses done through BAR0 and BAR2/3 (when present)
-		uint32_t mask = NV_PMC_BOOT_1_ENDIAN0_LITTLE_MASK;
-		if (data & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK) {
-			mask = NV_PMC_BOOT_1_ENDIAN0_BIG_MASK;
-			nxbx_fatal("NV_PMC_BOOT_1: big endian switch not implemented");
-			break;
+		uint32_t old_state = endianness;
+		uint32_t new_endianness = (value ^ NV_PMC_BOOT_1_ENDIAN24_BIG_MASK) & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK;
+		endianness = (new_endianness | (new_endianness >> 24));
+		if ((old_state ^ endianness) & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK) {
+			update_io();
+			m_machine->get<pbus>().update_io();
+			m_machine->get<pramdac>().update_io();
+			m_machine->get<pramin>().update_io();
+			m_machine->get<pfifo>().update_io();
+			m_machine->get<ptimer>().update_io();
+			m_machine->get<pfb>().update_io();
+			m_machine->get<pcrtc>().update_io();
+			m_machine->get<pvideo>().update_io();
+			mem_init_region_io(m_machine->get<cpu_t *>(), 0, 0, true, {}, m_machine->get<cpu_t *>(), true, 3); // trigger the update in lib86cpu too
 		}
-		endianness = ((data & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK) | mask);
 	}
 	break;
 
 	case NV_PMC_INTR_0:
 		// Only NV_PMC_INTR_0_SOFTWARE is writable, the other bits are read-only
-		int_status = (int_status & ~NV_PMC_INTR_0_SOFTWARE_MASK) | (data & NV_PMC_INTR_0_SOFTWARE_MASK);
+		int_status = (int_status & ~NV_PMC_INTR_0_SOFTWARE_MASK) | (value & NV_PMC_INTR_0_SOFTWARE_MASK);
 		update_irq();
 		break;
 
 	case NV_PMC_INTR_EN_0:
-		int_enabled = data;
+		int_enabled = value;
 		update_irq();
 		break;
 
 	case NV_PMC_ENABLE: {
 		bool has_int_state_changed = false;
 		uint32_t old_state = engine_enabled;
-		engine_enabled = data;
-		if ((data & NV_PMC_ENABLE_PFIFO) == 0) {
+		engine_enabled = value;
+		if ((value & NV_PMC_ENABLE_PFIFO) == 0) {
 			m_machine->get<pfifo>().reset();
 		}
-		if ((data & NV_PMC_ENABLE_PTIMER) == 0) {
+		if ((value & NV_PMC_ENABLE_PTIMER) == 0) {
 			m_machine->get<ptimer>().reset();
 			has_int_state_changed = true;
 		}
-		if ((data & NV_PMC_ENABLE_PFB) == 0) {
+		if ((value & NV_PMC_ENABLE_PFB) == 0) {
 			m_machine->get<pfb>().reset();
 		}
-		if ((data & NV_PMC_ENABLE_PCRTC) == 0) {
+		if ((value & NV_PMC_ENABLE_PCRTC) == 0) {
 			m_machine->get<pcrtc>().reset();
 			has_int_state_changed = true;
 		}
-		if ((data & NV_PMC_ENABLE_PVIDEO) == 0) {
+		if ((value & NV_PMC_ENABLE_PVIDEO) == 0) {
 			m_machine->get<pvideo>().reset();
 		}
 		if ((old_state ^ engine_enabled) & NV_PMC_ENABLE_MASK) {
@@ -106,11 +108,11 @@ void pmc::write(uint32_t addr, const uint32_t data)
 	break;
 
 	default:
-		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
+		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, value);
 	}
 }
 
-template<bool log>
+template<bool log, bool is_be>
 uint32_t pmc::read(uint32_t addr)
 {
 	uint32_t value = 0;
@@ -143,6 +145,9 @@ uint32_t pmc::read(uint32_t addr)
 		nxbx_fatal("Unhandled %s read at address 0x%" PRIX32, addr);
 	}
 
+	if constexpr (is_be) {
+		value = util::byteswap(value);
+	}
 	if constexpr (log) {
 		log_io_read();
 	}
@@ -196,14 +201,36 @@ pmc::update_irq()
 	}
 }
 
+template<bool is_write>
+auto pmc::get_io_func(bool log, bool is_be)
+{
+	if constexpr (is_write) {
+		if (log) {
+			return is_be ? cpu_write<pmc, uint32_t, &pmc::write<true, true>> : cpu_write<pmc, uint32_t, &pmc::write<true>>;
+		}
+		else {
+			return is_be ? cpu_write<pmc, uint32_t, &pmc::write<false, true>> : cpu_write<pmc, uint32_t, &pmc::write<false>>;
+		}
+	}
+	else {
+		if (log) {
+			return is_be ? cpu_read<pmc, uint32_t, &pmc::read<true, true>> : cpu_read<pmc, uint32_t, &pmc::read<true>>;
+		}
+		else {
+			return is_be ? cpu_read<pmc, uint32_t, &pmc::read<false, true>> : cpu_read<pmc, uint32_t, &pmc::read<false>>;
+		}
+	}
+}
+
 bool
 pmc::update_io(bool is_update)
 {
 	bool log = module_enabled();
+	bool is_be = endianness & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK;
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PMC_BASE, NV_PMC_SIZE, false,
 		{
-			.fnr32 = log ? cpu_read<pmc, uint32_t, &pmc::read<true>> : cpu_read<pmc, uint32_t, &pmc::read<false>>,
-			.fnw32 = log ? cpu_write<pmc, uint32_t, &pmc::write<true>> : cpu_write<pmc, uint32_t, &pmc::write<false>>
+			.fnr32 = get_io_func<false>(log, is_be),
+			.fnw32 = get_io_func<true>(log, is_be)
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update mmio region");

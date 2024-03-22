@@ -23,11 +23,15 @@
 #define NV_PVIDEO_DEBUG_10 (NV2A_REGISTER_BASE + 0x000080A8)
 
 
-template<bool log, bool enabled>
+template<bool log, bool enabled, bool is_be>
 void pvideo::write(uint32_t addr, const uint32_t data)
 {
 	if constexpr (!enabled) {
 		return;
+	}
+	uint32_t value = data;
+	if constexpr (is_be) {
+		value = util::byteswap(value);
 	}
 	if constexpr (log) {
 		log_io_write();
@@ -46,15 +50,15 @@ void pvideo::write(uint32_t addr, const uint32_t data)
 	case NV_PVIDEO_DEBUG_8:
 	case NV_PVIDEO_DEBUG_9:
 	case NV_PVIDEO_DEBUG_10:
-		debug[(addr - NV_PVIDEO_DEBUG_0) >> 2] = data;
+		debug[(addr - NV_PVIDEO_DEBUG_0) >> 2] = value;
 		break;
 
 	default:
-		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
+		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, value);
 	}
 }
 
-template<bool log, bool enabled>
+template<bool log, bool enabled, bool is_be>
 uint32_t pvideo::read(uint32_t addr)
 {
 	if constexpr (!enabled) {
@@ -83,6 +87,9 @@ uint32_t pvideo::read(uint32_t addr)
 		nxbx_fatal("Unhandled read at address 0x%" PRIX32, addr);
 	}
 
+	if constexpr (is_be) {
+		value = util::byteswap(value);
+	}
 	if constexpr (log) {
 		log_io_read();
 	}
@@ -91,15 +98,15 @@ uint32_t pvideo::read(uint32_t addr)
 }
 
 template<bool is_write>
-auto pvideo::get_io_func(bool log, bool enabled)
+auto pvideo::get_io_func(bool log, bool enabled, bool is_be)
 {
 	if constexpr (is_write) {
 		if (enabled) {
 			if (log) {
-				return cpu_write<pvideo, uint32_t, &pvideo::write<true>>;
+				return is_be ? cpu_write<pvideo, uint32_t, &pvideo::write<true, true, true>> : cpu_write<pvideo, uint32_t, &pvideo::write<true>>;
 			}
 			else {
-				return cpu_write<pvideo, uint32_t, &pvideo::write<false>>;
+				return is_be ? cpu_write<pvideo, uint32_t, &pvideo::write<false, true, true>> : cpu_write<pvideo, uint32_t, &pvideo::write<false>>;
 			}
 		}
 		else {
@@ -109,10 +116,10 @@ auto pvideo::get_io_func(bool log, bool enabled)
 	else {
 		if (enabled) {
 			if (log) {
-				return cpu_read<pvideo, uint32_t, &pvideo::read<true>>;
+				return is_be ? cpu_read<pvideo, uint32_t, &pvideo::read<true, true, true>> : cpu_read<pvideo, uint32_t, &pvideo::read<true>>;
 			}
 			else {
-				return cpu_read<pvideo, uint32_t, &pvideo::read<false>>;
+				return is_be ? cpu_read<pvideo, uint32_t, &pvideo::read<false, true, true>> : cpu_read<pvideo, uint32_t, &pvideo::read<false>>;
 			}
 		}
 		else {
@@ -126,10 +133,11 @@ pvideo::update_io(bool is_update)
 {
 	bool log = module_enabled();
 	bool enabled = m_machine->get<pmc>().engine_enabled & NV_PMC_ENABLE_PVIDEO;
+	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK;
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PVIDEO_BASE, NV_PVIDEO_SIZE, false,
 		{
-			.fnr32 = get_io_func<false>(log, enabled),
-			.fnw32 = get_io_func<true>(log, enabled)
+			.fnr32 = get_io_func<false>(log, enabled, is_be),
+			.fnw32 = get_io_func<true>(log, enabled, is_be)
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update mmio region");

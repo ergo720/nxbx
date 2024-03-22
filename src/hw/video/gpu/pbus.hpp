@@ -15,17 +15,19 @@ public:
 	bool init();
 	void reset();
 	void update_io() { update_io(true); }
-	template<bool log = false>
+	template<bool log = false, bool is_be = false>
 	uint32_t read(uint32_t addr);
-	template<bool log = false>
+	template<bool log = false, bool is_be = false>
 	void write(uint32_t addr, const uint32_t data);
-	template<bool log = false>
+	template<bool log = false, bool is_be = false>
 	uint32_t pci_read(uint32_t addr);
-	template<bool log = false>
+	template<bool log = false, bool is_be = false>
 	void pci_write(uint32_t addr, const uint32_t data);
 
 private:
 	bool update_io(bool is_update);
+	template<bool is_write, bool is_pci>
+	auto get_io_func(bool log, bool is_be);
 	void pci_init();
 
 	machine *const m_machine;

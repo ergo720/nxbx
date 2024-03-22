@@ -49,9 +49,14 @@ pit::start_timer(uint8_t channel)
 	cpu_set_timeout(m_machine->get<cpu_t *>(), m_machine->get<cpu>().check_periodic_events(m_chan[channel].last_irq_time));
 }
 
-void
-pit::write_handler(uint32_t addr, const uint8_t data)
+template<bool log>
+void pit::write(uint32_t addr, const uint8_t data)
 {
+	if constexpr (log) {
+		uint8_t value = data;
+		log_io_write();
+	}
+
 	uint8_t channel = addr & 3;
 
 	switch (channel)
@@ -122,13 +127,6 @@ pit::write_handler(uint32_t addr, const uint8_t data)
 }
 
 void
-pit::write_handler_logger(uint32_t addr, const uint8_t data)
-{
-	log_io_write();
-	write_handler(addr, data);
-}
-
-void
 pit::channel_reset(uint8_t channel)
 {
 	m_chan[channel].counter = 0;
@@ -143,7 +141,7 @@ pit::update_io(bool is_update)
 	bool log = module_enabled();
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x40, 4, true,
 		{
-		.fnw8 = log ? cpu_write<pit, uint8_t, &pit::write_handler_logger> : cpu_write<pit, uint8_t, &pit::write_handler>
+		.fnw8 = log ? cpu_write<pit, uint8_t, &pit::write<true>> : cpu_write<pit, uint8_t, &pit::write<false>>
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update io ports");

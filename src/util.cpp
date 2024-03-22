@@ -25,6 +25,13 @@ namespace util {
 #endif
 	}
 
+	uint32_t
+	byteswap(uint32_t value)
+	{
+		// NOTE: this can be removed with std::byteswap of C++23
+		return (value << 24) | ((value << 8) & 0x00FF0000) | ((value >> 8) & 0x0000FF00) | (value >> 24);
+	}
+
 	char
 	xbox_toupper(char c)
 	{

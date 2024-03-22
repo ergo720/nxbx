@@ -235,6 +235,7 @@ template<bool log>
 void pic::write(uint32_t addr, const uint8_t data)
 {
 	if constexpr (log) {
+		uint8_t value = data;
 		log_io_write();
 	}
 
@@ -287,6 +288,7 @@ template<bool log>
 void pic::write_elcr(uint32_t addr, const uint8_t data)
 {
 	if constexpr (log) {
+		uint8_t value = data;
 		log_io_write();
 	}
 

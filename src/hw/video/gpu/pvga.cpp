@@ -35,21 +35,23 @@ uint8_t pvga::io_read8(uint32_t addr)
 template<bool log>
 void pvga::io_write8(uint32_t addr, const uint8_t data)
 {
+	uint8_t value = data;
 	if constexpr (log) {
 		log_io_write();
 	}
 
-	m_machine->get<vga>().io_write8(addr, data);
+	m_machine->get<vga>().io_write8(addr, value);
 }
 
 template<bool log>
 void pvga::io_write16(uint32_t addr, const uint16_t data)
 {
+	uint16_t value = data;
 	if constexpr (log) {
 		log_io_write();
 	}
 
-	m_machine->get<vga>().io_write16(addr, data);
+	m_machine->get<vga>().io_write16(addr, value);
 }
 
 template<bool log>
@@ -79,21 +81,23 @@ uint16_t pvga::mem_read16(uint32_t addr)
 template<bool log>
 void pvga::mem_write8(uint32_t addr, const uint8_t data)
 {
+	uint8_t value = data;
 	if constexpr (log) {
 		log_io_write();
 	}
 
-	m_machine->get<vga>().mem_write8(addr, data);
+	m_machine->get<vga>().mem_write8(addr, value);
 }
 
 template<bool log>
 void pvga::mem_write16(uint32_t addr, const uint16_t data)
 {
+	uint16_t value = data;
 	if constexpr (log) {
 		log_io_write();
 	}
 
-	m_machine->get<vga>().mem_write16(addr, data);
+	m_machine->get<vga>().mem_write16(addr, value);
 }
 
 bool

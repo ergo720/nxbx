@@ -16,15 +16,17 @@ public:
 	bool init();
 	void reset();
 	void update_io() { update_io(true); }
-	template<bool log = false>
+	template<bool log = false, bool is_be = false>
 	uint8_t read8(uint32_t addr);
-	template<bool log = false>
+	template<bool log = false, bool is_be = false>
 	uint32_t read32(uint32_t addr);
-	template<bool log = false>
+	template<bool log = false, bool is_be = false>
 	void write32(uint32_t addr, const uint32_t data);
 
 private:
 	bool update_io(bool is_update);
+	template<bool is_write, typename T>
+	auto get_io_func(bool log, bool is_be);
 
 	friend class ptimer;
 	machine *const m_machine;
