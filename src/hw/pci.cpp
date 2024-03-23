@@ -14,7 +14,6 @@ template<bool log>
 void pci::write8(uint32_t addr, const uint8_t data)
 {
 	if constexpr (log) {
-		uint8_t value = data;
 		log_io_write();
 	}
 
@@ -135,7 +134,6 @@ template<bool log>
 void pci::write16(uint32_t addr, const uint16_t data)
 {
 	if constexpr (log) {
-		uint16_t value = data;
 		log_io_write();
 	}
 
@@ -147,7 +145,6 @@ template<bool log>
 void pci::write32(uint32_t addr, const uint32_t data)
 {
 	if constexpr (log) {
-		uint32_t value = data;
 		log_io_write();
 	}
 

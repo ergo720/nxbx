@@ -16,11 +16,11 @@ public:
 	bool init();
 	void reset();
 	void update_io() { update_io(true); }
-	template<bool log = false, bool is_be = false>
+	template<bool log = false>
 	uint8_t read8(uint32_t addr);
-	template<bool log = false, bool is_be = false>
+	template<bool log = false>
 	uint32_t read32(uint32_t addr);
-	template<bool log = false, bool is_be = false>
+	template<bool log = false>
 	void write32(uint32_t addr, const uint32_t data);
 
 private:

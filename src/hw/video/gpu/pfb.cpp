@@ -16,15 +16,11 @@
 #define NV_PFB_NVM (NV2A_REGISTER_BASE + 0x00100214)
 
 
-template<bool log, bool enabled, bool is_be>
+template<bool log, bool enabled>
 void pfb::write(uint32_t addr, const uint32_t data)
 {
 	if constexpr (!enabled) {
 		return;
-	}
-	uint32_t value = data;
-	if constexpr (is_be) {
-		value = util::byteswap(value);
 	}
 	if constexpr (log) {
 		log_io_write();
@@ -33,11 +29,11 @@ void pfb::write(uint32_t addr, const uint32_t data)
 	switch (addr)
 	{
 	case NV_PFB_CFG0:
-		cfg0 = value;
+		cfg0 = data;
 		break;
 
 	case NV_PFB_CFG1:
-		cfg1 = value;
+		cfg1 = data;
 		break;
 
 	case NV_PFB_CSTATUS:
@@ -45,15 +41,15 @@ void pfb::write(uint32_t addr, const uint32_t data)
 		break;
 
 	case NV_PFB_NVM:
-		nvm = value;
+		nvm = data;
 		break;
 
 	default:
-		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, value);
+		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
 	}
 }
 
-template<bool log, bool enabled, bool is_be>
+template<bool log, bool enabled>
 uint32_t pfb::read(uint32_t addr)
 {
 	if constexpr (!enabled) {
@@ -84,9 +80,6 @@ uint32_t pfb::read(uint32_t addr)
 		nxbx_fatal("Unhandled read at address 0x%" PRIX32, addr);
 	}
 
-	if constexpr (is_be) {
-		value = util::byteswap(value);
-	}
 	if constexpr (log) {
 		log_io_read();
 	}
@@ -100,27 +93,27 @@ auto pfb::get_io_func(bool log, bool enabled, bool is_be)
 	if constexpr (is_write) {
 		if (enabled) {
 			if (log) {
-				return is_be ? cpu_write<pfb, uint32_t, &pfb::write<true, true, true>> : cpu_write<pfb, uint32_t, &pfb::write<true>>;
+				return is_be ? nv2a_write<pfb, uint32_t, &pfb::write<true, true>, true> : nv2a_write<pfb, uint32_t, &pfb::write<true>>;
 			}
 			else {
-				return is_be ? cpu_write<pfb, uint32_t, &pfb::write<false, true, true>> : cpu_write<pfb, uint32_t, &pfb::write<false>>;
+				return is_be ? nv2a_write<pfb, uint32_t, &pfb::write<false, true>, true> : nv2a_write<pfb, uint32_t, &pfb::write<false>>;
 			}
 		}
 		else {
-			return cpu_write<pfb, uint32_t, &pfb::write<false, false>>;
+			return nv2a_write<pfb, uint32_t, &pfb::write<false, false>>;
 		}
 	}
 	else {
 		if (enabled) {
 			if (log) {
-				return is_be ? cpu_read<pfb, uint32_t, &pfb::read<true, true, true>> : cpu_read<pfb, uint32_t, &pfb::read<true>>;
+				return is_be ? nv2a_read<pfb, uint32_t, &pfb::read<true, true>, true> : nv2a_read<pfb, uint32_t, &pfb::read<true>>;
 			}
 			else {
-				return is_be ? cpu_read<pfb, uint32_t, &pfb::read<false, true, true>> : cpu_read<pfb, uint32_t, &pfb::read<false>>;
+				return is_be ? nv2a_read<pfb, uint32_t, &pfb::read<false, true>, true> : nv2a_read<pfb, uint32_t, &pfb::read<false>>;
 			}
 		}
 		else {
-			return cpu_read<pfb, uint32_t, &pfb::read<false, false>>;
+			return nv2a_read<pfb, uint32_t, &pfb::read<false, false>>;
 		}
 	}
 }

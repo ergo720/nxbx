@@ -14,7 +14,7 @@
 #define logger_en(lv, msg, ...) do { logger<log_lv::lv, log_module::MODULE_NAME, true>(msg __VA_OPT__(,) __VA_ARGS__); } while(0)
 #define logger_nxbx(lv, msg, ...) do { logger<log_lv::lv, log_module::nxbx, true>(msg __VA_OPT__(,) __VA_ARGS__); } while(0)
 #define log_io_read() do { logger<log_lv::debug, log_module::MODULE_NAME, false>("Read at address 0x%08X of value 0x%08X", addr, value); } while(0)
-#define log_io_write() do { logger<log_lv::debug,log_module::MODULE_NAME, false>("Write at address 0x%08X of value 0x%08X", addr, value); } while(0)
+#define log_io_write() do { logger<log_lv::debug,log_module::MODULE_NAME, false>("Write at address 0x%08X of value 0x%08X", addr, data); } while(0)
 #define module_enabled() check_if_enabled<log_module::MODULE_NAME>()
 
 #define NUM_OF_LOG_MODULES32 static_cast<std::underlying_type_t<log_module>>(log_module::max) / 32 + 1

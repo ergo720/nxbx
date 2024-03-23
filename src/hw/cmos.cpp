@@ -135,7 +135,6 @@ template<bool log>
 void cmos::write(uint32_t addr, const uint8_t data)
 {
 	if constexpr (log) {
-		uint8_t value = data;
 		log_io_write();
 	}
 

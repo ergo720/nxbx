@@ -25,15 +25,11 @@
 #define NV_PMC_INTR_EN_0_INTA_SOFTWARE 0x00000002
 
 
-template<bool log, bool is_be>
+template<bool log>
 void pmc::write(uint32_t addr, const uint32_t data)
 {
-	uint32_t value = data;
 	if constexpr (log) {
 		log_io_write();
-	}
-	if constexpr (is_be) {
-		value = util::byteswap(value);
 	}
 
 	switch (addr)
@@ -44,7 +40,7 @@ void pmc::write(uint32_t addr, const uint32_t data)
 
 	case NV_PMC_BOOT_1: {
 		uint32_t old_state = endianness;
-		uint32_t new_endianness = (value ^ NV_PMC_BOOT_1_ENDIAN24_BIG_MASK) & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK;
+		uint32_t new_endianness = (data ^ NV_PMC_BOOT_1_ENDIAN24_BIG_MASK) & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK;
 		endianness = (new_endianness | (new_endianness >> 24));
 		if ((old_state ^ endianness) & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK) {
 			update_io();
@@ -63,34 +59,34 @@ void pmc::write(uint32_t addr, const uint32_t data)
 
 	case NV_PMC_INTR_0:
 		// Only NV_PMC_INTR_0_SOFTWARE is writable, the other bits are read-only
-		int_status = (int_status & ~NV_PMC_INTR_0_SOFTWARE_MASK) | (value & NV_PMC_INTR_0_SOFTWARE_MASK);
+		int_status = (int_status & ~NV_PMC_INTR_0_SOFTWARE_MASK) | (data & NV_PMC_INTR_0_SOFTWARE_MASK);
 		update_irq();
 		break;
 
 	case NV_PMC_INTR_EN_0:
-		int_enabled = value;
+		int_enabled = data;
 		update_irq();
 		break;
 
 	case NV_PMC_ENABLE: {
 		bool has_int_state_changed = false;
 		uint32_t old_state = engine_enabled;
-		engine_enabled = value;
-		if ((value & NV_PMC_ENABLE_PFIFO) == 0) {
+		engine_enabled = data;
+		if ((data & NV_PMC_ENABLE_PFIFO) == 0) {
 			m_machine->get<pfifo>().reset();
 		}
-		if ((value & NV_PMC_ENABLE_PTIMER) == 0) {
+		if ((data & NV_PMC_ENABLE_PTIMER) == 0) {
 			m_machine->get<ptimer>().reset();
 			has_int_state_changed = true;
 		}
-		if ((value & NV_PMC_ENABLE_PFB) == 0) {
+		if ((data & NV_PMC_ENABLE_PFB) == 0) {
 			m_machine->get<pfb>().reset();
 		}
-		if ((value & NV_PMC_ENABLE_PCRTC) == 0) {
+		if ((data & NV_PMC_ENABLE_PCRTC) == 0) {
 			m_machine->get<pcrtc>().reset();
 			has_int_state_changed = true;
 		}
-		if ((value & NV_PMC_ENABLE_PVIDEO) == 0) {
+		if ((data & NV_PMC_ENABLE_PVIDEO) == 0) {
 			m_machine->get<pvideo>().reset();
 		}
 		if ((old_state ^ engine_enabled) & NV_PMC_ENABLE_MASK) {
@@ -108,11 +104,11 @@ void pmc::write(uint32_t addr, const uint32_t data)
 	break;
 
 	default:
-		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, value);
+		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
 	}
 }
 
-template<bool log, bool is_be>
+template<bool log>
 uint32_t pmc::read(uint32_t addr)
 {
 	uint32_t value = 0;
@@ -145,9 +141,6 @@ uint32_t pmc::read(uint32_t addr)
 		nxbx_fatal("Unhandled %s read at address 0x%" PRIX32, addr);
 	}
 
-	if constexpr (is_be) {
-		value = util::byteswap(value);
-	}
 	if constexpr (log) {
 		log_io_read();
 	}
@@ -206,18 +199,18 @@ auto pmc::get_io_func(bool log, bool is_be)
 {
 	if constexpr (is_write) {
 		if (log) {
-			return is_be ? cpu_write<pmc, uint32_t, &pmc::write<true, true>> : cpu_write<pmc, uint32_t, &pmc::write<true>>;
+			return is_be ? nv2a_write<pmc, uint32_t, &pmc::write<true>, true> : nv2a_write<pmc, uint32_t, &pmc::write<true>>;
 		}
 		else {
-			return is_be ? cpu_write<pmc, uint32_t, &pmc::write<false, true>> : cpu_write<pmc, uint32_t, &pmc::write<false>>;
+			return is_be ? nv2a_write<pmc, uint32_t, &pmc::write<false>, true> : nv2a_write<pmc, uint32_t, &pmc::write<false>>;
 		}
 	}
 	else {
 		if (log) {
-			return is_be ? cpu_read<pmc, uint32_t, &pmc::read<true, true>> : cpu_read<pmc, uint32_t, &pmc::read<true>>;
+			return is_be ? nv2a_read<pmc, uint32_t, &pmc::read<true>, true> : nv2a_read<pmc, uint32_t, &pmc::read<true>>;
 		}
 		else {
-			return is_be ? cpu_read<pmc, uint32_t, &pmc::read<false, true>> : cpu_read<pmc, uint32_t, &pmc::read<false>>;
+			return is_be ? nv2a_read<pmc, uint32_t, &pmc::read<false>, true> : nv2a_read<pmc, uint32_t, &pmc::read<false>>;
 		}
 	}
 }

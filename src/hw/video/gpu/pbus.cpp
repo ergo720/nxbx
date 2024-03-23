@@ -90,29 +90,25 @@ nv2a_pci_write(uint8_t *ptr, uint8_t addr, uint8_t data, void *opaque)
 	return 0; // pass-through the write
 }
 
-template<bool should_log, bool is_be>
+template<bool log>
 void pbus::write(uint32_t addr, const uint32_t data)
 {
-	uint32_t value = data;
-	if constexpr (is_be) {
-		value = util::byteswap(value);
-	}
-	if constexpr (should_log) {
+	if constexpr (log) {
 		log_io_write();
 	}
 
 	switch (addr)
 	{
 	case NV_PBUS_FBIO_RAM:
-		fbio_ram = value;
+		fbio_ram = data;
 		break;
 
 	default:
-		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, value);
+		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
 	}
 }
 
-template<bool should_log, bool is_be>
+template<bool log>
 uint32_t pbus::read(uint32_t addr)
 {
 	uint32_t value = 0;
@@ -127,41 +123,31 @@ uint32_t pbus::read(uint32_t addr)
 		nxbx_fatal("Unhandled read at address 0x%" PRIX32, addr);
 	}
 
-	if constexpr (is_be) {
-		value = util::byteswap(value);
-	}
-	if constexpr (should_log) {
+	if constexpr (log) {
 		log_io_read();
 	}
 
 	return value;
 }
 
-template<bool should_log, bool is_be>
+template<bool log>
 void pbus::pci_write(uint32_t addr, const uint32_t data)
 {
-	uint32_t value = data;
-	if constexpr (is_be) {
-		value = util::byteswap(value);
-	}
-	if constexpr (should_log) {
+	if constexpr (log) {
 		log_io_write();
 	}
 
 	uint32_t *pci_conf = (uint32_t *)m_pci_conf;
-	pci_conf[(addr - NV_PBUS_PCI_BASE) / 4] = value;
+	pci_conf[(addr - NV_PBUS_PCI_BASE) / 4] = data;
 }
 
-template<bool should_log, bool is_be>
+template<bool log>
 uint32_t pbus::pci_read(uint32_t addr)
 {
 	uint32_t *pci_conf = (uint32_t *)m_pci_conf;
 	uint32_t value = pci_conf[(addr - NV_PBUS_PCI_BASE) / 4];
 
-	if constexpr (is_be) {
-		value = util::byteswap(value);
-	}
-	if constexpr (should_log) {
+	if constexpr (log) {
 		log_io_read();
 	}
 
@@ -183,36 +169,36 @@ auto pbus::get_io_func(bool log, bool is_be)
 	if constexpr (is_pci) {
 		if constexpr (is_write) {
 			if (log) {
-				return is_be ? cpu_write<pbus, uint32_t, &pbus::pci_write<true, true>> : cpu_write<pbus, uint32_t, &pbus::pci_write<true>>;
+				return is_be ? nv2a_write<pbus, uint32_t, &pbus::pci_write<true>, true> : nv2a_write<pbus, uint32_t, &pbus::pci_write<true>>;
 			}
 			else {
-				return is_be ? cpu_write<pbus, uint32_t, &pbus::pci_write<false, true>> : cpu_write<pbus, uint32_t, &pbus::pci_write<false>>;
+				return is_be ? nv2a_write<pbus, uint32_t, &pbus::pci_write<false>, true> : nv2a_write<pbus, uint32_t, &pbus::pci_write<false>>;
 			}
 		}
 		else {
 			if (log) {
-				return is_be ? cpu_read<pbus, uint32_t, &pbus::pci_read<true, true>> : cpu_read<pbus, uint32_t, &pbus::pci_read<true>>;
+				return is_be ? nv2a_read<pbus, uint32_t, &pbus::pci_read<true>, true> : nv2a_read<pbus, uint32_t, &pbus::pci_read<true>>;
 			}
 			else {
-				return is_be ? cpu_read<pbus, uint32_t, &pbus::pci_read<false, true>> : cpu_read<pbus, uint32_t, &pbus::pci_read<false>>;
+				return is_be ? nv2a_read<pbus, uint32_t, &pbus::pci_read<false>, true> : nv2a_read<pbus, uint32_t, &pbus::pci_read<false>>;
 			}
 		}
 	}
 	else {
 		if constexpr (is_write) {
 			if (log) {
-				return is_be ? cpu_write<pbus, uint32_t, &pbus::write<true, true>> : cpu_write<pbus, uint32_t, &pbus::write<true>>;
+				return is_be ? nv2a_write<pbus, uint32_t, &pbus::write<true>, true> : nv2a_write<pbus, uint32_t, &pbus::write<true>>;
 			}
 			else {
-				return is_be ? cpu_write<pbus, uint32_t, &pbus::write<false, true>> : cpu_write<pbus, uint32_t, &pbus::write<false>>;
+				return is_be ? nv2a_write<pbus, uint32_t, &pbus::write<false>, true> : nv2a_write<pbus, uint32_t, &pbus::write<false>>;
 			}
 		}
 		else {
 			if (log) {
-				return is_be ? cpu_read<pbus, uint32_t, &pbus::read<true, true>> : cpu_read<pbus, uint32_t, &pbus::read<true>>;
+				return is_be ? nv2a_read<pbus, uint32_t, &pbus::read<true>, true> : nv2a_read<pbus, uint32_t, &pbus::read<true>>;
 			}
 			else {
-				return is_be ? cpu_read<pbus, uint32_t, &pbus::read<false, true>> : cpu_read<pbus, uint32_t, &pbus::read<false>>;
+				return is_be ? nv2a_read<pbus, uint32_t, &pbus::read<false>, true> : nv2a_read<pbus, uint32_t, &pbus::read<false>>;
 			}
 		}
 	}

@@ -14,9 +14,9 @@ public:
 	pramin(machine *machine) : m_machine(machine) {}
 	bool init();
 	void update_io() { update_io(true); }
-	template<typename T, bool log = false, bool is_be = false>
+	template<typename T, bool log = false>
 	T read(uint32_t addr);
-	template<typename T, bool log = false, bool is_be = false>
+	template<typename T, bool log = false>
 	void write(uint32_t addr, const T data);
 
 private:

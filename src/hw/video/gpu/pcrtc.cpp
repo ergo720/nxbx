@@ -17,15 +17,11 @@
 #define NV_PCRTC_UNKNOWN0 (NV2A_REGISTER_BASE + 0x00600804)
 
 
-template<bool log, bool enabled, bool is_be>
+template<bool log, bool enabled>
 void pcrtc::write(uint32_t addr, const uint32_t data)
 {
 	if constexpr (!enabled) {
 		return;
-	}
-	uint32_t value = data;
-	if constexpr (is_be) {
-		value = util::byteswap(value);
 	}
 	if constexpr (log) {
 		log_io_write();
@@ -34,29 +30,29 @@ void pcrtc::write(uint32_t addr, const uint32_t data)
 	switch (addr)
 	{
 	case NV_PCRTC_INTR_0:
-		int_status &= ~value;
+		int_status &= ~data;
 		m_machine->get<pmc>().update_irq();
 		break;
 
 	case NV_PCRTC_INTR_EN_0:
-		int_enabled = value;
+		int_enabled = data;
 		m_machine->get<pmc>().update_irq();
 		break;
 
 	case NV_PCRTC_START:
-		fb_addr = value & 0x7FFFFFC; // fb is 4 byte aligned
+		fb_addr = data & 0x7FFFFFC; // fb is 4 byte aligned
 		break;
 
 	case NV_PCRTC_UNKNOWN0:
-		unknown[0] = value;
+		unknown[0] = data;
 		break;
 
 	default:
-		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, value);
+		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
 	}
 }
 
-template<bool log, bool enabled, bool is_be>
+template<bool log, bool enabled>
 uint32_t pcrtc::read(uint32_t addr)
 {
 	if constexpr (!enabled) {
@@ -87,9 +83,6 @@ uint32_t pcrtc::read(uint32_t addr)
 		nxbx_fatal("Unhandled read at address 0x%" PRIX32, addr);
 	}
 
-	if constexpr (is_be) {
-		value = util::byteswap(value);
-	}
 	if constexpr (log) {
 		log_io_read();
 	}
@@ -103,27 +96,27 @@ auto pcrtc::get_io_func(bool log, bool enabled, bool is_be)
 	if constexpr (is_write) {
 		if (enabled) {
 			if (log) {
-				return is_be ? cpu_write<pcrtc, uint32_t, &pcrtc::write<true, true, true>> : cpu_write<pcrtc, uint32_t, &pcrtc::write<true>>;
+				return is_be ? nv2a_write<pcrtc, uint32_t, &pcrtc::write<true, true>, true> : nv2a_write<pcrtc, uint32_t, &pcrtc::write<true>>;
 			}
 			else {
-				return is_be ? cpu_write<pcrtc, uint32_t, &pcrtc::write<false, true, true>> : cpu_write<pcrtc, uint32_t, &pcrtc::write<false>>;
+				return is_be ? nv2a_write<pcrtc, uint32_t, &pcrtc::write<false, true>, true> : nv2a_write<pcrtc, uint32_t, &pcrtc::write<false>>;
 			}
 		}
 		else {
-			return cpu_write<pcrtc, uint32_t, &pcrtc::write<false, false>>;
+			return nv2a_write<pcrtc, uint32_t, &pcrtc::write<false, false>>;
 		}
 	}
 	else {
 		if (enabled) {
 			if (log) {
-				return is_be ? cpu_read<pcrtc, uint32_t, &pcrtc::read<true, true, true>> : cpu_read<pcrtc, uint32_t, &pcrtc::read<true>>;
+				return is_be ? nv2a_read<pcrtc, uint32_t, &pcrtc::read<true, true>, true> : nv2a_read<pcrtc, uint32_t, &pcrtc::read<true>>;
 			}
 			else {
-				return is_be ? cpu_read<pcrtc, uint32_t, &pcrtc::read<false, true, true>> : cpu_read<pcrtc, uint32_t, &pcrtc::read<false>>;
+				return is_be ? nv2a_read<pcrtc, uint32_t, &pcrtc::read<false, true>, true> : nv2a_read<pcrtc, uint32_t, &pcrtc::read<false>>;
 			}
 		}
 		else {
-			return cpu_read<pcrtc, uint32_t, &pcrtc::read<false, false>>;
+			return nv2a_read<pcrtc, uint32_t, &pcrtc::read<false, false>>;
 		}
 	}
 }

@@ -16,9 +16,9 @@ public:
 	bool init();
 	void reset();
 	void update_io() { update_io(true); }
-	template<bool log = false, bool enabled = true, bool is_be = false>
+	template<bool log = false, bool enabled = true>
 	uint32_t read(uint32_t addr);
-	template<bool log = false, bool enabled = true, bool is_be = false>
+	template<bool log = false, bool enabled = true>
 	void write(uint32_t addr, const uint32_t data);
 
 private:

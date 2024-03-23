@@ -15,15 +15,11 @@
 #define NV_PFIFO_RAMRO (NV2A_REGISTER_BASE + 0x00002218)
 
 
-template<bool log, bool enabled, bool is_be>
+template<bool log, bool enabled>
 void pfifo::write(uint32_t addr, const uint32_t data)
 {
 	if constexpr (!enabled) {
 		return;
-	}
-	uint32_t value = data;
-	if constexpr (is_be) {
-		value = util::byteswap(value);
 	}
 	if constexpr (log) {
 		log_io_write();
@@ -32,15 +28,15 @@ void pfifo::write(uint32_t addr, const uint32_t data)
 	switch (addr)
 	{
 	case NV_PFIFO_RAMHT:
-		ramht = value;
+		ramht = data;
 		break;
 
 	case NV_PFIFO_RAMFC:
-		ramfc = value;
+		ramfc = data;
 		break;
 
 	case NV_PFIFO_RAMRO:
-		ramro = value;
+		ramro = data;
 		break;
 
 	default:
@@ -48,7 +44,7 @@ void pfifo::write(uint32_t addr, const uint32_t data)
 	}
 }
 
-template<bool log, bool enabled, bool is_be>
+template<bool log, bool enabled>
 uint32_t pfifo::read(uint32_t addr)
 {
 	if constexpr (!enabled) {
@@ -75,9 +71,6 @@ uint32_t pfifo::read(uint32_t addr)
 		nxbx_fatal("Unhandled read at address 0x%" PRIX32, addr);
 	}
 
-	if constexpr (is_be) {
-		value = util::byteswap(value);
-	}
 	if constexpr (log) {
 		log_io_read();
 	}
@@ -91,27 +84,27 @@ auto pfifo::get_io_func(bool log, bool enabled, bool is_be)
 	if constexpr (is_write) {
 		if (enabled) {
 			if (log) {
-				return is_be ? cpu_write<pfifo, uint32_t, &pfifo::write<true, true, true>> : cpu_write<pfifo, uint32_t, &pfifo::write<true>>;
+				return is_be ? nv2a_write<pfifo, uint32_t, &pfifo::write<true, true>, true> : nv2a_write<pfifo, uint32_t, &pfifo::write<true>>;
 			}
 			else {
-				return is_be ? cpu_write<pfifo, uint32_t, &pfifo::write<false, true, true>> : cpu_write<pfifo, uint32_t, &pfifo::write<false>>;
+				return is_be ? nv2a_write<pfifo, uint32_t, &pfifo::write<false, true>, true> : nv2a_write<pfifo, uint32_t, &pfifo::write<false>>;
 			}
 		}
 		else {
-			return cpu_write<pfifo, uint32_t, &pfifo::write<false, false>>;
+			return nv2a_write<pfifo, uint32_t, &pfifo::write<false, false>>;
 		}
 	}
 	else {
 		if (enabled) {
 			if (log) {
-				return is_be ? cpu_read<pfifo, uint32_t, &pfifo::read<true, true, true>> : cpu_read<pfifo, uint32_t, &pfifo::read<true>>;
+				return is_be ? nv2a_read<pfifo, uint32_t, &pfifo::read<true, true>, true> : nv2a_read<pfifo, uint32_t, &pfifo::read<true>>;
 			}
 			else {
-				return is_be ? cpu_read<pfifo, uint32_t, &pfifo::read<false, true, true>> : cpu_read<pfifo, uint32_t, &pfifo::read<false>>;
+				return is_be ? nv2a_read<pfifo, uint32_t, &pfifo::read<false, true>, true> : nv2a_read<pfifo, uint32_t, &pfifo::read<false>>;
 			}
 		}
 		else {
-			return cpu_read<pfifo, uint32_t, &pfifo::read<false, false>>;
+			return nv2a_read<pfifo, uint32_t, &pfifo::read<false, false>>;
 		}
 	}
 }

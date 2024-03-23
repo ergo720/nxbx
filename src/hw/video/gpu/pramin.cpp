@@ -13,15 +13,12 @@
 #define RAMIN_UNIT_SIZE 64
 
 
-template<typename T, bool log, bool is_be>
+template<typename T, bool log>
 T pramin::read(uint32_t addr)
 {
 	uint8_t *ram_ptr = m_ram + ramin_to_ram_addr(addr);
 	T value = *(T *)ram_ptr;
 
-	if constexpr (is_be) {
-		value = (T)util::byteswap(value);
-	}
 	if constexpr (log) {
 		log_io_read();
 	}
@@ -29,19 +26,15 @@ T pramin::read(uint32_t addr)
 	return value;
 }
 
-template<typename T, bool log, bool is_be>
+template<typename T, bool log>
 void pramin::write(uint32_t addr, const T data)
 {
-	T value = data;
-	if constexpr (is_be) {
-		value = (T)util::byteswap(value);
-	}
 	if constexpr (log) {
 		log_io_write();
 	}
 
 	uint8_t *ram_ptr = m_ram + ramin_to_ram_addr(addr);
-	*(T *)ram_ptr = value;
+	*(T *)ram_ptr = data;
 }
 
 uint32_t
@@ -56,18 +49,18 @@ auto pramin::get_io_func(bool log, bool is_be)
 {
 	if constexpr (is_write) {
 		if (log) {
-			return is_be ? cpu_write<pramin, T, &pramin::write<T, true, true>> : cpu_write<pramin, T, &pramin::write<T, true>>;
+			return is_be ? nv2a_write<pramin, T, &pramin::write<T, true>, true> : nv2a_write<pramin, T, &pramin::write<T, true>>;
 		}
 		else {
-			return is_be ? cpu_write<pramin, T, &pramin::write<T, false, true>> : cpu_write<pramin, T, &pramin::write<T, false>>;
+			return is_be ? nv2a_write<pramin, T, &pramin::write<T, false>, true> : nv2a_write<pramin, T, &pramin::write<T, false>>;
 		}
 	}
 	else {
 		if (log) {
-			return is_be ? cpu_read<pramin, T, &pramin::read<T, true, true>> : cpu_read<pramin, T, &pramin::read<T, true>>;
+			return is_be ? nv2a_read<pramin, T, &pramin::read<T, true>, true> : nv2a_read<pramin, T, &pramin::read<T, true>>;
 		}
 		else {
-			return is_be ? cpu_read<pramin, T, &pramin::read<T, false, true>> : cpu_read<pramin, T, &pramin::read<T, false>>;
+			return is_be ? nv2a_read<pramin, T, &pramin::read<T, false>, true> : nv2a_read<pramin, T, &pramin::read<T, false>>;
 		}
 	}
 }

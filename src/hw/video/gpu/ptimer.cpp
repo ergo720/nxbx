@@ -62,15 +62,11 @@ ptimer::get_next_alarm_time(uint64_t now)
 	return std::numeric_limits<uint64_t>::max();
 }
 
-template<bool log, bool enabled, bool is_be>
+template<bool log, bool enabled>
 void ptimer::write(uint32_t addr, const uint32_t data)
 {
 	if constexpr (!enabled) {
 		return;
-	}
-	uint32_t value = data;
-	if constexpr (is_be) {
-		value = util::byteswap(value);
 	}
 	if constexpr (log) {
 		log_io_write();
@@ -79,17 +75,17 @@ void ptimer::write(uint32_t addr, const uint32_t data)
 	switch (addr)
 	{
 	case NV_PTIMER_INTR_0:
-		int_status &= ~value;
+		int_status &= ~data;
 		m_machine->get<pmc>().update_irq();
 		break;
 
 	case NV_PTIMER_INTR_EN_0:
-		int_enabled = value;
+		int_enabled = data;
 		m_machine->get<pmc>().update_irq();
 		break;
 
 	case NV_PTIMER_NUMERATOR:
-		divider = value & NV_PTIMER_NUMERATOR_MASK;
+		divider = data & NV_PTIMER_NUMERATOR_MASK;
 		if (counter_active) {
 			counter_period = counter_to_us();
 			cpu_set_timeout(m_machine->get<cpu_t *>(), m_machine->get<cpu>().check_periodic_events(timer::get_now()));
@@ -97,7 +93,7 @@ void ptimer::write(uint32_t addr, const uint32_t data)
 		break;
 
 	case NV_PTIMER_DENOMINATOR: {
-		multiplier = value & NV_PTIMER_DENOMINATOR_MASK;
+		multiplier = data & NV_PTIMER_DENOMINATOR_MASK;
 		if (multiplier > divider) [[unlikely]] {
 			// Testing on a Retail 1.0 xbox shows that, when this condition is hit, the console hangs. We don't actually want to freeze the emulator, so
 			// we will just terminate the emulation instead
@@ -118,11 +114,11 @@ void ptimer::write(uint32_t addr, const uint32_t data)
 
 		// Tested on a Retail 1.0 xbox: writing to the NV_PTIMER_TIME_0/1 registers causes the timer to start counting from the written value
 	case NV_PTIMER_TIME_0:
-		counter_offset = (counter_offset & (0xFFFFFFFFULL << 32)) | value;
+		counter_offset = (counter_offset & (0xFFFFFFFFULL << 32)) | data;
 		break;
 
 	case NV_PTIMER_TIME_1:
-		counter_offset = (counter_offset & 0xFFFFFFFFULL) | ((uint64_t)value << 32);
+		counter_offset = (counter_offset & 0xFFFFFFFFULL) | ((uint64_t)data << 32);
 		break;
 
 	case NV_PTIMER_ALARM_0: {
@@ -138,7 +134,7 @@ void ptimer::write(uint32_t addr, const uint32_t data)
 		                    a1                          n bias+ (period larger for one cycle)
 		*/
 		uint32_t old_alarm = alarm >> 5;
-		alarm = value & ~0x1F; // tested on hw: writes of 1s to the first five bits have no impact
+		alarm = data & ~0x1F; // tested on hw: writes of 1s to the first five bits have no impact
 		uint32_t new_alarm = alarm >> 5;
 		counter_bias = new_alarm - old_alarm;
 		if (counter_active) {
@@ -148,11 +144,11 @@ void ptimer::write(uint32_t addr, const uint32_t data)
 	break;
 
 	default:
-		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, value);
+		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
 	}
 }
 
-template<bool log, bool enabled, bool is_be>
+template<bool log, bool enabled>
 uint32_t ptimer::read(uint32_t addr)
 {
 	if constexpr (!enabled) {
@@ -201,9 +197,6 @@ uint32_t ptimer::read(uint32_t addr)
 		nxbx_fatal("Unhandled read at address 0x%" PRIX32, addr);
 	}
 
-	if constexpr (is_be) {
-		value = util::byteswap(value);
-	}
 	if constexpr (log) {
 		log_io_read();
 	}
@@ -217,27 +210,27 @@ auto ptimer::get_io_func(bool log, bool enabled, bool is_be)
 	if constexpr (is_write) {
 		if (enabled) {
 			if (log) {
-				return is_be ? cpu_write<ptimer, uint32_t, &ptimer::write<true, true, true>> : cpu_write<ptimer, uint32_t, &ptimer::write<true>>;
+				return is_be ? nv2a_write<ptimer, uint32_t, &ptimer::write<true, true>, true> : nv2a_write<ptimer, uint32_t, &ptimer::write<true>>;
 			}
 			else {
-				return is_be ? cpu_write<ptimer, uint32_t, &ptimer::write<false, true, true>> : cpu_write<ptimer, uint32_t, &ptimer::write<false>>;
+				return is_be ? nv2a_write<ptimer, uint32_t, &ptimer::write<false, true>, true> : nv2a_write<ptimer, uint32_t, &ptimer::write<false>>;
 			}
 		}
 		else {
-			return cpu_write<ptimer, uint32_t, &ptimer::write<false, false>>;
+			return nv2a_write<ptimer, uint32_t, &ptimer::write<false, false>>;
 		}
 	}
 	else {
 		if (enabled) {
 			if (log) {
-				return is_be ? cpu_read<ptimer, uint32_t, &ptimer::read<true, true, true>> : cpu_read<ptimer, uint32_t, &ptimer::read<true>>;
+				return is_be ? nv2a_read<ptimer, uint32_t, &ptimer::read<true, true>, true> : nv2a_read<ptimer, uint32_t, &ptimer::read<true>>;
 			}
 			else {
-				return is_be ? cpu_read<ptimer, uint32_t, &ptimer::read<false, true, true>> : cpu_read<ptimer, uint32_t, &ptimer::read<false>>;
+				return is_be ? nv2a_read<ptimer, uint32_t, &ptimer::read<false, true>, true> : nv2a_read<ptimer, uint32_t, &ptimer::read<false>>;
 			}
 		}
 		else {
-			return cpu_read<ptimer, uint32_t, &ptimer::read<false, false>>;
+			return nv2a_read<ptimer, uint32_t, &ptimer::read<false, false>>;
 		}
 	}
 }

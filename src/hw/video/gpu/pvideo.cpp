@@ -23,15 +23,11 @@
 #define NV_PVIDEO_DEBUG_10 (NV2A_REGISTER_BASE + 0x000080A8)
 
 
-template<bool log, bool enabled, bool is_be>
+template<bool log, bool enabled>
 void pvideo::write(uint32_t addr, const uint32_t data)
 {
 	if constexpr (!enabled) {
 		return;
-	}
-	uint32_t value = data;
-	if constexpr (is_be) {
-		value = util::byteswap(value);
 	}
 	if constexpr (log) {
 		log_io_write();
@@ -50,15 +46,15 @@ void pvideo::write(uint32_t addr, const uint32_t data)
 	case NV_PVIDEO_DEBUG_8:
 	case NV_PVIDEO_DEBUG_9:
 	case NV_PVIDEO_DEBUG_10:
-		debug[(addr - NV_PVIDEO_DEBUG_0) >> 2] = value;
+		debug[(addr - NV_PVIDEO_DEBUG_0) >> 2] = data;
 		break;
 
 	default:
-		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, value);
+		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
 	}
 }
 
-template<bool log, bool enabled, bool is_be>
+template<bool log, bool enabled>
 uint32_t pvideo::read(uint32_t addr)
 {
 	if constexpr (!enabled) {
@@ -87,9 +83,6 @@ uint32_t pvideo::read(uint32_t addr)
 		nxbx_fatal("Unhandled read at address 0x%" PRIX32, addr);
 	}
 
-	if constexpr (is_be) {
-		value = util::byteswap(value);
-	}
 	if constexpr (log) {
 		log_io_read();
 	}
@@ -103,27 +96,27 @@ auto pvideo::get_io_func(bool log, bool enabled, bool is_be)
 	if constexpr (is_write) {
 		if (enabled) {
 			if (log) {
-				return is_be ? cpu_write<pvideo, uint32_t, &pvideo::write<true, true, true>> : cpu_write<pvideo, uint32_t, &pvideo::write<true>>;
+				return is_be ? nv2a_write<pvideo, uint32_t, &pvideo::write<true, true>, true> : nv2a_write<pvideo, uint32_t, &pvideo::write<true>>;
 			}
 			else {
-				return is_be ? cpu_write<pvideo, uint32_t, &pvideo::write<false, true, true>> : cpu_write<pvideo, uint32_t, &pvideo::write<false>>;
+				return is_be ? nv2a_write<pvideo, uint32_t, &pvideo::write<false, true>, true> : nv2a_write<pvideo, uint32_t, &pvideo::write<false>>;
 			}
 		}
 		else {
-			return cpu_write<pvideo, uint32_t, &pvideo::write<false, false>>;
+			return nv2a_write<pvideo, uint32_t, &pvideo::write<false, false>>;
 		}
 	}
 	else {
 		if (enabled) {
 			if (log) {
-				return is_be ? cpu_read<pvideo, uint32_t, &pvideo::read<true, true, true>> : cpu_read<pvideo, uint32_t, &pvideo::read<true>>;
+				return is_be ? nv2a_read<pvideo, uint32_t, &pvideo::read<true, true>, true> : nv2a_read<pvideo, uint32_t, &pvideo::read<true>>;
 			}
 			else {
-				return is_be ? cpu_read<pvideo, uint32_t, &pvideo::read<false, true, true>> : cpu_read<pvideo, uint32_t, &pvideo::read<false>>;
+				return is_be ? nv2a_read<pvideo, uint32_t, &pvideo::read<false, true>, true> : nv2a_read<pvideo, uint32_t, &pvideo::read<false>>;
 			}
 		}
 		else {
-			return cpu_read<pvideo, uint32_t, &pvideo::read<false, false>>;
+			return nv2a_read<pvideo, uint32_t, &pvideo::read<false, false>>;
 		}
 	}
 }

@@ -14,6 +14,7 @@
 #include "pfifo.hpp"
 #include "pvga.hpp"
 #include "pvideo.hpp"
+#include "cpu.hpp"
 
 #define NV2A_CLOCK_FREQ 233333324 // = 233 MHz
 #define NV2A_CRYSTAL_FREQ 16666666 // = 16 MHz
@@ -54,3 +55,22 @@ private:
 	pvga m_pvga;
 	pvideo m_pvideo;
 };
+
+template<typename D, typename T, auto f, bool is_be = false, uint32_t base = 0>
+T nv2a_read(uint32_t addr, void *opaque)
+{
+	T value = cpu_read<D, T, f, base>(addr, opaque);
+	if constexpr (is_be) {
+		value = util::byteswap<T>(value);
+	}
+	return value;
+}
+
+template<typename D, typename T, auto f, bool is_be = false, uint32_t base = 0>
+void nv2a_write(uint32_t addr, T value, void *opaque)
+{
+	if constexpr (is_be) {
+		value = util::byteswap<T>(value);
+	}
+	cpu_write<D, T, f, base>(addr, value, opaque);
+}
