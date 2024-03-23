@@ -29,5 +29,6 @@ private:
 	struct {
 		// Some unknown debug stuff
 		uint32_t debug[11];
+		uint32_t regs[24];
 	};
 };

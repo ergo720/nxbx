@@ -7,7 +7,7 @@
 #define MODULE_NAME pvideo
 
 #define NV_PVIDEO 0x00008000
-#define NV_PVIDEO_BASE (NV2A_REGISTER_BASE + NV_PVIDEO)
+#define NV_PVIDEO_MMIO_BASE (NV2A_REGISTER_BASE + NV_PVIDEO)
 #define NV_PVIDEO_SIZE 0x1000
 
 #define NV_PVIDEO_DEBUG_0 (NV2A_REGISTER_BASE + 0x00008080)
@@ -21,6 +21,13 @@
 #define NV_PVIDEO_DEBUG_8 (NV2A_REGISTER_BASE + 0x000080A0)
 #define NV_PVIDEO_DEBUG_9 (NV2A_REGISTER_BASE + 0x000080A4)
 #define NV_PVIDEO_DEBUG_10 (NV2A_REGISTER_BASE + 0x000080A8)
+#define NV_PVIDEO_BASE(i) (NV2A_REGISTER_BASE + 0x00008900 + (i) * 4)
+#define NV_PVIDEO_LUMINANCE(i) (NV2A_REGISTER_BASE + 0x00008910 + (i) * 4)
+#define NV_PVIDEO_CHROMINANCE(i) (NV2A_REGISTER_BASE + 0x00008918 + (i) * 4)
+#define NV_PVIDEO_SIZE_IN(i) (NV2A_REGISTER_BASE + 0x00008928 + (i) * 4)
+#define NV_PVIDEO_POINT_IN(i) (NV2A_REGISTER_BASE + 0x00008930 + (i) * 4)
+#define NV_PVIDEO_DS_DX(i) (NV2A_REGISTER_BASE + 0x00008938 + (i) * 4)
+#define NV_PVIDEO_DT_DY(i) (NV2A_REGISTER_BASE + 0x00008940 + (i) * 4)
 
 
 template<bool log, bool enabled>
@@ -47,6 +54,21 @@ void pvideo::write(uint32_t addr, const uint32_t data)
 	case NV_PVIDEO_DEBUG_9:
 	case NV_PVIDEO_DEBUG_10:
 		debug[(addr - NV_PVIDEO_DEBUG_0) >> 2] = data;
+		break;
+
+	case NV_PVIDEO_LUMINANCE(0):
+	case NV_PVIDEO_LUMINANCE(1):
+	case NV_PVIDEO_CHROMINANCE(0):
+	case NV_PVIDEO_CHROMINANCE(1):
+	case NV_PVIDEO_SIZE_IN(0):
+	case NV_PVIDEO_SIZE_IN(1):
+	case NV_PVIDEO_POINT_IN(0):
+	case NV_PVIDEO_POINT_IN(1):
+	case NV_PVIDEO_DS_DX(0):
+	case NV_PVIDEO_DS_DX(1):
+	case NV_PVIDEO_DT_DY(0):
+	case NV_PVIDEO_DT_DY(1):
+		regs[(addr - NV_PVIDEO_BASE(0)) >> 2] = data;
 		break;
 
 	default:
@@ -77,6 +99,21 @@ uint32_t pvideo::read(uint32_t addr)
 	case NV_PVIDEO_DEBUG_9:
 	case NV_PVIDEO_DEBUG_10:
 		value = debug[(addr - NV_PVIDEO_DEBUG_0) >> 2];
+		break;
+
+	case NV_PVIDEO_LUMINANCE(0):
+	case NV_PVIDEO_LUMINANCE(1):
+	case NV_PVIDEO_CHROMINANCE(0):
+	case NV_PVIDEO_CHROMINANCE(1):
+	case NV_PVIDEO_SIZE_IN(0):
+	case NV_PVIDEO_SIZE_IN(1):
+	case NV_PVIDEO_POINT_IN(0):
+	case NV_PVIDEO_POINT_IN(1):
+	case NV_PVIDEO_DS_DX(0):
+	case NV_PVIDEO_DS_DX(1):
+	case NV_PVIDEO_DT_DY(0):
+	case NV_PVIDEO_DT_DY(1):
+		value = regs[(addr - NV_PVIDEO_BASE(0)) >> 2];
 		break;
 
 	default:
@@ -127,7 +164,7 @@ pvideo::update_io(bool is_update)
 	bool log = module_enabled();
 	bool enabled = m_machine->get<pmc>().engine_enabled & NV_PMC_ENABLE_PVIDEO;
 	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK;
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PVIDEO_BASE, NV_PVIDEO_SIZE, false,
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PVIDEO_MMIO_BASE, NV_PVIDEO_SIZE, false,
 		{
 			.fnr32 = get_io_func<false>(log, enabled, is_be),
 			.fnw32 = get_io_func<true>(log, enabled, is_be)
