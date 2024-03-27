@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include "nv2a_defs.hpp"
 
 #define NV_PMC_BOOT_1 (NV2A_REGISTER_BASE + 0x00000004)
 #define NV_PMC_BOOT_1_ENDIAN00_LITTLE 0x00000000

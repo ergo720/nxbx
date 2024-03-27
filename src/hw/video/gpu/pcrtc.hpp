@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include "nv2a_defs.hpp"
 
 #define NV_PCRTC_START (NV2A_REGISTER_BASE + 0x00600800)
 

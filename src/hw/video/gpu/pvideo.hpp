@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include "nv2a_defs.hpp"
 
 
 class machine;

@@ -66,6 +66,7 @@ set(HEADERS
  "${NXBX_ROOT_DIR}/src/hw/pit.hpp"
  "${NXBX_ROOT_DIR}/src/hw/video/vga.hpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/nv2a.hpp"
+ "${NXBX_ROOT_DIR}/src/hw/video/gpu/nv2a_defs.hpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/pbus.hpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/pcrtc.hpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/pfb.hpp"
