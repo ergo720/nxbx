@@ -6,10 +6,6 @@
 
 #define MODULE_NAME pramin
 
-#define NV_PRAMIN 0x00700000
-#define NV_PRAMIN_BASE (NV2A_REGISTER_BASE + NV_PRAMIN)
-#define NV_PRAMIN_SIZE 0x100000 // = 1 MiB
-
 #define RAMIN_UNIT_SIZE 64
 
 

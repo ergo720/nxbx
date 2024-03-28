@@ -6,14 +6,6 @@
 
 #define MODULE_NAME pfifo
 
-#define NV_PFIFO 0x00002000
-#define NV_PFIFO_BASE (NV2A_REGISTER_BASE + NV_PFIFO)
-#define NV_PFIFO_SIZE 0x2000
-
-#define NV_PFIFO_RAMHT (NV2A_REGISTER_BASE + 0x00002210)
-#define NV_PFIFO_RAMFC (NV2A_REGISTER_BASE + 0x00002214)
-#define NV_PFIFO_RAMRO (NV2A_REGISTER_BASE + 0x00002218)
-
 
 template<bool log, bool enabled>
 void pfifo::write(uint32_t addr, const uint32_t data)

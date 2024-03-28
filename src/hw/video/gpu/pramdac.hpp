@@ -7,6 +7,17 @@
 #include <cstdint>
 #include "nv2a_defs.hpp"
 
+#define NV_PRAMDAC 0x00680300
+#define NV_PRAMDAC_BASE (NV2A_REGISTER_BASE + NV_PRAMDAC)
+#define NV_PRAMDAC_SIZE 0xD00
+
+#define NV_PRAMDAC_NVPLL_COEFF (NV2A_REGISTER_BASE + 0x00680500) // core pll (phase-locked loop) coefficients
+#define NV_PRAMDAC_NVPLL_COEFF_MDIV_MASK 0x000000FF
+#define NV_PRAMDAC_NVPLL_COEFF_NDIV_MASK 0x0000FF00
+#define NV_PRAMDAC_NVPLL_COEFF_PDIV_MASK 0x00070000
+#define NV_PRAMDAC_MPLL_COEFF (NV2A_REGISTER_BASE + 0x00680504) // memory pll (phase-locked loop) coefficients
+#define NV_PRAMDAC_VPLL_COEFF (NV2A_REGISTER_BASE + 0x00680508) // video pll (phase-locked loop) coefficients
+
 
 class machine;
 class ptimer;
@@ -33,7 +44,6 @@ private:
 	machine *const m_machine;
 	uint64_t core_freq; // gpu frequency
 	struct {
-		// core, memory and video clocks
 		uint32_t nvpll_coeff, mpll_coeff, vpll_coeff;
 	};
 };

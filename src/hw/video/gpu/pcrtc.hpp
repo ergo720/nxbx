@@ -7,7 +7,16 @@
 #include <cstdint>
 #include "nv2a_defs.hpp"
 
-#define NV_PCRTC_START (NV2A_REGISTER_BASE + 0x00600800)
+#define NV_PCRTC 0x00600000
+#define NV_PCRTC_BASE (NV2A_REGISTER_BASE + NV_PCRTC)
+#define NV_PCRTC_SIZE 0x1000
+
+#define NV_PCRTC_INTR_0 (NV2A_REGISTER_BASE + 0x00600100) // Pending vblank interrupt. Writing a 0 has no effect, and writing a 1 clears the interrupt
+#define NV_PCRTC_INTR_0_VBLANK_NOT_PENDING 0x00000000
+#define NV_PCRTC_INTR_EN_0 (NV2A_REGISTER_BASE + 0x00600140) // Enable/disable vblank interrupt
+#define NV_PCRTC_INTR_EN_0_VBLANK_DISABLED 0x00000000
+#define NV_PCRTC_START (NV2A_REGISTER_BASE + 0x00600800) // The address of the framebuffer
+#define NV_PCRTC_UNKNOWN0 (NV2A_REGISTER_BASE + 0x00600804) // Unknown
 
 
 class machine;
@@ -32,13 +41,9 @@ private:
 	friend class pmc;
 	machine *const m_machine;
 	struct {
-		// Pending vblank interrupt. Writing a 0 has no effect, and writing a 1 clears the interrupt
 		uint32_t int_status;
-		// Enable/disable vblank interrupt
 		uint32_t int_enabled;
-		// The address of the framebuffer
 		uint32_t fb_addr;
-		// Unknown
 		uint32_t unknown[1];
 	};
 };

@@ -7,6 +7,14 @@
 #include <cstdint>
 #include "nv2a_defs.hpp"
 
+#define NV_PFIFO 0x00002000
+#define NV_PFIFO_BASE (NV2A_REGISTER_BASE + NV_PFIFO)
+#define NV_PFIFO_SIZE 0x2000
+
+#define NV_PFIFO_RAMHT (NV2A_REGISTER_BASE + 0x00002210) // Contains the base address and size of ramht in ramin
+#define NV_PFIFO_RAMFC (NV2A_REGISTER_BASE + 0x00002214) // Contains the base address and size of ramfc in ramin
+#define NV_PFIFO_RAMRO (NV2A_REGISTER_BASE + 0x00002218) // Contains the base address and size of ramro in ramin
+
 
 class machine;
 
@@ -28,7 +36,6 @@ private:
 
 	machine *const m_machine;
 	struct {
-		// Contain the base address and size of ramht, ramfc and ramro in ramin
 		uint32_t ramht, ramfc, ramro;
 	};
 };
