@@ -59,6 +59,7 @@ settings::load_config_values()
 	else {
 		// ...otherwise, use default log module settings
 		m_core.log_modules[0] = default_log_modules1;
+		logger("Mismatching logger version, using default log module settings");
 	}
 	nxbx::update_logging();
 }

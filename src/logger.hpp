@@ -52,6 +52,7 @@ enum class log_module : int32_t {
 	ptimer,
 	pvga,
 	pvideo,
+	user,
 	max,
 };
 
@@ -76,6 +77,7 @@ inline constexpr std::array module_to_str = {
 	"NV2A.PTIMER -> ",
 	"NV2A.PVGA -> ",
 	"NV2A.PVIDEO -> ",
+	"NV2A.USER -> ",
 };
 static_assert(module_to_str.size() == (uint32_t)(log_module::max));
 

@@ -37,6 +37,12 @@ namespace util {
 		}
 	}
 
+	template<typename T>
+	bool in_range(T val, T low, T high)
+	{
+		return !((val < low) || (high < val));
+	}
+
 	// Case-insensitive variant of std::char_traits<char>, used to compare xbox strings
 	struct xbox_char_traits : public std::char_traits<char> {
 		static bool eq(char c1, char c2)

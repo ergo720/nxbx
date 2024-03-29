@@ -149,6 +149,14 @@ pmc::update_irq()
 		int_status &= ~(1 << NV_PMC_INTR_0_PTIMER);
 	}
 
+	// Check for pending PFIFO interrupts
+	if (m_machine->get<pfifo>().regs0[REGS0_PFIFO_idx(NV_PFIFO_INTR_0)] & m_machine->get<pfifo>().regs0[REGS0_PFIFO_idx(NV_PFIFO_INTR_EN_0)]) {
+		int_status |= (1 << NV_PMC_INTR_0_PFIFO);
+	}
+	else {
+		int_status &= ~(1 << NV_PMC_INTR_0_PFIFO);
+	}
+
 	switch (int_enabled)
 	{
 	default:

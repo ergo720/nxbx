@@ -14,14 +14,24 @@
 #include "pfifo.hpp"
 #include "pvga.hpp"
 #include "pvideo.hpp"
+#include "user.hpp"
 #include "cpu.hpp"
 
+
+struct dma_obj {
+	uint32_t class_type;
+	uint32_t mem_type;
+	uint32_t target_addr;
+	uint32_t limit;
+};
 
 class nv2a {
 public:
 	nv2a(machine *machine) : m_pmc(machine), m_pcrtc(machine), m_pramdac(machine), m_ptimer(machine),
-		m_pfb(machine), m_pbus(machine), m_pramin(machine), m_pfifo(machine), m_pvga(machine), m_pvideo(machine) {}
+		m_pfb(machine), m_pbus(machine), m_pramin(machine), m_pfifo(machine), m_pvga(machine), m_pvideo(machine),
+		m_user(machine) {}
 	bool init();
+	void deinit();
 	uint64_t get_next_update_time(uint64_t now);
 	pmc &get_pmc() { return m_pmc; }
 	pcrtc &get_pcrtc() { return m_pcrtc; }
@@ -36,6 +46,9 @@ public:
 	void apply_log_settings();
 
 private:
+	dma_obj get_dma_obj(uint32_t addr);
+
+	friend class pfifo;
 	pmc m_pmc;
 	pcrtc m_pcrtc;
 	pramdac m_pramdac;
@@ -46,6 +59,7 @@ private:
 	pfifo m_pfifo;
 	pvga m_pvga;
 	pvideo m_pvideo;
+	user m_user;
 };
 
 template<typename D, typename T, auto f, bool is_be = false, uint32_t base = 0>

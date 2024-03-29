@@ -23,6 +23,7 @@
 #define NV_PMC_BOOT_1_ENDIAN24_LITTLE_MASK (0x00000000 << 24)
 #define NV_PMC_BOOT_1_ENDIAN24_BIG_MASK (0x00000001 << 24)
 #define NV_PMC_INTR_0 (NV2A_REGISTER_BASE + 0x00000100) // Pending interrupts of all engines
+#define NV_PMC_INTR_0_PFIFO 8
 #define NV_PMC_INTR_0_PTIMER 20
 #define NV_PMC_INTR_0_PCRTC 24
 #define NV_PMC_INTR_0_SOFTWARE 31
@@ -51,6 +52,7 @@ class pvideo;
 class pbus;
 class pramdac;
 class pramin;
+class user;
 
 class pmc {
 public:
@@ -77,6 +79,7 @@ private:
 	friend class pbus;
 	friend class pramdac;
 	friend class pramin;
+	friend class user;
 	machine *const m_machine;
 	struct {
 		uint32_t endianness;

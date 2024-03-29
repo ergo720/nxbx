@@ -77,6 +77,7 @@ set(HEADERS
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/ptimer.hpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/pvga.hpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/pvideo.hpp"
+ "${NXBX_ROOT_DIR}/src/hw/video/gpu/user.hpp"
 )
 
 set(SOURCES
@@ -107,6 +108,7 @@ set(SOURCES
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/ptimer.cpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/pvga.cpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/pvideo.cpp"
+ "${NXBX_ROOT_DIR}/src/hw/video/gpu/user.cpp"
 )
 
 source_group(TREE ${NXBX_ROOT_DIR} PREFIX header FILES ${HEADERS})

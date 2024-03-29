@@ -44,5 +44,5 @@ private:
 	std::string m_ini_path;
 	console_t m_type;
 	static constexpr uint32_t m_version = 1;
-	static constexpr uint32_t m_log_version = 1; // add one to this every time the log modules change
+	static constexpr uint32_t m_log_version = 2; // add one to this every time the log modules change
 };
