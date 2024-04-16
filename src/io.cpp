@@ -152,6 +152,7 @@ namespace io {
 	}
 
 	static cpu_t *lc86cpu;
+	static std::jthread jthr;
 	static std::deque<std::unique_ptr<io_request>> curr_io_queue;
 	static std::vector<std::unique_ptr<io_request>> pending_io_vec;
 	static std::unordered_map<uint64_t, std::unique_ptr<io_request>> completed_io_info;
@@ -159,7 +160,6 @@ namespace io {
 	static std::mutex queue_mtx;
 	static std::mutex completed_io_mtx;
 	static std::atomic_flag io_pending;
-	static std::atomic_flag io_running;
 
 	static std::filesystem::path hdd_path;
 	static std::filesystem::path dvd_path;
@@ -229,17 +229,15 @@ namespace io {
 	}
 
 	static void
-	worker()
+	worker(std::stop_token stok)
 	{
-		io_running.test_and_set();
-
 		while (true) {
 
 			// Wait until there's some work to do
 			io_pending.wait(false);
 
 			// Check to see if we need to terminate this thread
-			if (io_running.test() == false) [[unlikely]] {
+			if (stok.stop_requested()) [[unlikely]] {
 				pending_packets = false;
 				curr_io_queue.clear();
 				completed_io_info.clear();
@@ -247,8 +245,6 @@ namespace io {
 					handle_map.clear();
 				}
 				pending_io_vec.clear();
-				io_running.test_and_set();
-				io_running.notify_one();
 				return;
 			}
 
@@ -617,7 +613,7 @@ namespace io {
 			return false;
 		}
 
-		std::thread(worker).detach();
+		jthr = std::jthread(&io::worker);
 
 		return true;
 	}
@@ -625,15 +621,14 @@ namespace io {
 	void
 	stop()
 	{
-		if (io_running.test()) {
+		if (jthr.joinable()) {
 			// Signal the I/O thread that it needs to exit
-			io_running.clear();
+			jthr.request_stop();
 			queue_mtx.lock();
 			io_pending.test_and_set();
 			io_pending.notify_one();
 			queue_mtx.unlock();
-			io_running.wait(false);
-			io_running.clear();
+			jthr.join();
 		}
 	}
 }
