@@ -12,6 +12,7 @@
 #define NV_PFIFO 0x00002000
 #define NV_PFIFO_BASE (NV2A_REGISTER_BASE + NV_PFIFO)
 #define NV_PFIFO_SIZE 0x2000
+#define REGS_PFIFO_idx(x) ((x - NV_PFIFO_BASE) >> 2)
 
 #define NV_PFIFO_INTR_0 (NV2A_REGISTER_BASE + 0x00002100) // Pending pfifo interrupts. Writing a 0 has no effect, and writing a 1 clears the interrupt
 #define NV_PFIFO_INTR_0_DMA_PUSHER (1 << 12)
@@ -62,13 +63,6 @@
 #define NV_PFIFO_CACHE1_METHOD(i) (NV2A_REGISTER_BASE + 0x00003800 + (i) * 8) // cache1 register array of 128 entries (caches methods)
 #define NV_PFIFO_CACHE1_DATA(i) (NV2A_REGISTER_BASE + 0x00003804 + (i) * 8) // cache1 register array of 128 entries (caches parameters)
 
-#define REGS0_OFFSET_BASE (NV_PFIFO_INTR_0 & 0xFFF)
-#define REGS0_OFFSET_END ((NV_PFIFO_MODE + 4) & 0xFFF)
-#define REGS1_OFFSET_BASE (NV_PFIFO_CACHE1_PUSH0 & 0xFFF)
-#define REGS1_OFFSET_END ((NV_PFIFO_CACHE1_DATA(127) + 4) & 0xFFF)
-#define REGS0_PFIFO_idx(addr) ((addr - NV_PFIFO_INTR_0) >> 2)
-#define REGS1_PFIFO_idx(addr) ((addr - NV_PFIFO_CACHE1_PUSH0) >> 2)
-
 
 class machine;
 class nv2a;
@@ -103,8 +97,8 @@ private:
 	machine *const m_machine;
 	uint8_t *m_ram;
 	struct {
-		std::atomic_uint32_t regs0[(REGS0_OFFSET_END - REGS0_OFFSET_BASE) / 4];
-		std::atomic_uint32_t regs1[(REGS1_OFFSET_END - REGS1_OFFSET_BASE) / 4];
-		std::atomic_uint32_t *regs[2] = { regs0, regs1 };
+		std::atomic_uint32_t regs[NV_PFIFO_SIZE / 4];
 	};
 };
+
+static_assert(sizeof(std::atomic_uint32_t) == 4);
