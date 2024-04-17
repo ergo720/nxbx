@@ -18,7 +18,7 @@ void pfifo::write(uint32_t addr, const uint32_t data)
 		log_io_write();
 	}
 
-	uint32_t addr_off = (addr - NV_PFIFO_BASE) >> 2;
+	uint32_t addr_off = REGS_PFIFO_idx(addr);
 	switch (addr)
 	{
 	case NV_PFIFO_INTR_0:
@@ -60,7 +60,7 @@ uint32_t pfifo::read(uint32_t addr)
 		return 0;
 	}
 
-	uint32_t addr_off = (addr - NV_PFIFO_BASE) >> 2;
+	uint32_t addr_off = REGS_PFIFO_idx(addr);
 	uint32_t value = regs[addr_off];
 
 	if constexpr (log) {
