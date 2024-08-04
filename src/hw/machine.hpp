@@ -134,10 +134,12 @@ public:
 	}
 	void raise_irq(uint8_t a)
 	{
+		std::unique_lock lock(pic::m_mtx);
 		m_pic[a > 7 ? 1 : 0].raise_irq(a & 7);
 	}
 	void lower_irq(uint8_t a)
 	{
+		std::unique_lock lock(pic::m_mtx);
 		m_pic[a > 7 ? 1 : 0].lower_irq(a & 7);
 	}
 	void apply_log_settings()

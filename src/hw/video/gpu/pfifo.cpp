@@ -209,12 +209,8 @@ pfifo::worker(std::stop_token stok)
 	// This lambda is called when the pusher encounters an error
 	const auto lambda = [this](const char *msg) {
 		regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_PUSH)] |= NV_PFIFO_CACHE1_DMA_PUSH_STATUS_MASK; // suspend pusher
-		// Currently disabled, because it's not thread safe yet
-#if 0
 		regs[REGS_PFIFO_idx(NV_PFIFO_INTR_0)] |= NV_PFIFO_INTR_0_DMA_PUSHER; // raise pusher interrupt
 		m_machine->get<pmc>().update_irq();
-#endif
-		nxbx_fatal(msg);
 		};
 
 	while (true) {

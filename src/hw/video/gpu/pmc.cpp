@@ -166,19 +166,19 @@ pmc::update_irq()
 
 	case NV_PMC_INTR_EN_0_INTA_HARDWARE:
 		if (int_status & NV_PMC_INTR_0_HARDWARE_MASK) {
-			m_machine->get<pic>().raise_irq(NV2A_IRQ_NUM);
+			m_machine->raise_irq(NV2A_IRQ_NUM);
 		}
 		else {
-			m_machine->get<pic>().lower_irq(NV2A_IRQ_NUM);
+			m_machine->lower_irq(NV2A_IRQ_NUM);
 		}
 		break;
 
 	case NV_PMC_INTR_EN_0_INTA_SOFTWARE:
 		if (int_status & NV_PMC_INTR_0_SOFTWARE_MASK) {
-			m_machine->get<pic>().raise_irq(NV2A_IRQ_NUM);
+			m_machine->raise_irq(NV2A_IRQ_NUM);
 		}
 		else {
-			m_machine->get<pic>().lower_irq(NV2A_IRQ_NUM);
+			m_machine->lower_irq(NV2A_IRQ_NUM);
 		}
 		break;
 	}

@@ -33,18 +33,14 @@ pic::get_interrupt()
 	return vector_offset + irq;
 }
 
-uint8_t
-pic::get_interrupt_for_cpu()
-{
-	cpu_lower_hw_int_line(m_machine->get<cpu_t *>());
-	return get_interrupt();
-}
-
 uint16_t
 get_interrupt_for_cpu(void *opaque)
 {
+	// NOTE: called from the cpu thread when it services a hw interrupt
+	std::unique_lock lock(pic::m_mtx);
 	pic *master = static_cast<pic *>(opaque);
-	return master->get_interrupt_for_cpu();
+	cpu_lower_hw_int_line(master->m_machine->get<cpu_t *>());
+	return master->get_interrupt();
 }
 
 void
@@ -74,8 +70,8 @@ pic::update_state()
 				cpu_raise_hw_int_line(m_machine->get<cpu_t *>());
 			}
 			else {
-				m_machine->lower_irq(2);
-				m_machine->raise_irq(2);
+				m_machine->get<pic, 0>().lower_irq(2);
+				m_machine->get<pic, 0>().raise_irq(2);
 			}
 
 			return;
@@ -115,7 +111,7 @@ pic::lower_irq(uint8_t irq)
 	irr &= ~mask;
 
 	if (!is_master() && !irr) {
-		m_machine->lower_irq(2);
+		m_machine->get<pic, 0>().lower_irq(2);
 	}
 }
 
@@ -234,6 +230,7 @@ pic::write_icw(unsigned idx, uint8_t value)
 template<bool log>
 void pic::write8(uint32_t addr, const uint8_t data)
 {
+	std::unique_lock lock(pic::m_mtx);
 	if constexpr (log) {
 		log_io_write();
 	}
@@ -267,6 +264,7 @@ void pic::write8(uint32_t addr, const uint8_t data)
 template<bool log>
 uint8_t pic::read8(uint32_t addr)
 {
+	std::unique_lock lock(pic::m_mtx);
 	uint8_t value;
 
 	if (addr & 1) {
@@ -286,6 +284,7 @@ uint8_t pic::read8(uint32_t addr)
 template<bool log>
 void pic::write8_elcr(uint32_t addr, const uint8_t data)
 {
+	std::unique_lock lock(pic::m_mtx);
 	if constexpr (log) {
 		log_io_write();
 	}
@@ -296,6 +295,7 @@ void pic::write8_elcr(uint32_t addr, const uint8_t data)
 template<bool log>
 uint8_t pic::read8_elcr(uint32_t addr)
 {
+	std::unique_lock lock(pic::m_mtx);
 	uint8_t value = elcr;
 
 	if constexpr (log) {
