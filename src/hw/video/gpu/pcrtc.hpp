@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <atomic>
 #include "nv2a_defs.hpp"
 
 #define NV_PCRTC 0x00600000
@@ -41,8 +42,8 @@ private:
 	friend class pmc;
 	machine *const m_machine;
 	struct {
-		uint32_t int_status;
-		uint32_t int_enabled;
+		std::atomic_uint32_t int_status; // accessed from pfifo::worker with pmc::update_irq()
+		std::atomic_uint32_t int_enabled; // accessed from pfifo::worker with pmc::update_irq()
 		uint32_t fb_addr;
 		uint32_t unknown[1];
 	};

@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <atomic>
 #include "nv2a_defs.hpp"
 
 #define NV_PFB 0x00100000
@@ -41,6 +42,6 @@ private:
 	struct {
 		uint32_t cfg0, cfg1;
 		uint32_t nvm;
-		uint32_t cstatus;
+		std::atomic_uint32_t cstatus; // accessed from pfifo::worker with nv2a::get_dma_obj()
 	};
 };

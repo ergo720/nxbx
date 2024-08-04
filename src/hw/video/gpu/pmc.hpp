@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <atomic>
 #include "nv2a_defs.hpp"
 
 #define NV_PMC 0x00000000
@@ -83,8 +84,8 @@ private:
 	machine *const m_machine;
 	struct {
 		uint32_t endianness;
-		uint32_t int_status;
-		uint32_t int_enabled;
+		std::atomic_uint32_t int_status; // accessed from pfifo::worker with pmc::update_irq()
+		std::atomic_uint32_t int_enabled; // accessed from pfifo::worker with pmc::update_irq()
 		uint32_t engine_enabled;
 	};
 };
