@@ -188,7 +188,7 @@ vga::complete_redraw()
 	framebuffer_offset = 0;
 
 	// On nv2a, the framebuffer address is fetched from PCRTC. The address is already byte-addressed, so it doesn't need the extra multiplication here
-	vram_addr = m_machine->get<pcrtc>().read(NV_PCRTC_START);
+	vram_addr = m_machine->get<pcrtc>().read32(NV_PCRTC_START);
 
 	// Force a complete redraw of the screen, and to do that, pretend that memory has been written.
 	memory_modified = 3;
@@ -913,7 +913,7 @@ vga::mem_write8(uint32_t addr, const uint8_t data)
 	*vram_ptr = do_mask(*vram_ptr, data32, plane);
 
 	// Update scanline
-	uint32_t offs = (plane_addr << 2) - m_machine->get<pcrtc>().read(NV_PCRTC_START),
+	uint32_t offs = (plane_addr << 2) - m_machine->get<pcrtc>().read32(NV_PCRTC_START),
 		offset_between_lines = (((crt[0x25] & 0x20) << 6) | ((crt[0x19] & 0xE0) << 3) | crt[0x13]) << 3;
 
 	unsigned int scanline = offs / offset_between_lines;

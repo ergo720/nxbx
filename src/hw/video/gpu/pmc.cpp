@@ -8,7 +8,7 @@
 
 
 template<bool log>
-void pmc::write(uint32_t addr, const uint32_t data)
+void pmc::write32(uint32_t addr, const uint32_t data)
 {
 	if constexpr (log) {
 		log_io_write();
@@ -91,7 +91,7 @@ void pmc::write(uint32_t addr, const uint32_t data)
 }
 
 template<bool log>
-uint32_t pmc::read(uint32_t addr)
+uint32_t pmc::read32(uint32_t addr)
 {
 	uint32_t value = 0;
 
@@ -189,18 +189,18 @@ auto pmc::get_io_func(bool log, bool is_be)
 {
 	if constexpr (is_write) {
 		if (log) {
-			return is_be ? nv2a_write<pmc, uint32_t, &pmc::write<true>, true> : nv2a_write<pmc, uint32_t, &pmc::write<true>>;
+			return is_be ? nv2a_write<pmc, uint32_t, &pmc::write32<true>, true> : nv2a_write<pmc, uint32_t, &pmc::write32<true>>;
 		}
 		else {
-			return is_be ? nv2a_write<pmc, uint32_t, &pmc::write<false>, true> : nv2a_write<pmc, uint32_t, &pmc::write<false>>;
+			return is_be ? nv2a_write<pmc, uint32_t, &pmc::write32<false>, true> : nv2a_write<pmc, uint32_t, &pmc::write32<false>>;
 		}
 	}
 	else {
 		if (log) {
-			return is_be ? nv2a_read<pmc, uint32_t, &pmc::read<true>, true> : nv2a_read<pmc, uint32_t, &pmc::read<true>>;
+			return is_be ? nv2a_read<pmc, uint32_t, &pmc::read32<true>, true> : nv2a_read<pmc, uint32_t, &pmc::read32<true>>;
 		}
 		else {
-			return is_be ? nv2a_read<pmc, uint32_t, &pmc::read<false>, true> : nv2a_read<pmc, uint32_t, &pmc::read<false>>;
+			return is_be ? nv2a_read<pmc, uint32_t, &pmc::read32<false>, true> : nv2a_read<pmc, uint32_t, &pmc::read32<false>>;
 		}
 	}
 }

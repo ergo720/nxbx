@@ -33,7 +33,7 @@ namespace kernel {
 	}
 
 	template<bool log>
-	uint32_t read(addr_t addr, void *opaque)
+	uint32_t read32(addr_t addr, void *opaque)
 	{
 		static uint64_t acpi_time, curr_clock_increment;
 		uint32_t value = 0;
@@ -89,7 +89,7 @@ namespace kernel {
 	}
 
 	template<bool log>
-	void write(addr_t addr, const uint32_t data, void *opaque)
+	void write32(addr_t addr, const uint32_t data, void *opaque)
 	{
 		if constexpr (log) {
 			uint32_t value = data;
@@ -132,8 +132,8 @@ namespace kernel {
 		}
 	}
 
-	template uint32_t read<true>(addr_t addr, void *opaque);
-	template uint32_t read<false>(addr_t addr, void *opaque);
-	template void write<true>(addr_t addr, const uint32_t data, void *opaque);
-	template void write<false>(addr_t addr, const uint32_t data, void *opaque);
+	template uint32_t read32<true>(addr_t addr, void *opaque);
+	template uint32_t read32<false>(addr_t addr, void *opaque);
+	template void write32<true>(addr_t addr, const uint32_t data, void *opaque);
+	template void write32<false>(addr_t addr, const uint32_t data, void *opaque);
 }

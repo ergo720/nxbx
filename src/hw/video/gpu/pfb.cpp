@@ -8,7 +8,7 @@
 
 
 template<bool log, bool enabled>
-void pfb::write(uint32_t addr, const uint32_t data)
+void pfb::write32(uint32_t addr, const uint32_t data)
 {
 	if constexpr (!enabled) {
 		return;
@@ -41,7 +41,7 @@ void pfb::write(uint32_t addr, const uint32_t data)
 }
 
 template<bool log, bool enabled>
-uint32_t pfb::read(uint32_t addr)
+uint32_t pfb::read32(uint32_t addr)
 {
 	if constexpr (!enabled) {
 		return 0;
@@ -84,27 +84,27 @@ auto pfb::get_io_func(bool log, bool enabled, bool is_be)
 	if constexpr (is_write) {
 		if (enabled) {
 			if (log) {
-				return is_be ? nv2a_write<pfb, uint32_t, &pfb::write<true, true>, true> : nv2a_write<pfb, uint32_t, &pfb::write<true>>;
+				return is_be ? nv2a_write<pfb, uint32_t, &pfb::write32<true, true>, true> : nv2a_write<pfb, uint32_t, &pfb::write32<true>>;
 			}
 			else {
-				return is_be ? nv2a_write<pfb, uint32_t, &pfb::write<false, true>, true> : nv2a_write<pfb, uint32_t, &pfb::write<false>>;
+				return is_be ? nv2a_write<pfb, uint32_t, &pfb::write32<false, true>, true> : nv2a_write<pfb, uint32_t, &pfb::write32<false>>;
 			}
 		}
 		else {
-			return nv2a_write<pfb, uint32_t, &pfb::write<false, false>>;
+			return nv2a_write<pfb, uint32_t, &pfb::write32<false, false>>;
 		}
 	}
 	else {
 		if (enabled) {
 			if (log) {
-				return is_be ? nv2a_read<pfb, uint32_t, &pfb::read<true, true>, true> : nv2a_read<pfb, uint32_t, &pfb::read<true>>;
+				return is_be ? nv2a_read<pfb, uint32_t, &pfb::read32<true, true>, true> : nv2a_read<pfb, uint32_t, &pfb::read32<true>>;
 			}
 			else {
-				return is_be ? nv2a_read<pfb, uint32_t, &pfb::read<false, true>, true> : nv2a_read<pfb, uint32_t, &pfb::read<false>>;
+				return is_be ? nv2a_read<pfb, uint32_t, &pfb::read32<false, true>, true> : nv2a_read<pfb, uint32_t, &pfb::read32<false>>;
 			}
 		}
 		else {
-			return nv2a_read<pfb, uint32_t, &pfb::read<false, false>>;
+			return nv2a_read<pfb, uint32_t, &pfb::read32<false, false>>;
 		}
 	}
 }

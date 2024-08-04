@@ -50,7 +50,7 @@ pit::start_timer(uint8_t channel)
 }
 
 template<bool log>
-void pit::write(uint32_t addr, const uint8_t data)
+void pit::write8(uint32_t addr, const uint8_t data)
 {
 	if constexpr (log) {
 		log_io_write();
@@ -140,7 +140,7 @@ pit::update_io(bool is_update)
 	bool log = module_enabled();
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x40, 4, true,
 		{
-		.fnw8 = log ? cpu_write<pit, uint8_t, &pit::write<true>> : cpu_write<pit, uint8_t, &pit::write<false>>
+		.fnw8 = log ? cpu_write<pit, uint8_t, &pit::write8<true>> : cpu_write<pit, uint8_t, &pit::write8<false>>
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update io ports");

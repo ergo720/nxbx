@@ -45,7 +45,7 @@ ptimer::get_next_alarm_time(uint64_t now)
 }
 
 template<bool log, bool enabled>
-void ptimer::write(uint32_t addr, const uint32_t data)
+void ptimer::write32(uint32_t addr, const uint32_t data)
 {
 	if constexpr (!enabled) {
 		return;
@@ -131,7 +131,7 @@ void ptimer::write(uint32_t addr, const uint32_t data)
 }
 
 template<bool log, bool enabled>
-uint32_t ptimer::read(uint32_t addr)
+uint32_t ptimer::read32(uint32_t addr)
 {
 	if constexpr (!enabled) {
 		return 0;
@@ -192,27 +192,27 @@ auto ptimer::get_io_func(bool log, bool enabled, bool is_be)
 	if constexpr (is_write) {
 		if (enabled) {
 			if (log) {
-				return is_be ? nv2a_write<ptimer, uint32_t, &ptimer::write<true, true>, true> : nv2a_write<ptimer, uint32_t, &ptimer::write<true>>;
+				return is_be ? nv2a_write<ptimer, uint32_t, &ptimer::write32<true, true>, true> : nv2a_write<ptimer, uint32_t, &ptimer::write32<true>>;
 			}
 			else {
-				return is_be ? nv2a_write<ptimer, uint32_t, &ptimer::write<false, true>, true> : nv2a_write<ptimer, uint32_t, &ptimer::write<false>>;
+				return is_be ? nv2a_write<ptimer, uint32_t, &ptimer::write32<false, true>, true> : nv2a_write<ptimer, uint32_t, &ptimer::write32<false>>;
 			}
 		}
 		else {
-			return nv2a_write<ptimer, uint32_t, &ptimer::write<false, false>>;
+			return nv2a_write<ptimer, uint32_t, &ptimer::write32<false, false>>;
 		}
 	}
 	else {
 		if (enabled) {
 			if (log) {
-				return is_be ? nv2a_read<ptimer, uint32_t, &ptimer::read<true, true>, true> : nv2a_read<ptimer, uint32_t, &ptimer::read<true>>;
+				return is_be ? nv2a_read<ptimer, uint32_t, &ptimer::read32<true, true>, true> : nv2a_read<ptimer, uint32_t, &ptimer::read32<true>>;
 			}
 			else {
-				return is_be ? nv2a_read<ptimer, uint32_t, &ptimer::read<false, true>, true> : nv2a_read<ptimer, uint32_t, &ptimer::read<false>>;
+				return is_be ? nv2a_read<ptimer, uint32_t, &ptimer::read32<false, true>, true> : nv2a_read<ptimer, uint32_t, &ptimer::read32<false>>;
 			}
 		}
 		else {
-			return nv2a_read<ptimer, uint32_t, &ptimer::read<false, false>>;
+			return nv2a_read<ptimer, uint32_t, &ptimer::read32<false, false>>;
 		}
 	}
 }

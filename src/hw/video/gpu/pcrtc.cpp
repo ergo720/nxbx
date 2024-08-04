@@ -8,7 +8,7 @@
 
 
 template<bool log, bool enabled>
-void pcrtc::write(uint32_t addr, const uint32_t data)
+void pcrtc::write32(uint32_t addr, const uint32_t data)
 {
 	if constexpr (!enabled) {
 		return;
@@ -43,7 +43,7 @@ void pcrtc::write(uint32_t addr, const uint32_t data)
 }
 
 template<bool log, bool enabled>
-uint32_t pcrtc::read(uint32_t addr)
+uint32_t pcrtc::read32(uint32_t addr)
 {
 	if constexpr (!enabled) {
 		return 0;
@@ -86,27 +86,27 @@ auto pcrtc::get_io_func(bool log, bool enabled, bool is_be)
 	if constexpr (is_write) {
 		if (enabled) {
 			if (log) {
-				return is_be ? nv2a_write<pcrtc, uint32_t, &pcrtc::write<true, true>, true> : nv2a_write<pcrtc, uint32_t, &pcrtc::write<true>>;
+				return is_be ? nv2a_write<pcrtc, uint32_t, &pcrtc::write32<true, true>, true> : nv2a_write<pcrtc, uint32_t, &pcrtc::write32<true>>;
 			}
 			else {
-				return is_be ? nv2a_write<pcrtc, uint32_t, &pcrtc::write<false, true>, true> : nv2a_write<pcrtc, uint32_t, &pcrtc::write<false>>;
+				return is_be ? nv2a_write<pcrtc, uint32_t, &pcrtc::write32<false, true>, true> : nv2a_write<pcrtc, uint32_t, &pcrtc::write32<false>>;
 			}
 		}
 		else {
-			return nv2a_write<pcrtc, uint32_t, &pcrtc::write<false, false>>;
+			return nv2a_write<pcrtc, uint32_t, &pcrtc::write32<false, false>>;
 		}
 	}
 	else {
 		if (enabled) {
 			if (log) {
-				return is_be ? nv2a_read<pcrtc, uint32_t, &pcrtc::read<true, true>, true> : nv2a_read<pcrtc, uint32_t, &pcrtc::read<true>>;
+				return is_be ? nv2a_read<pcrtc, uint32_t, &pcrtc::read32<true, true>, true> : nv2a_read<pcrtc, uint32_t, &pcrtc::read32<true>>;
 			}
 			else {
-				return is_be ? nv2a_read<pcrtc, uint32_t, &pcrtc::read<false, true>, true> : nv2a_read<pcrtc, uint32_t, &pcrtc::read<false>>;
+				return is_be ? nv2a_read<pcrtc, uint32_t, &pcrtc::read32<false, true>, true> : nv2a_read<pcrtc, uint32_t, &pcrtc::read32<false>>;
 			}
 		}
 		else {
-			return nv2a_read<pcrtc, uint32_t, &pcrtc::read<false, false>>;
+			return nv2a_read<pcrtc, uint32_t, &pcrtc::read32<false, false>>;
 		}
 	}
 }

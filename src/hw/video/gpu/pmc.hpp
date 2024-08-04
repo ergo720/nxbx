@@ -62,9 +62,9 @@ public:
 	void update_io() { update_io(true); }
 	void update_irq();
 	template<bool log = false>
-	uint32_t read(uint32_t addr);
+	uint32_t read32(uint32_t addr);
 	template<bool log = false>
-	void write(uint32_t addr, const uint32_t data);
+	void write32(uint32_t addr, const uint32_t data);
 
 private:
 	bool update_io(bool is_update);

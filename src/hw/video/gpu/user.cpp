@@ -8,7 +8,7 @@
 
 
 template<bool log>
-void user::write(uint32_t addr, const uint32_t data)
+void user::write32(uint32_t addr, const uint32_t data)
 {
 	if constexpr (log) {
 		log_io_write();
@@ -55,7 +55,7 @@ void user::write(uint32_t addr, const uint32_t data)
 }
 
 template<bool log>
-uint32_t user::read(uint32_t addr)
+uint32_t user::read32(uint32_t addr)
 {
 	uint32_t value = 0;
 	uint32_t chan_id = ((addr - NV_USER_BASE) >> 16) & (NV2A_MAX_NUM_CHANNELS - 1); // addr increases of 0x10000 for each channel
@@ -106,18 +106,18 @@ auto user::get_io_func(bool log, bool is_be)
 {
 	if constexpr (is_write) {
 		if (log) {
-			return is_be ? nv2a_write<user, uint32_t, &user::write<true>, true> : nv2a_write<user, uint32_t, &user::write<true>>;
+			return is_be ? nv2a_write<user, uint32_t, &user::write32<true>, true> : nv2a_write<user, uint32_t, &user::write32<true>>;
 		}
 		else {
-			return is_be ? nv2a_write<user, uint32_t, &user::write<false>, true> : nv2a_write<user, uint32_t, &user::write<false>>;
+			return is_be ? nv2a_write<user, uint32_t, &user::write32<false>, true> : nv2a_write<user, uint32_t, &user::write32<false>>;
 		}
 	}
 	else {
 		if (log) {
-			return is_be ? nv2a_read<user, uint32_t, &user::read<true>, true> : nv2a_read<user, uint32_t, &user::read<true>>;
+			return is_be ? nv2a_read<user, uint32_t, &user::read32<true>, true> : nv2a_read<user, uint32_t, &user::read32<true>>;
 		}
 		else {
-			return is_be ? nv2a_read<user, uint32_t, &user::read<false>, true> : nv2a_read<user, uint32_t, &user::read<false>>;
+			return is_be ? nv2a_read<user, uint32_t, &user::read32<false>, true> : nv2a_read<user, uint32_t, &user::read32<false>>;
 		}
 	}
 }

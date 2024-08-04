@@ -18,9 +18,9 @@ public:
 	void reset();
 	void update_io_logging() { update_io(true); }
 	template<bool log = false>
-	uint8_t read(uint32_t addr);
+	uint8_t read8(uint32_t addr);
 	template<bool log = false>
-	void write(uint32_t addr, const uint8_t data);
+	void write8(uint32_t addr, const uint8_t data);
 	uint64_t get_next_update_time(uint64_t now);
 
 private:

@@ -24,7 +24,7 @@ public:
 	void update_io_logging() { update_io(true); }
 	uint64_t get_next_irq_time(uint64_t now);
 	template<bool log = false>
-	void write(uint32_t addr, const uint8_t data);
+	void write8(uint32_t addr, const uint8_t data);
 
 private:
 	bool update_io(bool is_update);

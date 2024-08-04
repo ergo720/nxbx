@@ -232,7 +232,7 @@ pic::write_icw(unsigned idx, uint8_t value)
 }
 
 template<bool log>
-void pic::write(uint32_t addr, const uint8_t data)
+void pic::write8(uint32_t addr, const uint8_t data)
 {
 	if constexpr (log) {
 		log_io_write();
@@ -265,7 +265,7 @@ void pic::write(uint32_t addr, const uint8_t data)
 }
 
 template<bool log>
-uint8_t pic::read(uint32_t addr)
+uint8_t pic::read8(uint32_t addr)
 {
 	uint8_t value;
 
@@ -284,7 +284,7 @@ uint8_t pic::read(uint32_t addr)
 }
 
 template<bool log>
-void pic::write_elcr(uint32_t addr, const uint8_t data)
+void pic::write8_elcr(uint32_t addr, const uint8_t data)
 {
 	if constexpr (log) {
 		log_io_write();
@@ -294,7 +294,7 @@ void pic::write_elcr(uint32_t addr, const uint8_t data)
 }
 
 template<bool log>
-uint8_t pic::read_elcr(uint32_t addr)
+uint8_t pic::read8_elcr(uint32_t addr)
 {
 	uint8_t value = elcr;
 
@@ -312,8 +312,8 @@ pic::update_io(bool is_update)
 	if (idx == 0) {
 		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x20, 2, true,
 			{
-				.fnr8 = log ? cpu_read<pic, uint8_t, &pic::read<true>> : cpu_read<pic, uint8_t, &pic::read<false>>,
-				.fnw8 = log ? cpu_write<pic, uint8_t, &pic::write<true>> : cpu_write<pic, uint8_t, &pic::write<false>>
+				.fnr8 = log ? cpu_read<pic, uint8_t, &pic::read8<true>> : cpu_read<pic, uint8_t, &pic::read8<false>>,
+				.fnw8 = log ? cpu_write<pic, uint8_t, &pic::write8<true>> : cpu_write<pic, uint8_t, &pic::write8<false>>
 			},
 			this, is_update, is_update))) {
 			logger_en(error, "Failed to update io ports");
@@ -322,8 +322,8 @@ pic::update_io(bool is_update)
 
 		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x4D0, 1, true,
 			{
-				.fnr8 = log ? cpu_read<pic, uint8_t, &pic::read_elcr<true>> : cpu_read<pic, uint8_t, &pic::read_elcr<false>>,
-				.fnw8 = log ? cpu_write<pic, uint8_t, &pic::write_elcr<true>> : cpu_write<pic, uint8_t, &pic::write_elcr<false>>
+				.fnr8 = log ? cpu_read<pic, uint8_t, &pic::read8_elcr<true>> : cpu_read<pic, uint8_t, &pic::read8_elcr<false>>,
+				.fnw8 = log ? cpu_write<pic, uint8_t, &pic::write8_elcr<true>> : cpu_write<pic, uint8_t, &pic::write8_elcr<false>>
 			},
 			this, is_update, is_update))) {
 			logger_en(error, "Failed to update elcr io ports");
@@ -333,8 +333,8 @@ pic::update_io(bool is_update)
 	else {
 		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0xA0, 2, true,
 			{
-				.fnr8 = log ? cpu_read<pic, uint8_t, &pic::read<true>> : cpu_read<pic, uint8_t, &pic::read<false>>,
-				.fnw8 = log ? cpu_write<pic, uint8_t, &pic::write<true>> : cpu_write<pic, uint8_t, &pic::write<false>>
+				.fnr8 = log ? cpu_read<pic, uint8_t, &pic::read8<true>> : cpu_read<pic, uint8_t, &pic::read8<false>>,
+				.fnw8 = log ? cpu_write<pic, uint8_t, &pic::write8<true>> : cpu_write<pic, uint8_t, &pic::write8<false>>
 			},
 			this, is_update, is_update))) {
 			logger_en(error, "Failed to update pic io ports");
@@ -343,8 +343,8 @@ pic::update_io(bool is_update)
 
 		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x4D1, 1, true,
 			{
-				.fnr8 = log ? cpu_read<pic, uint8_t, &pic::read_elcr<true>> : cpu_read<pic, uint8_t, &pic::read_elcr<false>>,
-				.fnw8 = log ? cpu_write<pic, uint8_t, &pic::write_elcr<true>> : cpu_write<pic, uint8_t, &pic::write_elcr<false>>
+				.fnr8 = log ? cpu_read<pic, uint8_t, &pic::read8_elcr<true>> : cpu_read<pic, uint8_t, &pic::read8_elcr<false>>,
+				.fnw8 = log ? cpu_write<pic, uint8_t, &pic::write8_elcr<true>> : cpu_write<pic, uint8_t, &pic::write8_elcr<false>>
 			},
 			this, is_update, is_update))) {
 			logger_en(error, "Failed to update elcr io ports");

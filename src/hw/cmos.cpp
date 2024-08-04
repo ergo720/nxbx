@@ -44,7 +44,7 @@ cmos::update_time(uint64_t elapsed_us)
 }
 
 template<bool log>
-uint8_t cmos::read(uint32_t addr)
+uint8_t cmos::read8(uint32_t addr)
 {
 	uint8_t value = 0;
 
@@ -132,7 +132,7 @@ uint8_t cmos::read(uint32_t addr)
 }
 
 template<bool log>
-void cmos::write(uint32_t addr, const uint8_t data)
+void cmos::write8(uint32_t addr, const uint8_t data)
 {
 	if constexpr (log) {
 		log_io_write();
@@ -280,8 +280,8 @@ cmos::update_io(bool is_update)
 	bool log = module_enabled();
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x70, 2, true,
 		{
-			.fnr8 = log ? cpu_read<cmos, uint8_t, &cmos::read<true>> : cpu_read<cmos, uint8_t, &cmos::read<false>>,
-			.fnw8 = log ? cpu_write<cmos, uint8_t, &cmos::write<true>> : cpu_write<cmos, uint8_t, &cmos::write<false>>
+			.fnr8 = log ? cpu_read<cmos, uint8_t, &cmos::read8<true>> : cpu_read<cmos, uint8_t, &cmos::read8<false>>,
+			.fnw8 = log ? cpu_write<cmos, uint8_t, &cmos::write8<true>> : cpu_write<cmos, uint8_t, &cmos::write8<false>>
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update io ports");

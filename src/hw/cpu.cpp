@@ -43,8 +43,8 @@ cpu::update_io(bool is_update)
 	bool log = check_if_enabled<log_module::kernel>();
 	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, kernel::IO_BASE, kernel::IO_SIZE, true,
 		{
-			.fnr32 = log ? kernel::read<true> : kernel::read<false>,
-			.fnw32 = log ? kernel::write<true> : kernel::write<false>
+			.fnr32 = log ? kernel::read32<true> : kernel::read32<false>,
+			.fnw32 = log ? kernel::write32<true> : kernel::write32<false>
 		}, m_lc86cpu, is_update, is_update))) {
 		logger_en(error, "Failed to update kernel communication io ports");
 		return false;

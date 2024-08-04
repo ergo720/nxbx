@@ -9,7 +9,7 @@
 
 
 template<bool log, bool enabled>
-void pfifo::write(uint32_t addr, const uint32_t data)
+void pfifo::write32(uint32_t addr, const uint32_t data)
 {
 	if constexpr (!enabled) {
 		return;
@@ -54,7 +54,7 @@ void pfifo::write(uint32_t addr, const uint32_t data)
 }
 
 template<bool log, bool enabled>
-uint32_t pfifo::read(uint32_t addr)
+uint32_t pfifo::read32(uint32_t addr)
 {
 	if constexpr (!enabled) {
 		return 0;
@@ -237,27 +237,27 @@ auto pfifo::get_io_func(bool log, bool enabled, bool is_be)
 	if constexpr (is_write) {
 		if (enabled) {
 			if (log) {
-				return is_be ? nv2a_write<pfifo, uint32_t, &pfifo::write<true, true>, true> : nv2a_write<pfifo, uint32_t, &pfifo::write<true>>;
+				return is_be ? nv2a_write<pfifo, uint32_t, &pfifo::write32<true, true>, true> : nv2a_write<pfifo, uint32_t, &pfifo::write32<true>>;
 			}
 			else {
-				return is_be ? nv2a_write<pfifo, uint32_t, &pfifo::write<false, true>, true> : nv2a_write<pfifo, uint32_t, &pfifo::write<false>>;
+				return is_be ? nv2a_write<pfifo, uint32_t, &pfifo::write32<false, true>, true> : nv2a_write<pfifo, uint32_t, &pfifo::write32<false>>;
 			}
 		}
 		else {
-			return nv2a_write<pfifo, uint32_t, &pfifo::write<false, false>>;
+			return nv2a_write<pfifo, uint32_t, &pfifo::write32<false, false>>;
 		}
 	}
 	else {
 		if (enabled) {
 			if (log) {
-				return is_be ? nv2a_read<pfifo, uint32_t, &pfifo::read<true, true>, true> : nv2a_read<pfifo, uint32_t, &pfifo::read<true>>;
+				return is_be ? nv2a_read<pfifo, uint32_t, &pfifo::read32<true, true>, true> : nv2a_read<pfifo, uint32_t, &pfifo::read32<true>>;
 			}
 			else {
-				return is_be ? nv2a_read<pfifo, uint32_t, &pfifo::read<false, true>, true> : nv2a_read<pfifo, uint32_t, &pfifo::read<false>>;
+				return is_be ? nv2a_read<pfifo, uint32_t, &pfifo::read32<false, true>, true> : nv2a_read<pfifo, uint32_t, &pfifo::read32<false>>;
 			}
 		}
 		else {
-			return nv2a_read<pfifo, uint32_t, &pfifo::read<false, false>>;
+			return nv2a_read<pfifo, uint32_t, &pfifo::read32<false, false>>;
 		}
 	}
 }

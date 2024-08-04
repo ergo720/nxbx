@@ -19,13 +19,13 @@ public:
 	void raise_irq(uint8_t a);
 	void lower_irq(uint8_t a);
 	template<bool log = false>
-	uint8_t read(uint32_t addr);
+	uint8_t read8(uint32_t addr);
 	template<bool log = false>
-	void write(uint32_t addr, const uint8_t data);
+	void write8(uint32_t addr, const uint8_t data);
 	template<bool log = false>
-	uint8_t read_elcr(uint32_t addr);
+	uint8_t read8_elcr(uint32_t addr);
 	template<bool log = false>
-	void write_elcr(uint32_t addr, const uint8_t data);
+	void write8_elcr(uint32_t addr, const uint8_t data);
 
 private:
 	bool update_io(bool is_update);
