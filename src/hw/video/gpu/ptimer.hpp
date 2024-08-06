@@ -64,10 +64,9 @@ private:
 	uint64_t counter_offset;
 	// Counter value when it was stopped
 	uint64_t counter_when_stopped;
-	struct {
-		std::atomic_uint32_t int_status; // accessed from pfifo::worker with pmc::update_irq()
-		std::atomic_uint32_t int_enabled; // accessed from pfifo::worker with pmc::update_irq()
-		uint32_t multiplier, divider;
-		uint32_t alarm;
-	};
+	// registers
+	std::atomic_uint32_t int_status; // accessed from pfifo::worker with pmc::update_irq()
+	std::atomic_uint32_t int_enabled; // accessed from pfifo::worker with pmc::update_irq()
+	uint32_t multiplier, divider;
+	uint32_t alarm;
 };

@@ -43,7 +43,6 @@ private:
 	friend class ptimer;
 	machine *const m_machine;
 	uint64_t core_freq; // gpu frequency
-	struct {
-		uint32_t nvpll_coeff, mpll_coeff, vpll_coeff;
-	};
+	// registers
+	uint32_t nvpll_coeff, mpll_coeff, vpll_coeff;
 };

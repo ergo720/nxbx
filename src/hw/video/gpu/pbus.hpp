@@ -42,8 +42,6 @@ private:
 
 	machine *const m_machine;
 	void *m_pci_conf;
-	struct {
-		// Contains the ram type, among other unknown info about the ram modules
-		uint32_t fbio_ram;
-	};
+	// registers
+	uint32_t fbio_ram; // Contains the ram type, among other unknown info about the ram modules
 };

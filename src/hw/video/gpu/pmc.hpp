@@ -82,10 +82,9 @@ private:
 	friend class pramin;
 	friend class user;
 	machine *const m_machine;
-	struct {
-		uint32_t endianness;
-		std::atomic_uint32_t int_status; // accessed from pfifo::worker with pmc::update_irq()
-		std::atomic_uint32_t int_enabled; // accessed from pfifo::worker with pmc::update_irq()
-		uint32_t engine_enabled;
-	};
+	// registers
+	uint32_t endianness;
+	std::atomic_uint32_t int_status; // accessed from pfifo::worker with pmc::update_irq()
+	std::atomic_uint32_t int_enabled; // accessed from pfifo::worker with pmc::update_irq()
+	uint32_t engine_enabled;
 };

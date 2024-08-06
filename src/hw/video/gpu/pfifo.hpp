@@ -96,9 +96,8 @@ private:
 	std::atomic_uint32_t signal;
 	machine *const m_machine;
 	uint8_t *m_ram;
-	struct {
-		std::atomic_uint32_t regs[NV_PFIFO_SIZE / 4];
-	};
+	// registers
+	std::atomic_uint32_t regs[NV_PFIFO_SIZE / 4];
 };
 
 static_assert(sizeof(std::atomic_uint32_t) == 4);

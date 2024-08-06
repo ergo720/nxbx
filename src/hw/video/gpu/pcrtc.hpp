@@ -41,10 +41,9 @@ private:
 
 	friend class pmc;
 	machine *const m_machine;
-	struct {
-		std::atomic_uint32_t int_status; // accessed from pfifo::worker with pmc::update_irq()
-		std::atomic_uint32_t int_enabled; // accessed from pfifo::worker with pmc::update_irq()
-		uint32_t fb_addr;
-		uint32_t unknown[1];
-	};
+	// registers
+	std::atomic_uint32_t int_status; // accessed from pfifo::worker with pmc::update_irq()
+	std::atomic_uint32_t int_enabled; // accessed from pfifo::worker with pmc::update_irq()
+	uint32_t fb_addr;
+	uint32_t unknown[1];
 };

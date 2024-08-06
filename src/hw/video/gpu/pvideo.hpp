@@ -50,8 +50,7 @@ private:
 	auto get_io_func(bool log, bool enabled, bool is_be);
 
 	machine *const m_machine;
-	struct {
-		uint32_t debug[11];
-		uint32_t regs[24];
-	};
+	// registers
+	uint32_t debug[11];
+	uint32_t regs[24];
 };

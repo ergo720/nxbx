@@ -39,9 +39,8 @@ private:
 
 	friend class pramin;
 	machine *const m_machine;
-	struct {
-		uint32_t cfg0, cfg1;
-		uint32_t nvm;
-		std::atomic_uint32_t cstatus; // accessed from pfifo::worker with nv2a::get_dma_obj()
-	};
+	// registers
+	uint32_t cfg0, cfg1;
+	uint32_t nvm;
+	std::atomic_uint32_t cstatus; // accessed from pfifo::worker with nv2a::get_dma_obj()
 };
