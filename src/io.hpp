@@ -5,6 +5,7 @@
 #pragma once
 
 #include "util.hpp"
+#include "nxbx.hpp"
 
 
 struct cpu_t;
@@ -14,7 +15,7 @@ namespace io {
 	inline util::xbox_string xbe_name;
 	inline util::xbox_string xbe_path;
 
-	bool init(std::string nxbx_path, std::string xbe_path_, cpu_t *cpu);
+	bool init(const init_info_t &init_info, cpu_t *cpu);
 	void stop();
 	void submit_io_packet(uint32_t addr);
 	void flush_pending_packets();

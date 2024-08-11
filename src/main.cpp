@@ -13,7 +13,7 @@ static void
 print_help()
 {
 	static const char *help =
-		"usage: [options] <path to the XBE (xbox executable) to run>\n\
+		"usage: [options] <path to the XBE (xbox executable) or XISO (xbox disk image) to run>\n\
 options: \n\
 -k <path>  Path to nboxkrnl (xbox kernel) to run\n\
 -s <num>   Specify assembly syntax (default is AT&T)\n\
@@ -29,7 +29,7 @@ main(int argc, char **argv)
 {
 	init_info_t init_info;
 	init_info.m_syntax = disas_syntax::att;
-	init_info.m_type = console_t::xbox;
+	init_info.m_console_type = console_t::xbox;
 	init_info.m_use_dbg = 0;
 	char option = ' ';
 
@@ -79,16 +79,16 @@ main(int argc, char **argv)
 					}
 					std::string console = argv[idx];
 					if (console == nxbx::console_to_string(console_t::xbox)) {
-						init_info.m_type = console_t::xbox;
+						init_info.m_console_type = console_t::xbox;
 					}
 					else if (console == nxbx::console_to_string(console_t::chihiro)) {
-						init_info.m_type = console_t::chihiro;
+						init_info.m_console_type = console_t::chihiro;
 					}
 					else if (console == nxbx::console_to_string(console_t::devkit)) {
-						init_info.m_type = console_t::devkit;
+						init_info.m_console_type = console_t::devkit;
 					}
 					else {
-						switch (init_info.m_type = static_cast<console_t>(std::stoul(console, nullptr, 0)))
+						switch (init_info.m_console_type = static_cast<console_t>(std::stoul(console, nullptr, 0)))
 						{
 						case console_t::xbox:
 						case console_t::chihiro:
@@ -118,7 +118,10 @@ main(int argc, char **argv)
 				}
 			}
 			else if ((idx + 1) == argc) {
-				init_info.m_xbe_path = std::move(arg_str);
+				if (!nxbx::validate_input_file(init_info, arg_str)) {
+					return 1;
+				}
+				init_info.m_input_path = std::move(arg_str);
 				break;
 			}
 			else {
@@ -134,14 +137,14 @@ main(int argc, char **argv)
 		}
 	}
 
-	if (init_info.m_xbe_path.empty()) {
+	if (init_info.m_input_path.empty()) {
 		logger("Input file is required");
 		return 1;
 	}
 
 	// FIXME: remove this when the chihiro and devkit console types are supported
-	if ((init_info.m_type == console_t::chihiro) || (init_info.m_type == console_t::devkit)) {
-		logger("The %s console type is currently not supported", nxbx::console_to_string(init_info.m_type).data());
+	if ((init_info.m_console_type == console_t::chihiro) || (init_info.m_console_type == console_t::devkit)) {
+		logger("The %s console type is currently not supported", nxbx::console_to_string(init_info.m_console_type).data());
 		return 1;
 	}
 

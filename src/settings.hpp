@@ -42,7 +42,7 @@ private:
 		static constexpr const char *log_modules1 = "log_modules1";
 	} m_core_str;
 	std::string m_ini_path;
-	console_t m_type;
+	console_t m_console_type;
 	static constexpr uint32_t m_version = 1;
 	static constexpr uint32_t m_log_version = 2; // add one to this every time the log modules change
 };

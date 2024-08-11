@@ -18,29 +18,29 @@
 
 
 bool
-file_exists(std::pair<std::filesystem::path, std::string> path_to_check, std::filesystem::path &resolved_path)
+file_exists(std::filesystem::path dev_path, std::string remaining_name, std::filesystem::path &resolved_path)
 {
-	// path_to_check.first -> base device part, decided by host, path_to_check.second -> remaining variable part, decided by xbox
+	// dev_path -> base device part, decided by host, remaining_name -> remaining variable part, decided by xbox
 
 	try {
-		resolved_path = path_to_check.first / path_to_check.second;
+		resolved_path = dev_path / remaining_name;
 		bool exists = std::filesystem::exists(resolved_path);
 		if (!exists) {
 			// If it failed, the path might still exists, but the OS filesystem doesn't do case-insensitive comparisons (which the xbox always does)
 			// E.g.: on Linux, the ext4 filesystem might trigger this case
 
-			if (path_to_check.second.empty()) {
+			if (remaining_name.empty()) {
 				return false;
 			}
 
 			// This starts from the device path, and checks each file name component of the path for a case-insensitive match with a host file in the current inspected directory
-			size_t pos_to_check = 0, name_size = path_to_check.second.size();
+			size_t pos_to_check = 0, name_size = remaining_name.size();
 			int64_t remaining_path_size = name_size;
-			std::filesystem::path local_path(path_to_check.first);
+			std::filesystem::path local_path(dev_path);
 			do {
-				size_t pos = path_to_check.second.find_first_of('\\', pos_to_check);
+				size_t pos = remaining_name.find_first_of(std::filesystem::path::preferred_separator, pos_to_check);
 				pos = std::min(pos, name_size);
-				util::xbox_string_view xbox_name(util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(std::string_view(&path_to_check.second[pos_to_check], pos - pos_to_check)));
+				util::xbox_string_view xbox_name(util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(std::string_view(&remaining_name[pos_to_check], pos - pos_to_check)));
 				for (const auto &directory_entry : std::filesystem::directory_iterator(local_path)) {
 					std::string host_name(directory_entry.path().filename().string());
 					util::xbox_string xbox_host_name(util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(host_name));
@@ -61,10 +61,7 @@ file_exists(std::pair<std::filesystem::path, std::string> path_to_check, std::fi
 		}
 		return true;
 	}
-	catch (const std::filesystem::filesystem_error &e) {
-		logger_en(info, "Failed to check existence of path %s, the error was %s", resolved_path.string().c_str(), e.what());
-	}
-	catch (const std::bad_alloc &e) {
+	catch (const std::exception &e) {
 		logger_en(info, "Failed to check existence of path %s, the error was %s", resolved_path.string().c_str(), e.what());
 	}
 
@@ -72,17 +69,14 @@ file_exists(std::pair<std::filesystem::path, std::string> path_to_check, std::fi
 }
 
 bool
-file_exists(std::pair<std::filesystem::path, std::string> path_to_check, std::filesystem::path &resolved_path, bool *is_directory)
+file_exists(std::filesystem::path dev_path, std::string remaining_name, std::filesystem::path &resolved_path, bool *is_directory)
 {
-	if (file_exists(path_to_check, resolved_path)) {
+	if (file_exists(dev_path, remaining_name, resolved_path)) {
 		try {
 			*is_directory = std::filesystem::is_directory(resolved_path);
 			return true;
 		}
-		catch (const std::filesystem::filesystem_error &e) {
-			logger_en(info, "Failed to determine the file type of path %s, the error was %s", resolved_path.string().c_str(), e.what());
-		}
-		catch (const std::bad_alloc &e) {
+		catch (const std::exception &e) {
 			logger_en(info, "Failed to determine the file type of path %s, the error was %s", resolved_path.string().c_str(), e.what());
 		}
 	}
@@ -96,10 +90,7 @@ file_exists(std::filesystem::path path)
 	try {
 		return std::filesystem::exists(path);
 	}
-	catch (const std::filesystem::filesystem_error &e) {
-		logger_en(info, "Failed to determine the file type of path %s, the error was %s", path.string().c_str(), e.what());
-	}
-	catch (const std::bad_alloc &e) {
+	catch (const std::exception &e) {
 		logger_en(info, "Failed to determine the file type of path %s, the error was %s", path.string().c_str(), e.what());
 	}
 
@@ -127,10 +118,7 @@ create_directory(std::filesystem::path path)
 
 		return true;
 	}
-	catch (const std::filesystem::filesystem_error &e) {
-		logger_en(info, "Failed to created directory %s, the error was %s", path.string().c_str(), e.what());
-	}
-	catch (const std::bad_alloc &e) {
+	catch (const std::exception &e) {
 		logger_en(info, "Failed to created directory %s, the error was %s", path.string().c_str(), e.what());
 	}
 
@@ -153,10 +141,7 @@ create_file(std::filesystem::path path, uint64_t initial_size)
 			try {
 				std::filesystem::resize_file(path, initial_size);
 			}
-			catch (const std::filesystem::filesystem_error &e) {
-				logger_en(info, "Failed to set the initial file size of path %s, the error was %s", path.string().c_str(), e.what());
-			}
-			catch (const std::bad_alloc &e) {
+			catch (const std::exception &e) {
 				logger_en(info, "Failed to set the initial file size of path %s, the error was %s", path.string().c_str(), e.what());
 			}
 		}
@@ -179,11 +164,7 @@ open_file(std::filesystem::path path, std::uintmax_t *size)
 		try {
 			*size = std::filesystem::file_size(path);
 		}
-		catch (const std::filesystem::filesystem_error &e) {
-			*size = 0;
-			logger_en(info, "Failed to determine the file size of path %s, the error was %s", path.string().c_str(), e.what());
-		}
-		catch (const std::bad_alloc &e) {
+		catch (const std::exception &e) {
 			*size = 0;
 			logger_en(info, "Failed to determine the file size of path %s, the error was %s", path.string().c_str(), e.what());
 		}

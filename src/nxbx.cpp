@@ -5,6 +5,9 @@
 #include "nxbx.hpp"
 #include "console.hpp"
 #include "settings.hpp"
+#include "files.hpp"
+#include "xbe.hpp"
+#include "xiso.hpp"
 
 
 namespace nxbx {
@@ -17,6 +20,29 @@ namespace nxbx {
 	init_console(const init_info_t &init_info)
 	{
 		return console::get().init(init_info);
+	}
+
+
+	bool
+	validate_input_file(init_info_t &init_info, std::string_view arg_str)
+	{
+		if (auto opt = open_file(arg_str)) {
+			if (xbe::validate(arg_str)) {
+				init_info.m_input_type = input_t::xbe;
+				return true;
+			}
+
+			if (xiso::validate(arg_str)) {
+				init_info.m_input_type = input_t::xiso;
+				return true;
+			}
+
+			logger("Unrecognized input file (must be an XBE or XISO)");
+			return false;
+		}
+
+		logger(("Failed to open file \"" + std::string(arg_str) + "\"").c_str());
+		return false;
 	}
 
 	bool

@@ -7,6 +7,7 @@
 #include "cpu.hpp"
 #include "eeprom.hpp"
 #include "kernel.hpp"
+#include "xiso.hpp"
 #include "xpartition.hpp"
 #include <thread>
 #include <deque>
@@ -94,6 +95,11 @@ namespace io {
 		not_exists
 	};
 
+	enum class dev_t : uint32_t {
+		hdd,
+		dvd,
+	};
+
 	// io_request as used in nboxkrnl, also packed to make sure it has the same padding and alignment
 #pragma pack(1)
 	struct packed_io_request {
@@ -142,6 +148,20 @@ namespace io {
 		std::unique_ptr<char[]> io_buffer; // holds the data to be transferred (r/w requests only)
 	};
 
+	// Info about an opened file
+	struct io_file_info {
+		std::fstream fs; // opened file stream
+		std::string path; // host path of the file
+		uint64_t offset; // file offset inside xiso, or zero for everything else
+	};
+
+	// Info about a parsed xbox file path
+	struct io_path_info {
+		std::filesystem::path dev_path;
+		std::string remaining_name;
+		dev_t dev_type;
+	};
+
 	io_request::~io_request()
 	{
 		io_request_type io_type = IO_GET_TYPE(this->type);
@@ -152,11 +172,12 @@ namespace io {
 	}
 
 	static cpu_t *lc86cpu;
+	static input_t dvd_input_type;
 	static std::jthread jthr;
 	static std::deque<std::unique_ptr<io_request>> curr_io_queue;
 	static std::vector<std::unique_ptr<io_request>> pending_io_vec;
 	static std::unordered_map<uint64_t, std::unique_ptr<io_request>> completed_io_info;
-	static std::array<std::unordered_map<uint64_t, std::pair<std::fstream, std::string>>, NUM_OF_DEVS> xbox_handle_map;
+	static std::array<std::unordered_map<uint64_t, io_file_info>, NUM_OF_DEVS> xbox_handle_map;
 	static std::mutex queue_mtx;
 	static std::mutex completed_io_mtx;
 	static std::atomic_flag io_pending;
@@ -174,7 +195,7 @@ namespace io {
 				return false;
 			}
 			else {
-				auto pair = xbox_handle_map[handle].emplace(handle, std::make_pair(std::move(*opt), resolved_path.string()));
+				auto pair = xbox_handle_map[handle].emplace(handle, io_file_info{ std::move(*opt), resolved_path.string(), 0 });
 				assert(pair.second == true);
 				return true;
 			}
@@ -195,7 +216,7 @@ namespace io {
 		return true;
 	}
 
-	static std::pair<std::filesystem::path, std::string>
+	static io_path_info
 	parse_path(io_request *curr_io_request)
 	{
 		// NOTE1: Paths from the kernel should have the form "\device\<device name>\<partition number (optional)>\<file name>"
@@ -205,27 +226,32 @@ namespace io {
 		std::string_view path(curr_io_request->path, curr_io_request->size);
 		size_t dev_pos = path.find_first_of('\\', 1); // discards "device"
 		assert(dev_pos != std::string_view::npos);
-		size_t pos = path.find_first_of('\\', dev_pos + 1);
+		size_t pos = std::min(path.find_first_of('\\', dev_pos + 1), path.length() + 1);
 		assert(pos != std::string_view::npos);
 		util::xbox_string_view device = util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(path.substr(dev_pos + 1, pos - dev_pos - 1)); // extracts device name
 		std::filesystem::path resolved_path;
+		io_path_info path_info;
 		if (device.compare("CdRom0") == 0) {
 			resolved_path = dvd_path;
+			path_info.dev_path = resolved_path;
+			path_info.dev_type = dev_t::dvd;
 		}
 		else {
 			resolved_path = hdd_path;
-			size_t pos2 = path.find_first_of('\\', pos + 1);
-			assert(pos2 != std::string_view::npos);
+			size_t pos2 = std::min(path.find_first_of('\\', pos + 1), path.length());
 			unsigned partition_num = std::strtoul(&path[pos2 - 1], nullptr, 10);
 			assert(partition_num < XBOX_NUM_OF_PARTITIONS);
 			std::string partition = "Partition" + std::to_string(partition_num); // extracts partition number
 			resolved_path /= partition;
 			pos = pos2;
+			path_info.dev_path = resolved_path;
+			path_info.dev_type = dev_t::hdd;
 		}
-		std::string name(path.substr(pos + 1));
+		std::string name(path.substr(std::min(pos + 1, path.length())));
 		xbox_to_host_separator(name);
+		path_info.remaining_name = name;
 
-		return std::make_pair(resolved_path, name);
+		return path_info;
 	}
 
 	static void
@@ -263,17 +289,17 @@ namespace io {
 			if (io_type == open) {
 				// This code opens/creates the file according to the CreateDisposition parameter used by NtCreate/OpenFile
 
-				auto path_pair = parse_path(curr_io_request.get());
+				auto path_info = parse_path(curr_io_request.get());
 				io_info_block io_result(error, no_data, 0);
 				uint32_t disposition = IO_GET_DISPOSITION(curr_io_request->type);
 				uint32_t flags = IO_GET_FLAGS(curr_io_request->type);
-				bool host_is_directory, is_directory = flags & io_flags::is_directory;
+				bool is_directory = flags & io_flags::is_directory;
 
-				const auto add_to_map = [&curr_io_request, dev](auto &&opt, io_info_block *io_result, std::filesystem::path resolved_path) {
+				const auto add_to_map = [&curr_io_request, dev](auto &&opt, io_info_block *io_result, std::filesystem::path resolved_path, uint64_t file_offset) {
 					// NOTE: this insertion will fail when the guest creates a new handle to the same file. This, because it will pass the same host handle, and std::unordered_map
 					// doesn't allow duplicated keys. This is ok though, because we can reuse the same std::fstream for the same file and it will have the same path too
 					logger_en(info, "Opened %s with handle %" PRIu64 " and path %s", opt->is_open() ? "file" : "directory", curr_io_request->handle_oc, resolved_path.string().c_str());
-					auto pair = xbox_handle_map[dev].emplace(curr_io_request->handle_oc, std::make_pair(std::move(*opt), resolved_path.string()));
+					auto pair = xbox_handle_map[dev].emplace(curr_io_request->handle_oc, io_file_info{ std::move(*opt), resolved_path.string(), file_offset });
 					io_result->status = success;
 					};
 				const auto check_dir_flags = [flags](bool host_is_directory, io_info_block *io_result) -> bool {
@@ -290,79 +316,101 @@ namespace io {
 					}
 					};
 
-				std::filesystem::path resolved_path;
-				if (file_exists(path_pair, resolved_path, &host_is_directory)) {
-					io_result.info = exists;
-					if (disposition == IO_CREATE) {
-						// Create if doesn't exist - FILE_CREATE
-						io_result.status = failed;
+				if ((path_info.dev_type == dev_t::dvd) && (dvd_input_type == input_t::xiso)) {
+					xiso::file_info_t file_info = xiso::search_file(path_info.remaining_name);
+					if (file_info.exists) {
+						assert((disposition == IO_OPEN) || (disposition == IO_OPEN_IF));
 						io_result.info = exists;
-					}
-					else if ((disposition == IO_OPEN) || (disposition == IO_OPEN_IF)) {
-						// Open if exists - FILE_OPEN
-						// Open always - FILE_OPEN_IF
-						if (check_dir_flags(host_is_directory, &io_result)) {
+						if (check_dir_flags(file_info.is_directory, &io_result)) {
+							io_result.info = opened;
 							if (is_directory) {
-								// Open directory: nothing to do
-								io_result.info = opened;
-								add_to_map(std::make_optional<std::fstream>(), &io_result, resolved_path);
+								// Open directory
+								add_to_map(std::make_optional<std::fstream>(), &io_result, xiso::dvd_image_path, 0);
 							}
 							else {
 								// Open file
-								if (auto opt = open_file(resolved_path, &io_result.info2_or_id); opt) {
-									io_result.info = opened;
-									add_to_map(opt, &io_result, resolved_path);
-								}
-							}
-						}
-					}
-					else {
-						// Create always - FILE_SUPERSEDE
-						// Truncate if exists - FILE_OVERWRITE
-						// Truncate always - FILE_OVERWRITE_IF
-						if (check_dir_flags(host_is_directory, &io_result)) {
-							if (is_directory) {
-								// Create directory: already exists
-								io_result.info = exists;
-								add_to_map(std::make_optional<std::fstream>(), &io_result, resolved_path);
-							}
-							else {
-								// Create file
-								if (auto opt = create_file(resolved_path, curr_io_request->initial_size); opt) {
-									io_result.info = (disposition == IO_SUPERSEDE) ? superseded : overwritten;
-									add_to_map(opt, &io_result, resolved_path);
-								}
+								io_result.info2_or_id = file_info.size;
+								add_to_map(std::make_optional<std::fstream>(std::move(file_info.fs)), &io_result, xiso::dvd_image_path, file_info.offset);
 							}
 						}
 					}
 				}
 				else {
-					io_result.info = not_exists;
-					if ((disposition == IO_CREATE) || (disposition == IO_SUPERSEDE) || (disposition == IO_OPEN_IF) || (disposition == IO_OVERWRITE_IF)) {
-						// Create if doesn't exist - FILE_CREATE
-						// Create always - FILE_SUPERSEDE
-						// Open always - FILE_OPEN_IF
-						// Truncate always - FILE_OVERWRITE_IF
-						if (is_directory) {
-							// Create directory
-							if (::create_directory(resolved_path)) {
-								io_result.info = created;
-								add_to_map(std::make_optional<std::fstream>(), &io_result, resolved_path);
+					bool host_is_directory;
+					std::filesystem::path resolved_path;
+					if (file_exists(path_info.dev_path, path_info.remaining_name, resolved_path, &host_is_directory)) {
+						io_result.info = exists;
+						if (disposition == IO_CREATE) {
+							// Create if doesn't exist - FILE_CREATE
+							io_result.status = failed;
+							io_result.info = exists;
+						}
+						else if ((disposition == IO_OPEN) || (disposition == IO_OPEN_IF)) {
+							// Open if exists - FILE_OPEN
+							// Open always - FILE_OPEN_IF
+							if (check_dir_flags(host_is_directory, &io_result)) {
+								if (is_directory) {
+									// Open directory: nothing to do
+									io_result.info = opened;
+									add_to_map(std::make_optional<std::fstream>(), &io_result, resolved_path, 0);
+								}
+								else {
+									// Open file
+									if (auto opt = open_file(resolved_path, &io_result.info2_or_id); opt) {
+										io_result.info = opened;
+										add_to_map(opt, &io_result, resolved_path, 0);
+									}
+								}
 							}
 						}
 						else {
-							// Create file
-							if (auto opt = create_file(resolved_path, curr_io_request->initial_size); opt) {
-								io_result.info = created;
-								add_to_map(opt, &io_result, resolved_path);
+							// Create always - FILE_SUPERSEDE
+							// Truncate if exists - FILE_OVERWRITE
+							// Truncate always - FILE_OVERWRITE_IF
+							if (check_dir_flags(host_is_directory, &io_result)) {
+								if (is_directory) {
+									// Create directory: already exists
+									io_result.info = exists;
+									add_to_map(std::make_optional<std::fstream>(), &io_result, resolved_path, 0);
+								}
+								else {
+									// Create file
+									if (auto opt = create_file(resolved_path, curr_io_request->initial_size); opt) {
+										io_result.info = (disposition == IO_SUPERSEDE) ? superseded : overwritten;
+										add_to_map(opt, &io_result, resolved_path, 0);
+									}
+								}
 							}
 						}
 					}
 					else {
-						// Open if exists - FILE_OPEN
-						// Truncate if exists - FILE_OVERWRITE
-						io_result.status = not_found;
 						io_result.info = not_exists;
+						if ((disposition == IO_CREATE) || (disposition == IO_SUPERSEDE) || (disposition == IO_OPEN_IF) || (disposition == IO_OVERWRITE_IF)) {
+							// Create if doesn't exist - FILE_CREATE
+							// Create always - FILE_SUPERSEDE
+							// Open always - FILE_OPEN_IF
+							// Truncate always - FILE_OVERWRITE_IF
+							if (is_directory) {
+								// Create directory
+								if (::create_directory(resolved_path)) {
+									io_result.info = created;
+									add_to_map(std::make_optional<std::fstream>(), &io_result, resolved_path, 0);
+								}
+							}
+							else {
+								// Create file
+								if (auto opt = create_file(resolved_path, curr_io_request->initial_size); opt) {
+									io_result.info = created;
+									add_to_map(opt, &io_result, resolved_path, 0);
+								}
+							}
+						}
+						else {
+							// Open if exists - FILE_OPEN
+							// Truncate if exists - FILE_OVERWRITE
+							io_result.status = not_found;
+							io_result.info = not_exists;
+						}
 					}
 				}
 
@@ -384,24 +432,24 @@ namespace io {
 				continue;
 			}
 
-			std::fstream *fs = &it->second.first;
+			std::fstream *fs = &it->second.fs;
 			switch (io_type)
 			{
 			case io_request_type::close:
-				logger_en(info, "Closed file handle %" PRIu64 " with path %s", it->first, it->second.second.c_str());
+				logger_en(info, "Closed file handle %" PRIu64 " with path %s", it->first, it->second.path.c_str());
 				xbox_handle_map[dev].erase(it);
 				break;
 
 			case io_request_type::read:
 				if (!fs->is_open()) [[unlikely]] {
 					// Read operation on a directory (this should not happen...)
-					logger_en(warn, "Read operation to directory handle %" PRIu64 " with path %s", it->first, it->second.second.c_str());
+					logger_en(warn, "Read operation to directory handle %" PRIu64 " with path %s", it->first, it->second.path.c_str());
 					io_result.status = error;
 					io_result.info = no_data;
 					break;
 				}
 				curr_io_request->io_buffer = std::unique_ptr<char[]>(new char[curr_io_request->size]);
-				fs->seekg(curr_io_request->offset, fs->beg);
+				fs->seekg(curr_io_request->offset + it->second.offset);
 				fs->read(curr_io_request->io_buffer.get(), curr_io_request->size);
 				if (fs->good()) {
 					io_result.info = static_cast<io_info>(fs->gcount());
@@ -412,26 +460,26 @@ namespace io {
 					io_result.status = error;
 					fs->clear();
 					logger_en(info, "Read operation to file handle %" PRIu64 " with path %s, offset=0x%08" PRIX32 ", size=0x%08" PRIX32 " -> FAILED!",
-						it->first, it->second.second.c_str(), curr_io_request->offset, curr_io_request->size);
+						it->first, it->second.path.c_str(), curr_io_request->offset, curr_io_request->size);
 				}
 				break;
 
 			case io_request_type::write:
 				if (!fs->is_open()) [[unlikely]] {
 					// Write operation on a directory (this should not happen...)
-					logger_en(warn, "Write operation to directory handle %" PRIu64 " with path %s", it->first, it->second.second.c_str());
+					logger_en(warn, "Write operation to directory handle %" PRIu64 " with path %s", it->first, it->second.path.c_str());
 					io_result.status = error;
 					io_result.info = no_data;
 					break;
 				}
-				fs->seekg(curr_io_request->offset, fs->beg);
+				fs->seekg(curr_io_request->offset + it->second.offset);
 				fs->write(curr_io_request->io_buffer.get(), curr_io_request->size);
 				if (!fs->good()) {
 					io_result.status = error;
 					io_result.info = no_data;
 					fs->clear();
 					logger_en(info, "Write operation to file handle %" PRIu64 " with path %s, offset=0x%08" PRIX32 ", size=0x%08" PRIX32 " -> FAILED!",
-						it->first, it->second.second.c_str(), curr_io_request->offset, curr_io_request->size);
+						it->first, it->second.path.c_str(), curr_io_request->offset, curr_io_request->size);
 				}
 				else {
 					io_result.info = static_cast<io_info>(curr_io_request->size);
@@ -442,7 +490,7 @@ namespace io {
 
 			case io_request_type::remove1: {
 				logger_en(info, "Deleted %s with handle %" PRIu64, fs->is_open() ? "file" : "directory", it->first);
-				std::string file_path(it->second.second);
+				std::string file_path(it->second.path);
 				xbox_handle_map[dev].erase(it);
 				std::error_code ec;
 				std::filesystem::remove(file_path, ec);
@@ -547,10 +595,10 @@ namespace io {
 	}
 
 	bool
-	init(std::string nxbx_path, std::string xbe_path_, cpu_t *cpu)
+	init(const init_info_t &init_info, cpu_t *cpu)
 	{
 		lc86cpu = cpu;
-		std::filesystem::path curr_dir = nxbx_path;
+		std::filesystem::path curr_dir = init_info.m_nxbx_path;
 		curr_dir = curr_dir.remove_filename();
 		std::filesystem::path hdd_dir = curr_dir;
 		hdd_dir /= "Harddisk/";
@@ -587,25 +635,36 @@ namespace io {
 			}
 		}
 
-		std::filesystem::path local_xbe_path = std::filesystem::path(xbe_path_).make_preferred();
-		xbe_name = util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(local_xbe_path.filename().string());
-		hdd_path = hdd_dir;
-		dvd_path = local_xbe_path.remove_filename();
-		eeprom_path = eeprom_dir.remove_filename();
-		xbe_path = "\\Device\\CdRom0\\" + xbe_name;
-		if (dvd_path.string().starts_with(hdd_path.string())) {
-			// XBE is installed inside a HDD partition, so set the dvd drive to be empty by setting th dvd path to an invalid directory
-			// TODO: this should also set the SMC tray state to have no media
-			size_t partition_num_off = hdd_path.string().size() + 9;
-			std::string xbox_hdd_dir = "\\Device\\Harddisk0\\Partition" + std::to_string(dvd_path.string()[partition_num_off] - '0');
-			std::string xbox_remaining_hdd_dir = dvd_path.string().substr(partition_num_off + 1);
-			for (size_t pos = 0; pos < xbox_remaining_hdd_dir.size(); ++pos) {
-				if (xbox_remaining_hdd_dir[pos] == '/') {
-					xbox_remaining_hdd_dir[pos] = '\\'; // convert to xbox path separator
+		if (init_info.m_input_type == input_t::xiso) {
+			xbe_name = "default.xbe";
+			hdd_path = hdd_dir;
+			dvd_path = std::filesystem::path(init_info.m_input_path).make_preferred().remove_filename();
+			eeprom_path = eeprom_dir.remove_filename();
+			xbe_path = "\\Device\\CdRom0\\" + xbe_name;
+			dvd_input_type = input_t::xiso;
+		}
+		else {
+			std::filesystem::path local_xbe_path = std::filesystem::path(init_info.m_input_path).make_preferred();
+			xbe_name = util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(local_xbe_path.filename().string());
+			hdd_path = hdd_dir;
+			dvd_path = local_xbe_path.remove_filename();
+			eeprom_path = eeprom_dir.remove_filename();
+			xbe_path = "\\Device\\CdRom0\\" + xbe_name;
+			dvd_input_type = input_t::xbe;
+			if (dvd_path.string().starts_with(hdd_path.string())) {
+				// XBE is installed inside a HDD partition, so set the dvd drive to be empty by setting th dvd path to an invalid directory
+				// TODO: this should also set the SMC tray state to have no media
+				size_t partition_num_off = hdd_path.string().size() + 9;
+				std::string xbox_hdd_dir = "\\Device\\Harddisk0\\Partition" + std::to_string(dvd_path.string()[partition_num_off] - '0');
+				std::string xbox_remaining_hdd_dir = dvd_path.string().substr(partition_num_off + 1);
+				for (size_t pos = 0; pos < xbox_remaining_hdd_dir.size(); ++pos) {
+					if (xbox_remaining_hdd_dir[pos] == '/') {
+						xbox_remaining_hdd_dir[pos] = '\\'; // convert to xbox path separator
+					}
 				}
+				xbe_path = util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(xbox_hdd_dir + xbox_remaining_hdd_dir + xbe_name.c_str());
+				dvd_path = "";
 			}
-			xbe_path = util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(xbox_hdd_dir + xbox_remaining_hdd_dir + xbe_name.c_str());
-			dvd_path = "";
 		}
 
 		if (!open_special_files()) {

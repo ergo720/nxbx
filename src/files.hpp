@@ -10,8 +10,8 @@
 
 
 bool create_directory(std::filesystem::path path);
-bool file_exists(std::pair<std::filesystem::path, std::string> path_to_check, std::filesystem::path &resolved_path);
-bool file_exists(std::pair<std::filesystem::path, std::string> path_to_check, std::filesystem::path &resolved_path, bool *is_directory);
+bool file_exists(std::filesystem::path dev_path, std::string remaining_name, std::filesystem::path &resolved_path);
+bool file_exists(std::filesystem::path dev_path, std::string remaining_name, std::filesystem::path &resolved_path, bool *is_directory);
 bool file_exists(std::filesystem::path path);
 std::optional<std::fstream> create_file(std::filesystem::path path);
 std::optional<std::fstream> create_file(std::filesystem::path path, uint64_t initial_size);

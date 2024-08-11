@@ -62,7 +62,7 @@ cpu::reset()
 bool
 cpu::init(const init_info_t &init_info)
 {
-	m_ramsize = init_info.m_type == console_t::xbox ? RAM_SIZE64 : RAM_SIZE128;
+	m_ramsize = init_info.m_console_type == console_t::xbox ? RAM_SIZE64 : RAM_SIZE128;
 
 	// Load the nboxkrnl exe file
 	std::ifstream ifs(init_info.m_kernel.c_str(), std::ios_base::in | std::ios_base::binary);

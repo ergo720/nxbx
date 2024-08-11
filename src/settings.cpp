@@ -12,10 +12,10 @@ settings::init(const init_info_t &init_info)
 {
 	m_ini.Reset();
 	m_ini.SetMultiKey(true);
-	m_type = init_info.m_type;
+	m_console_type = init_info.m_console_type;
 	std::filesystem::path curr_dir = init_info.m_nxbx_path;
 	curr_dir = curr_dir.remove_filename();
-	curr_dir /= "nxbx-" + nxbx::console_to_string(m_type) + ".ini";
+	curr_dir /= "nxbx-" + nxbx::console_to_string(m_console_type) + ".ini";
 	m_ini_path = curr_dir.string();
 	
 	SI_Error err = m_ini.LoadFile(m_ini_path.c_str());

@@ -8,6 +8,7 @@
 #include <string>
 #include <stdexcept>
 #include <cinttypes>
+#include <optional>
 #include <assert.h>
 #include "logger.hpp"
 
@@ -26,13 +27,19 @@ enum class console_t : uint32_t {
 	devkit,
 };
 
+enum class input_t : uint32_t {
+	xbe,
+	xiso,
+};
+
 struct init_info_t {
 	std::string m_kernel;
 	std::string m_nxbx_path;
-	std::string m_xbe_path;
+	std::string m_input_path;
 	disas_syntax m_syntax;
 	uint32_t m_use_dbg;
-	console_t m_type;
+	console_t m_console_type;
+	input_t m_input_type;
 };
 
 // Settings struct declarations, used in the settings class
@@ -46,6 +53,7 @@ struct core_s {
 
 namespace nxbx {
 	bool init_console(const init_info_t &init_info);
+	bool validate_input_file(init_info_t &init_info, std::string_view arg_str);
 	bool init_settings(const init_info_t &init_info);
 	void save_settings();
 	template<typename T>
