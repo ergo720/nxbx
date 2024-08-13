@@ -49,7 +49,6 @@ namespace xiso {
 
 	static_assert(sizeof(volume_desc_t) == 2048);
 	static constexpr char magic[] = { 'M', 'I', 'C', 'R', 'O', 'S', 'O', 'F', 'T', '*', 'X', 'B', 'O', 'X', '*', 'M', 'E', 'D', 'I', 'A' };
-	static size_t image_offset; // offset to add to reach the game partition
 	static uint32_t root_dirent_first_sector;
 
 

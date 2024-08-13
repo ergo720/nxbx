@@ -22,7 +22,7 @@ namespace kernel {
 		IO_START,
 		IO_RETRY,
 		IO_QUERY,
-		UNUSED1,
+		DVD_INPUT_TYPE,
 		IO_CHECK_ENQUEUE,
 		UNUSED2,
 		UNUSED3,

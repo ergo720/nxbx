@@ -59,6 +59,10 @@ namespace kernel {
 			value = static_cast<uint32_t>(curr_us / 1000);
 			break;
 
+		case DVD_INPUT_TYPE:
+			value = static_cast<uint32_t>(io::dvd_input_type);
+			break;
+
 		case IO_CHECK_ENQUEUE:
 			value = io::pending_packets;
 			break;

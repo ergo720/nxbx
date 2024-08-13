@@ -172,7 +172,6 @@ namespace io {
 	}
 
 	static cpu_t *lc86cpu;
-	static input_t dvd_input_type;
 	static std::jthread jthr;
 	static std::deque<std::unique_ptr<io_request>> curr_io_queue;
 	static std::vector<std::unique_ptr<io_request>> pending_io_vec;
@@ -195,11 +194,17 @@ namespace io {
 				return false;
 			}
 			else {
-				auto pair = xbox_handle_map[handle].emplace(handle, io_file_info{ std::move(*opt), resolved_path.string(), 0 });
+				auto pair = xbox_handle_map[handle].emplace(handle, io_file_info{ std::move(*opt), resolved_path.string(), handle == CDROM_HANDLE ? xiso::image_offset : 0 });
 				assert(pair.second == true);
 				return true;
 			}
 			};
+
+		if (dvd_input_type == input_t::xiso) {
+			if (!lambda((xiso::dvd_image_path).make_preferred(), CDROM_HANDLE)) {
+				return false;
+			}
+		}
 
 		if (!lambda((eeprom_path / "eeprom.bin").make_preferred(), EEPROM_HANDLE)) {
 			return false;

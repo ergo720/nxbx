@@ -18,6 +18,7 @@ namespace xiso {
 	};
 
 	inline std::filesystem::path dvd_image_path;
+	inline size_t image_offset; // offset to add to reach the game partition
 
 	bool validate(std::string_view arg_str);
 	file_info_t search_file(std::string_view arg_str);

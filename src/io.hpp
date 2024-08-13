@@ -14,6 +14,7 @@ namespace io {
 	inline bool pending_packets = false;
 	inline util::xbox_string xbe_name;
 	inline util::xbox_string xbe_path;
+	inline input_t dvd_input_type;
 
 	bool init(const init_info_t &init_info, cpu_t *cpu);
 	void stop();
