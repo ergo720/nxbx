@@ -10,6 +10,7 @@
 #include "pit.hpp"
 #include "cmos.hpp"
 #include "pci.hpp"
+#include "smbus.hpp"
 #include "video/vga.hpp"
 #include "video/gpu/nv2a.hpp"
 
@@ -20,7 +21,7 @@ concept is_cpu_t = std::is_same_v<T, cpu_t *>;
 class machine {
 public:
 	machine() : m_cpu(this), m_pit(this), m_pic{ {this, 0, "MASTER PIC"}, {this, 1, "SLAVE PIC"} }, m_pci(this), m_cmos(this), m_nv2a(this),
-	m_vga(this) {}
+	m_vga(this), m_smbus(this) {}
 	bool init(const init_info_t &init_info)
 	{
 		if (!m_cpu.init(init_info)) {
@@ -45,6 +46,9 @@ public:
 			return false;
 		}
 		if (!m_vga.init()) {
+			return false;
+		}
+		if (!m_smbus.init()) {
 			return false;
 		}
 		return true;
@@ -83,6 +87,9 @@ public:
 		}
 		else if constexpr (std::is_same_v<T, vga>) {
 			return m_vga;
+		}
+		else if constexpr (std::is_same_v<T, smbus>) {
+			return m_smbus;
 		}
 		else if constexpr (std::is_same_v<T, nv2a>) {
 			return m_nv2a;
@@ -151,6 +158,7 @@ public:
 		m_pci.update_io_logging();
 		m_cmos.update_io_logging();
 		m_nv2a.apply_log_settings();
+		m_smbus.update_io_logging();
 		mem_init_region_io(m_cpu.get_lc86cpu(), 0, 0, true, {}, m_cpu.get_lc86cpu(), true, 3); // trigger the update in lib86cpu too
 	}
 
@@ -162,4 +170,5 @@ private:
 	cmos m_cmos;
 	nv2a m_nv2a;
 	vga m_vga;
+	smbus m_smbus;
 };
