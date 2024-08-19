@@ -3,11 +3,16 @@
 // SPDX-FileCopyrightText: 2023 ergo720
 
 #include "eeprom.hpp"
+#include "../files.hpp"
 #include <cstdint>
+#include <cinttypes>
+#include <cstring>
+
+#define MODULE_NAME eeprom
 
 
 // This is bunnie's eeprom, except that it stores the encrypted settings unencrypted, because nboxkrnl cannot decrypt them yet
-constexpr uint8_t default_eeprom[] = {
+static constexpr uint8_t g_default_eeprom[] = {
 	0xe3, 0x1c, 0x5c, 0x23, 0x6a, 0x58, 0x68, 0x37,
 	0xb7, 0x12, 0x26, 0x6c, 0x99, 0x11, 0x30, 0xd1,
 	0xe2, 0x3e, 0x4d, 0x56, 0x00, 0x00, 0x00, 0x00,
@@ -41,17 +46,82 @@ constexpr uint8_t default_eeprom[] = {
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
+static_assert(sizeof(g_default_eeprom) == 256);
 
+
+std::optional<uint16_t>
+eeprom::read_byte(uint8_t command)
+{
+	return m_eeprom[command];
+}
+
+std::optional<uint16_t>
+eeprom::write_byte(uint8_t command, uint8_t data)
+{
+	m_eeprom[command] = data;
+	return 0;
+}
+
+std::optional<uint16_t>
+eeprom::read_word(uint8_t command)
+{
+	return m_eeprom[command] | (((uint16_t)m_eeprom[command + 1]) << 8);
+}
+
+std::optional<uint16_t>
+eeprom::write_word(uint8_t command, uint16_t data)
+{
+	m_eeprom[command] = data & 0xFF;
+	m_eeprom[command + 1] = data >> 8;
+	return 0;
+}
+
+void
+eeprom::deinit()
+{
+	m_fs.seekg(0);
+	m_fs.write((const char *)m_eeprom, 256);
+	if (!m_fs.good()) {
+		logger_en(error, "Failed to flush eeprom file to disk");
+	}
+}
 
 bool
-gen_eeprom(std::fstream fs)
+eeprom::init(std::filesystem::path eeprom_dir)
 {
-	fs.seekg(0, fs.beg);
-	fs.write((const char *)default_eeprom, sizeof(default_eeprom));
-	if (fs.rdstate() != std::ios_base::goodbit) {
-		fs.clear();
+	uintmax_t size;
+	eeprom_dir = eeprom_dir.remove_filename();
+	eeprom_dir /= "eeprom.bin";
+	eeprom_dir.make_preferred();
+	if (auto opt = open_file(eeprom_dir, &size); !opt) {
+		if (auto opt = create_file(eeprom_dir); !opt) {
+			logger_en(error, "Failed to create eeprom file");
+			return false;
+		}
+		else {
+			m_fs = std::move(*opt);
+			m_fs.seekg(0);
+			m_fs.write((const char *)g_default_eeprom, 256);
+			if (m_fs.good()) {
+				std::memcpy(m_eeprom, g_default_eeprom, 256);
+				return true;
+			}
+			logger_en(error, "Failed to update eeprom file");
+			return false;
+		}
+	}
+	else {
+		if (size != 256) {
+			logger_en(error, "Unexpected eeprom file size (it was %" PRIuMAX ")", size);
+			return false;
+		}
+		m_fs = std::move(*opt);
+		m_fs.seekg(0);
+		m_fs.read((char *)m_eeprom, 256);
+		if (m_fs.good()) {
+			return true;
+		}
+		logger_en(error, "Failed to copy eeprom file to memory");
 		return false;
 	}
-
-	return true;
 }

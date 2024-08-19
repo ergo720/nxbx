@@ -22,7 +22,7 @@
 
 // Device number
 #define DEV_CDROM      0
-#define DEV_EEPROM     1
+#define DEV_UNUSED     1
 #define DEV_PARTITION0 2
 #define DEV_PARTITION1 3
 #define DEV_PARTITION2 4
@@ -35,7 +35,7 @@
 
 // Special internal handles used by the kernel
 #define CDROM_HANDLE      DEV_CDROM
-#define EEPROM_HANDLE     DEV_EEPROM
+#define UNUSED_HANDLE     DEV_UNUSED
 #define PARTITION0_HANDLE DEV_PARTITION0
 #define PARTITION1_HANDLE DEV_PARTITION1
 #define PARTITION2_HANDLE DEV_PARTITION2
@@ -183,7 +183,6 @@ namespace io {
 
 	static std::filesystem::path hdd_path;
 	static std::filesystem::path dvd_path;
-	static std::filesystem::path eeprom_path;
 
 
 	static bool
@@ -204,10 +203,6 @@ namespace io {
 			if (!lambda((xiso::dvd_image_path).make_preferred(), CDROM_HANDLE)) {
 				return false;
 			}
-		}
-
-		if (!lambda((eeprom_path / "eeprom.bin").make_preferred(), EEPROM_HANDLE)) {
-			return false;
 		}
 
 		for (unsigned i = 0; i < XBOX_NUM_OF_PARTITIONS; ++i) {
@@ -603,9 +598,7 @@ namespace io {
 	init(const init_info_t &init_info, cpu_t *cpu)
 	{
 		lc86cpu = cpu;
-		std::filesystem::path curr_dir = init_info.m_nxbx_path;
-		curr_dir = curr_dir.remove_filename();
-		std::filesystem::path hdd_dir = curr_dir;
+		std::filesystem::path hdd_dir = std::filesystem::path(init_info.m_nxbx_path).remove_filename();
 		hdd_dir /= "Harddisk/";
 		hdd_dir.make_preferred();
 		if (!::create_directory(hdd_dir)) {
@@ -624,27 +617,11 @@ namespace io {
 				return false;
 			}
 		}
-		std::filesystem::path eeprom_dir = curr_dir;
-		eeprom_dir /= "eeprom.bin";
-		eeprom_dir.make_preferred();
-		if (!file_exists(eeprom_dir)) {
-			if (auto opt = create_file(eeprom_dir); !opt) {
-				logger_en(error, "Failed to create eeprom file");
-				return false;
-			}
-			else {
-				if (!gen_eeprom(std::move(opt.value()))) {
-					logger_en(error, "Failed to update eeprom file");
-					return false;
-				}
-			}
-		}
 
 		if (init_info.m_input_type == input_t::xiso) {
 			xbe_name = "default.xbe";
 			hdd_path = hdd_dir;
 			dvd_path = std::filesystem::path(init_info.m_input_path).make_preferred().remove_filename();
-			eeprom_path = eeprom_dir.remove_filename();
 			xbe_path = "\\Device\\CdRom0\\" + xbe_name;
 			dvd_input_type = input_t::xiso;
 		}
@@ -653,7 +630,6 @@ namespace io {
 			xbe_name = util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(local_xbe_path.filename().string());
 			hdd_path = hdd_dir;
 			dvd_path = local_xbe_path.remove_filename();
-			eeprom_path = eeprom_dir.remove_filename();
 			xbe_path = "\\Device\\CdRom0\\" + xbe_name;
 			dvd_input_type = input_t::xbe;
 			if (dvd_path.string().starts_with(hdd_path.string())) {

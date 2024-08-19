@@ -160,12 +160,12 @@ open_file(std::filesystem::path path)
 std::optional<std::fstream>
 open_file(std::filesystem::path path, std::uintmax_t *size)
 {
+	*size = 0;
 	if (auto opt = open_file(path)) {
 		try {
 			*size = std::filesystem::file_size(path);
 		}
 		catch (const std::exception &e) {
-			*size = 0;
 			logger_en(info, "Failed to determine the file size of path %s, the error was %s", path.string().c_str(), e.what());
 		}
 		return opt;

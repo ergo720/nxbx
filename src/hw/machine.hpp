@@ -11,6 +11,7 @@
 #include "cmos.hpp"
 #include "pci.hpp"
 #include "smbus.hpp"
+#include "eeprom.hpp"
 #include "video/vga.hpp"
 #include "video/gpu/nv2a.hpp"
 
@@ -21,7 +22,7 @@ concept is_cpu_t = std::is_same_v<T, cpu_t *>;
 class machine {
 public:
 	machine() : m_cpu(this), m_pit(this), m_pic{ {this, 0, "MASTER PIC"}, {this, 1, "SLAVE PIC"} }, m_pci(this), m_cmos(this), m_nv2a(this),
-	m_vga(this), m_smbus(this) {}
+	m_vga(this), m_smbus(this), m_eeprom(log_module::eeprom) {}
 	bool init(const init_info_t &init_info)
 	{
 		if (!m_cpu.init(init_info)) {
@@ -49,6 +50,9 @@ public:
 			return false;
 		}
 		if (!m_smbus.init()) {
+			return false;
+		}
+		if (!m_eeprom.init(init_info.m_nxbx_path)) {
 			return false;
 		}
 		return true;
@@ -90,6 +94,9 @@ public:
 		}
 		else if constexpr (std::is_same_v<T, smbus>) {
 			return m_smbus;
+		}
+		else if constexpr (std::is_same_v<T, eeprom>) {
+			return m_eeprom;
 		}
 		else if constexpr (std::is_same_v<T, nv2a>) {
 			return m_nv2a;
@@ -171,4 +178,5 @@ private:
 	nv2a m_nv2a;
 	vga m_vga;
 	smbus m_smbus;
+	eeprom m_eeprom;
 };
