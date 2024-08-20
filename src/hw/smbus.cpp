@@ -281,6 +281,14 @@ smbus::reset()
 	m_block_off = 0;
 }
 
+void
+smbus::deinit()
+{
+	for (auto dev : m_devs) {
+		dev.second->deinit();
+	}
+}
+
 bool
 smbus::init()
 {

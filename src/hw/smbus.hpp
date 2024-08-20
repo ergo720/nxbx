@@ -33,6 +33,7 @@ class smbus {
 public:
 	smbus(machine *machine) : m_machine(machine) {}
 	bool init();
+	void deinit();
 	void reset();
 	void update_io_logging() { update_io(true); }
 	template<bool log = false>
