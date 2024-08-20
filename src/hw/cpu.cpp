@@ -65,7 +65,7 @@ cpu::init(const init_info_t &init_info)
 	m_ramsize = init_info.m_console_type == console_t::xbox ? RAM_SIZE64 : RAM_SIZE128;
 
 	// Load the nboxkrnl exe file
-	std::ifstream ifs(init_info.m_kernel.c_str(), std::ios_base::in | std::ios_base::binary);
+	std::ifstream ifs(init_info.m_kernel_path.c_str(), std::ios_base::in | std::ios_base::binary);
 	if (!ifs.is_open()) {
 		logger_en(error, "Could not open kernel file");
 		return false;
@@ -90,7 +90,6 @@ cpu::init(const init_info_t &init_info)
 		return false;
 	}
 	ifs.read(krnl_buff.get(), length);
-	ifs.close();
 
 	// Sanity checks on the kernel exe file
 	PIMAGE_DOS_HEADER dosHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(krnl_buff.get());
@@ -193,8 +192,38 @@ cpu::init(const init_info_t &init_info)
 	regs->ebp = 0x80400000;
 	regs->eip = peHeader->OptionalHeader.ImageBase + peHeader->OptionalHeader.AddressOfEntryPoint;
 
-	// Pass eeprom and certificate keys on the stack (we use dummy all-zero keys)
-	mem_fill_block_virt(m_lc86cpu, 0x80400000, 16 * 2, 0);
+	// Pass eeprom and certificate keys on the stack
+	char keys[32] = { 0 };
+	const auto open_keys = [&]() {
+		if (!init_info.m_keys_path.empty()) {
+			if (std::filesystem::path(init_info.m_keys_path).filename().compare("keys.bin") == 0) {
+				std::ifstream ifs(init_info.m_keys_path.c_str(), std::ios_base::in | std::ios_base::binary);
+				if (!ifs.is_open()) {
+					logger_en(info, "Could not open keys.bin file");
+					return;
+				}
+
+				ifs.seekg(0, ifs.end);
+				uint64_t length = ifs.tellg();
+				ifs.seekg(0, ifs.beg);
+				if (length != 32) {
+					logger_en(info, "Unexpected size of keys.bin file, should be 32 bytes (it was %" PRIu64 ")", length);
+					return;
+				}
+
+				ifs.read(keys, 32);
+				if (!ifs.good()) {
+					logger_en(info, "Failed to read keys.bin file");
+					return;
+				}
+				return;
+			}
+			logger_en(info, "Could not find keys.bin file");
+		}
+		};
+
+	open_keys();
+	mem_write_block_virt(m_lc86cpu, 0x80400000, 32, keys);
 
 	return true;
 }

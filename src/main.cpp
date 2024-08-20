@@ -13,13 +13,15 @@ static void
 print_help()
 {
 	static const char *help =
-		"usage: [options] <path to the XBE (xbox executable) or XISO (xbox disk image) to run>\n\
-options: \n\
--k <path>  Path to nboxkrnl (xbox kernel) to run\n\
--s <num>   Specify assembly syntax (default is AT&T)\n\
--c <name>  Specify the console type to emulate (default is xbox)\n\
--d         Start with debugger\n\
--h         Print this message";
+		"usage: nxbx [options]\n\
+options:\n\
+-i <path>    Path to the XBE (xbox executable) or XISO (xbox disk image) to run\n\
+-keys <path> Path of xbox keys.bin file\n\
+-k <path>    Path to nboxkrnl (xbox kernel) to run\n\
+-s <num>     Specify assembly syntax (default is AT&T)\n\
+-c <name>    Specify the console type to emulate (default is xbox)\n\
+-d           Start with debugger\n\
+-h           Print this message";
 
 	logger("%s", help);
 }
@@ -28,13 +30,28 @@ int
 main(int argc, char **argv)
 {
 	init_info_t init_info;
+	init_info.m_keys_path = "";
 	init_info.m_syntax = disas_syntax::att;
 	init_info.m_console_type = console_t::xbox;
 	init_info.m_use_dbg = 0;
 	char option = ' ';
 
+	const auto print_unk_opt = [](std::string_view arg_str) {
+		logger("Unknown option %s", arg_str.data());
+		print_help();
+		return 0;
+		};
+
+	const auto check_missing_arg = [argc, argv](int &idx, const char *opt) {
+		if (++idx == argc || argv[idx][0] == '-') {
+			logger("Missing argument for option \"%s\"", opt);
+			return true;
+		}
+		return false;
+		};
+
 	/* parameter parsing */
-	if (argc < 2) {
+	if (argc < 3) {
 		print_help();
 		return 0;
 	}
@@ -43,91 +60,103 @@ main(int argc, char **argv)
 		try {
 			option = ' ';
 			std::string arg_str(argv[idx]);
-			if (arg_str.size() == 2 && arg_str.front() == '-') {
-				switch (option = arg_str.at(1))
-				{
-				case 'k':
-					if (++idx == argc || argv[idx][0] == '-') {
-						logger("Missing argument for option \"%c\"", option);
-						return 0;
-					}
-					init_info.m_kernel = argv[idx];
-					break;
+			if (arg_str.front() == '-') {
+				if (arg_str.size() == 2) {
 
-				case 's':
-					if (++idx == argc || argv[idx][0] == '-') {
-						logger("Missing argument for option \"s\"");
-						return 0;
-					}
-					switch (init_info.m_syntax = static_cast<disas_syntax>(std::stoul(std::string(argv[idx]), nullptr, 0)))
+					// Process single-letter options
+					switch (option = arg_str.at(1))
 					{
-					case disas_syntax::att:
-					case disas_syntax::masm:
-					case disas_syntax::intel:
+					case 'i':
+						if (check_missing_arg(idx, "i")) {
+							return 0;
+						}
+						if (!nxbx::validate_input_file(init_info, argv[idx])) {
+							return 1;
+						}
+						init_info.m_input_path = argv[idx];
 						break;
 
-					default:
-						logger("Unknown syntax specified by option \"%c\"", option);
-						return 0;
-					}
-					break;
+					case 'k':
+						if (check_missing_arg(idx, "k")) {
+							return 0;
+						}
+						init_info.m_kernel_path = argv[idx];
+						break;
 
-				case 'c': {
-					if (++idx == argc || argv[idx][0] == '-') {
-						logger("Missing argument for option \"%c\"", option);
-						return 0;
-					}
-					std::string console = argv[idx];
-					if (console == nxbx::console_to_string(console_t::xbox)) {
-						init_info.m_console_type = console_t::xbox;
-					}
-					else if (console == nxbx::console_to_string(console_t::chihiro)) {
-						init_info.m_console_type = console_t::chihiro;
-					}
-					else if (console == nxbx::console_to_string(console_t::devkit)) {
-						init_info.m_console_type = console_t::devkit;
-					}
-					else {
-						switch (init_info.m_console_type = static_cast<console_t>(std::stoul(console, nullptr, 0)))
+					case 's':
+						if (check_missing_arg(idx, "s")) {
+							return 0;
+						}
+						switch (init_info.m_syntax = static_cast<disas_syntax>(std::stoul(std::string(argv[idx]), nullptr, 0)))
 						{
-						case console_t::xbox:
-						case console_t::chihiro:
-						case console_t::devkit:
+						case disas_syntax::att:
+						case disas_syntax::masm:
+						case disas_syntax::intel:
 							break;
 
 						default:
-							logger("Unknown console type specified by option \"%c\"", option);
+							logger("Unknown syntax specified by option \"%c\"", option);
 							return 0;
 						}
-					}
-				}
-				break;
+						break;
 
-				case 'd':
-					init_info.m_use_dbg = 1;
+					case 'c': {
+						if (check_missing_arg(idx, "c")) {
+							return 0;
+						}
+						std::string console = argv[idx];
+						if (console == nxbx::console_to_string(console_t::xbox)) {
+							init_info.m_console_type = console_t::xbox;
+						}
+						else if (console == nxbx::console_to_string(console_t::chihiro)) {
+							init_info.m_console_type = console_t::chihiro;
+						}
+						else if (console == nxbx::console_to_string(console_t::devkit)) {
+							init_info.m_console_type = console_t::devkit;
+						}
+						else {
+							switch (init_info.m_console_type = static_cast<console_t>(std::stoul(console, nullptr, 0)))
+							{
+							case console_t::xbox:
+							case console_t::chihiro:
+							case console_t::devkit:
+								break;
+
+							default:
+								logger("Unknown console type specified by option \"%c\"", option);
+								return 0;
+							}
+						}
+					}
 					break;
 
-				case 'h':
-					print_help();
-					return 0;
+					case 'd':
+						init_info.m_use_dbg = 1;
+						break;
 
-				default:
-					logger("Unknown option %s", arg_str.c_str());
-					print_help();
-					return 0;
+					case 'h':
+						print_help();
+						return 0;
+
+					default:
+						return print_unk_opt(arg_str);
+					}
 				}
-			}
-			else if ((idx + 1) == argc) {
-				if (!nxbx::validate_input_file(init_info, arg_str)) {
-					return 1;
+				else {
+					// Process multi-letter options
+					if (arg_str.compare("-keys") == 0) {
+						if (check_missing_arg(idx, arg_str.c_str())) {
+							return 0;
+						}
+						init_info.m_keys_path = argv[idx];
+					}
+					else {
+						return print_unk_opt(arg_str);
+					}
 				}
-				init_info.m_input_path = std::move(arg_str);
-				break;
 			}
 			else {
-				logger("Unknown option %s", arg_str.c_str());
-				print_help();
-				return 0;
+				return print_unk_opt(arg_str);
 			}
 		}
 		/* handle possible exceptions thrown by std::stoul */
@@ -149,7 +178,7 @@ main(int argc, char **argv)
 	}
 
 	init_info.m_nxbx_path = nxbx::get_path();
-	if (init_info.m_kernel.empty()) {
+	if (init_info.m_kernel_path.empty()) {
 		// Attempt to find nboxkrnl in the current directory of nxbx
 		std::filesystem::path curr_dir = init_info.m_nxbx_path;
 		curr_dir = curr_dir.remove_filename();
@@ -160,7 +189,7 @@ main(int argc, char **argv)
 			logger("Unable to find \"nboxkrnl.exe\" in the current working directory");
 			return 1;
 		}
-		init_info.m_kernel = curr_dir.string();
+		init_info.m_kernel_path = curr_dir.string();
 	}
 
 	if (nxbx::init_settings(init_info) == false) {
