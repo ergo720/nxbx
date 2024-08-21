@@ -299,6 +299,7 @@ smbus::init()
 	m_devs[0x54] = &m_machine->get<eeprom>(); // eeprom
 	m_devs[0x10] = &m_machine->get<smc>(); // smc
 	m_devs[0x4C] = &m_machine->get<adm>(); // adm
+	m_devs[0x45] = &m_machine->get<conexant>(); // conexant video encoder
 	reset();
 	return true;
 }

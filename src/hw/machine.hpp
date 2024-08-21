@@ -14,6 +14,7 @@
 #include "eeprom.hpp"
 #include "smc.hpp"
 #include "adm.hpp"
+#include "video/conexant.hpp"
 #include "video/vga.hpp"
 #include "video/gpu/nv2a.hpp"
 
@@ -24,7 +25,7 @@ concept is_cpu_t = std::is_same_v<T, cpu_t *>;
 class machine {
 public:
 	machine() : m_cpu(this), m_pit(this), m_pic{ {this, 0, "MASTER PIC"}, {this, 1, "SLAVE PIC"} }, m_pci(this), m_cmos(this), m_nv2a(this),
-	m_vga(this), m_smbus(this), m_eeprom(log_module::eeprom), m_smc(this, log_module::smc), m_adm(log_module::adm) {}
+	m_vga(this), m_smbus(this), m_eeprom(log_module::eeprom), m_smc(this, log_module::smc), m_adm(log_module::adm), m_conexant(log_module::conexant) {}
 	bool init(const init_info_t &init_info)
 	{
 		if (!m_cpu.init(init_info)) {
@@ -58,6 +59,9 @@ public:
 			return false;
 		}
 		if (!m_smc.init()) {
+			return false;
+		}
+		if (!m_conexant.init()) {
 			return false;
 		}
 		return true;
@@ -109,6 +113,9 @@ public:
 		}
 		else if constexpr (std::is_same_v<T, adm>) {
 			return m_adm;
+		}
+		else if constexpr (std::is_same_v<T, conexant>) {
+			return m_conexant;
 		}
 		else if constexpr (std::is_same_v<T, nv2a>) {
 			return m_nv2a;
@@ -193,4 +200,5 @@ private:
 	eeprom m_eeprom;
 	smc m_smc;
 	adm m_adm;
+	conexant m_conexant;
 };

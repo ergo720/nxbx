@@ -57,6 +57,7 @@ enum class log_module : int32_t {
 	eeprom,
 	smc,
 	adm,
+	conexant,
 	max,
 };
 
@@ -86,6 +87,7 @@ inline constexpr std::array module_to_str = {
 	"EEPROM -> ",
 	"SMC -> ",
 	"ADM -> ",
+	"CONEXANT -> "
 };
 static_assert(module_to_str.size() == (uint32_t)(log_module::max));
 
