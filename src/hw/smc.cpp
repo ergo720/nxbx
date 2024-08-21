@@ -14,6 +14,8 @@
 #define SMC_FAN_SPEED                   0x06
 #define SMC_LED_OVERRIDE                0x07
 #define SMC_LED_STATES                  0x08
+#define SMC_CPU_TEMPERATURE             0x09
+#define SMC_MB_TEMPERATURE              0x0A
 #define SMC_WRITE_SCRATCH               0x0E
 #define SMC_READ_SCRATCH                0x0F
 #define SMC_READ_FAN_SPEED              0x10
@@ -49,6 +51,11 @@ smc::read_byte(uint8_t command)
 	case SMC_VIDEO_MODE:
 	case SMC_SCRATCH:
 		value = m_regs[command];
+		break;
+
+	case SMC_CPU_TEMPERATURE:
+	case SMC_MB_TEMPERATURE:
+		value = *m_machine->get<adm>().read_byte((command - SMC_CPU_TEMPERATURE) ^ 1);
 		break;
 
 	case SMC_READ_SCRATCH:
