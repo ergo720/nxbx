@@ -5,10 +5,10 @@
 #include "io.hpp"
 #include "logger.hpp"
 #include "cpu.hpp"
-#include "eeprom.hpp"
 #include "kernel.hpp"
 #include "xiso.hpp"
 #include "xpartition.hpp"
+#include "console.hpp"
 #include <thread>
 #include <deque>
 #include <unordered_map>
@@ -633,8 +633,7 @@ namespace io {
 			xbe_path = "\\Device\\CdRom0\\" + xbe_name;
 			dvd_input_type = input_t::xbe;
 			if (dvd_path.string().starts_with(hdd_path.string())) {
-				// XBE is installed inside a HDD partition, so set the dvd drive to be empty by setting th dvd path to an invalid directory
-				// TODO: this should also set the SMC tray state to have no media
+				// XBE is installed inside a HDD partition, so set the dvd drive to be empty by setting the dvd path to an invalid directory
 				size_t partition_num_off = hdd_path.string().size() + 9;
 				std::string xbox_hdd_dir = "\\Device\\Harddisk0\\Partition" + std::to_string(dvd_path.string()[partition_num_off] - '0');
 				std::string xbox_remaining_hdd_dir = dvd_path.string().substr(partition_num_off + 1);
@@ -645,6 +644,7 @@ namespace io {
 				}
 				xbe_path = util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(xbox_hdd_dir + xbox_remaining_hdd_dir + xbe_name.c_str());
 				dvd_path = "";
+				console::get().update_tray_state(tray_state::no_media, false);
 			}
 		}
 

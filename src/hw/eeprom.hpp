@@ -2,6 +2,8 @@
 
 // SPDX-FileCopyrightText: 2023 ergo720
 
+#pragma once
+
 #include "smbus.hpp"
 #include <fstream>
 #include <filesystem>

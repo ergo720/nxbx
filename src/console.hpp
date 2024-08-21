@@ -55,6 +55,10 @@ public:
 			m_machine.apply_log_settings();
 		}
 	}
+	void update_tray_state(tray_state state, bool do_int)
+	{
+		m_machine.get<smc>().update_tray_state(state, do_int);
+	}
 
 private:
 	console() : m_is_init(false) {}
