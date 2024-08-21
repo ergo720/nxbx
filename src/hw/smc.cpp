@@ -130,7 +130,7 @@ bool
 smc::init()
 {
 	reset();
-	m_regs[SMC_TRAY_STATE] = SMC_TRAY_STATE_MEDIA_DETECT; // TODO: should change state when the user boots new XBEs/XISOs from the gui
+	m_tray_state = SMC_TRAY_STATE_MEDIA_DETECT; // TODO: should change state when the user boots new XBEs/XISOs from the gui
 	m_regs[SMC_VIDEO_MODE] = SMC_VIDEO_MODE_HDTV; // TODO: make configurable
 
 	return true;
