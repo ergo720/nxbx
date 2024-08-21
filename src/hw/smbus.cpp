@@ -93,14 +93,14 @@ void smbus::write8(uint32_t addr, const uint8_t data)
 		break;
 
 	case SMBUS_GE_addr:
-		m_regs[reg_off] |= (data & (GE_CYCTYPE | GE_HCYC_EN));
+		m_regs[reg_off] = data & (GE_CYCTYPE | GE_HCYC_EN);
 		if (data & GE_ABORT) {
 			m_regs[SMBUS_REG_off(SMBUS_GS_addr)] |= GS_ABRT_STS;
-			m_machine->raise_irq(SMBUS_IRQ_NUM);
-			break;
 		}
 		else if (data & GE_HOST_STC) {
 			start_cycle();
+		}
+		if (m_regs[SMBUS_REG_off(SMBUS_GE_addr)] & GE_HCYC_EN) {
 			m_machine->raise_irq(SMBUS_IRQ_NUM);
 		}
 		break;
