@@ -102,12 +102,12 @@ eeprom::init(std::filesystem::path eeprom_dir)
 			m_fs = std::move(*opt);
 			m_fs.seekg(0);
 			m_fs.write((const char *)g_default_eeprom, 256);
-			if (m_fs.good()) {
-				std::memcpy(m_eeprom, g_default_eeprom, 256);
-				return true;
+			if (!m_fs.good()) {
+				logger_en(error, "Failed to update eeprom file");
+				return false;
 			}
-			logger_en(error, "Failed to update eeprom file");
-			return false;
+			std::memcpy(m_eeprom, g_default_eeprom, 256);
+			return true;
 		}
 	}
 	else {
@@ -118,10 +118,10 @@ eeprom::init(std::filesystem::path eeprom_dir)
 		m_fs = std::move(*opt);
 		m_fs.seekg(0);
 		m_fs.read((char *)m_eeprom, 256);
-		if (m_fs.good()) {
-			return true;
+		if (!m_fs.good()) {
+			logger_en(error, "Failed to copy eeprom file to memory");
+			return false;
 		}
-		logger_en(error, "Failed to copy eeprom file to memory");
-		return false;
+		return true;
 	}
 }
