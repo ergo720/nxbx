@@ -42,6 +42,7 @@ smc::read_byte(uint8_t command)
 	{
 	case SMC_VERSION_STR:
 		value = m_version[m_version_idx];
+		m_version_idx = (m_version_idx + 1) % 3;
 		break;
 
 	case SMC_TRAY_STATE:
