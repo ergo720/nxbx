@@ -13,6 +13,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 20)
 
 option(LIB86CPU_BUILD_SHARED_LIB "Build shared libraries" OFF)
+option(LIB86CPU_XBOX_BUILD "Building Xbox version" ON)
 add_subdirectory("import/lib86cpu")
 
 if (CMAKE_GENERATOR MATCHES "Visual Studio")
