@@ -1,5 +1,8 @@
 # ergo720 Copyright (c) 2023
 
+# Suppress build failures caused by deprecation warnings treated as errors. CI seems to be using "-Werror=deprecated" which causes the issue
+set(CMAKE_ERROR_DEPRECATED FALSE CACHE BOOL "" FORCE)
+
 cmake_minimum_required(VERSION 3.5)
 project(nxbx)
 
