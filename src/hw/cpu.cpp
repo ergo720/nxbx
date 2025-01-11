@@ -184,9 +184,9 @@ cpu::init(const init_info_t &init_info)
 	regs->fs_hidden.flags = 0xCF9700;
 	regs->gs_hidden.flags = 0xCF9700;
 
-	regs->cr0 = 0x80000001; // protected, paging
+	regs->cr0 = 0x80000021; // protected, paging, ne
 	regs->cr3 = 0xF000; // pd addr
-	regs->cr4 = 0x10; // pse
+	regs->cr4 = 0x210; // pse, osfxsr
 
 	regs->esp = 0x80400000;
 	regs->ebp = 0x80400000;
