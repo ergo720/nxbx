@@ -305,8 +305,10 @@ pfifo::init()
 void
 pfifo::deinit()
 {
-	jthr.request_stop();
-	signal++;
-	signal.notify_one();
-	jthr.join();
+	if (jthr.joinable()) {
+		jthr.request_stop();
+		signal++;
+		signal.notify_one();
+		jthr.join();
+	}
 }
