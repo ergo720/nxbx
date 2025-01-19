@@ -6,20 +6,20 @@
 
 #include <cstdint>
 
-#define NV_USER 0x00800000
-#define NV_USER_BASE (NV2A_REGISTER_BASE + NV_USER)
-#define NV_USER_SIZE 0x800000
+#define NV_PUSER 0x00800000
+#define NV_PUSER_BASE (NV2A_REGISTER_BASE + NV_PUSER)
+#define NV_PUSER_SIZE 0x800000
 
-#define NV_USER_DMA_PUT 0x00800040
-#define NV_USER_DMA_GET 0x00800044
-#define NV_USER_REF 0x00800048
+#define NV_PUSER_DMA_PUT 0x00800040
+#define NV_PUSER_DMA_GET 0x00800044
+#define NV_PUSER_REF 0x00800048
 
 
 class machine;
 
-class user {
+class puser {
 public:
-	user(machine *machine) : m_machine(machine) {}
+	puser(machine *machine) : m_machine(machine) {}
 	bool init();
 	void update_io() { update_io(true); }
 	template<bool log = false>

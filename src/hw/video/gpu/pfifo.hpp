@@ -67,7 +67,7 @@
 class machine;
 class nv2a;
 class pmc;
-class user;
+class puser;
 
 class pfifo {
 public:
@@ -91,7 +91,7 @@ private:
 
 	friend class nv2a;
 	friend class pmc;
-	friend class user;
+	friend class puser;
 	std::jthread jthr;
 	std::atomic_uint32_t signal;
 	machine *const m_machine;

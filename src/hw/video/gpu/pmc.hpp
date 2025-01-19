@@ -53,7 +53,7 @@ class pvideo;
 class pbus;
 class pramdac;
 class pramin;
-class user;
+class puser;
 
 class pmc {
 public:
@@ -80,7 +80,7 @@ private:
 	friend class pbus;
 	friend class pramdac;
 	friend class pramin;
-	friend class user;
+	friend class puser;
 	machine *const m_machine;
 	// registers
 	uint32_t endianness;

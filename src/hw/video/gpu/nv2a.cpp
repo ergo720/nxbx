@@ -39,7 +39,7 @@ nv2a::init()
 	if (!m_pvideo.init()) {
 		return false;
 	}
-	if (!m_user.init()) {
+	if (!m_puser.init()) {
 		return false;
 	}
 	return true;
@@ -87,7 +87,7 @@ nv2a::apply_log_settings()
 	m_pfifo.update_io();
 	m_pvga.update_io();
 	m_pvideo.update_io();
-	m_user.update_io();
+	m_puser.update_io();
 }
 
 void
