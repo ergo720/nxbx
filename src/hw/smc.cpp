@@ -56,7 +56,7 @@ smc::read_byte(uint8_t command)
 
 	case SMC_CPU_TEMPERATURE:
 	case SMC_MB_TEMPERATURE:
-		value = *m_machine->get<adm>().read_byte((command - SMC_CPU_TEMPERATURE) ^ 1);
+		value = *m_machine->get<adm1032>().read_byte((command - SMC_CPU_TEMPERATURE) ^ 1);
 		break;
 
 	case SMC_READ_SCRATCH:

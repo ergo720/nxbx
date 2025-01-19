@@ -7,9 +7,9 @@
 #include "smbus.hpp"
 
 
-class adm : public smbus_device {
+class adm1032 : public smbus_device {
 public:
-	adm(log_module module_name) : smbus_device(module_name) {}
+	adm1032(log_module module_name) : smbus_device(module_name) {}
 	void deinit() override {}
 	void reset() {}
 	std::optional<uint16_t> read_byte(uint8_t command) override;

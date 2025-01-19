@@ -56,7 +56,7 @@ enum class log_module : int32_t {
 	smbus,
 	eeprom,
 	smc,
-	adm,
+	adm1032,
 	conexant,
 	max,
 };
