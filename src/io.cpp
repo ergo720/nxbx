@@ -54,14 +54,14 @@
 #define IO_OVERWRITE    4
 #define IO_OVERWRITE_IF 5
 
-#define IO_GET_TYPE(type) (io_request_type)((uint32_t)(type) & 0xF0000000)
+#define IO_GET_TYPE(type) (request_type_t)((uint32_t)(type) & 0xF0000000)
 #define IO_GET_FLAGS(type) ((uint32_t)(type) & 0x007FFFF8)
 #define IO_GET_DISPOSITION(type) ((uint32_t)(type) & 0x00000007)
 #define IO_GET_DEV(type) (((uint32_t)(type) >> 23) & 0x0000001F)
 
 namespace io {
 	// These definitions are the same used by nboxkrnl to submit I/O request, and should be kept synchronized with those
-	enum io_status : int32_t {
+	enum status_t : int32_t {
 		success = 0,
 		pending,
 		error,
@@ -71,7 +71,7 @@ namespace io {
 		not_found
 	};
 
-	enum io_request_type : uint32_t {
+	enum request_type_t : uint32_t {
 		open = 1 << 28,
 		remove1 = 2 << 28,
 		close = 3 << 28,
@@ -79,13 +79,13 @@ namespace io {
 		write = 5 << 28,
 	};
 
-	enum io_flags : uint32_t {
+	enum flags_t : uint32_t {
 		is_directory = 1 << 3,
 		must_be_a_dir = 1 << 4,
 		must_not_be_a_dir = 1 << 5
 	};
 
-	enum io_info : uint32_t {
+	enum info_t : uint32_t {
 		no_data = 0,
 		superseded = 0,
 		opened,
@@ -102,9 +102,9 @@ namespace io {
 
 	// io_request as used in nboxkrnl, also packed to make sure it has the same padding and alignment
 #pragma pack(1)
-	struct packed_io_request {
+	struct packed_request_t {
 		uint64_t id;
-		io_request_type type;
+		request_type_t type;
 		int64_t offset_or_size;
 		uint32_t size;
 		uint64_t handle_or_address;
@@ -112,9 +112,9 @@ namespace io {
 	};
 
 	// io_info_block as used in nboxkrnl, also packed to make sure it has the same padding and alignment
-	struct io_info_block {
-		io_status status;
-		io_info info;
+	struct info_block_t {
+		status_t status;
+		info_t info;
 		uint64_t info2_or_id; // extra info or id of the io request to query
 		uint32_t ready; // set to 0 by the guest, then set to 1 by the host when the io request is complete
 	};
@@ -125,10 +125,10 @@ namespace io {
 	// 31 - 28           27 - 23    22 - 3     2 - 0
 
 	// Host version of io_request
-	struct io_request {
-		~io_request();
+	struct request_t {
+		~request_t();
 		uint64_t id; // unique id to identify this request
-		io_request_type type; // type of request and flags
+		request_type_t type; // type of request and flags
 		union {
 			int64_t offset; // file offset from which to start the I/O
 			uint32_t initial_size; // initial file size for create requests only
@@ -144,27 +144,27 @@ namespace io {
 			uint64_t handle;
 			char *path;
 		};
-		io_info_block info; // holds the result of the transfer
-		std::unique_ptr<char[]> io_buffer; // holds the data to be transferred (r/w requests only)
+		info_block_t info; // holds the result of the transfer
+		std::unique_ptr<char[]> buffer; // holds the data to be transferred (r/w requests only)
 	};
 
 	// Info about an opened file
-	struct io_file_info {
+	struct file_info_t {
 		std::fstream fs; // opened file stream
 		std::string path; // host path of the file
 		uint64_t offset; // file offset inside xiso, or zero for everything else
 	};
 
 	// Info about a parsed xbox file path
-	struct io_path_info {
+	struct path_info_t {
 		std::filesystem::path dev_path;
 		std::string remaining_name;
 		dev_t dev_type;
 	};
 
-	io_request::~io_request()
+	request_t::~request_t()
 	{
-		io_request_type io_type = IO_GET_TYPE(this->type);
+		request_type_t io_type = IO_GET_TYPE(this->type);
 		if (io_type == open) {
 			delete[] this->path;
 			this->path = nullptr;
@@ -173,13 +173,13 @@ namespace io {
 
 	static cpu_t *lc86cpu;
 	static std::jthread jthr;
-	static std::deque<std::unique_ptr<io_request>> curr_io_queue;
-	static std::vector<std::unique_ptr<io_request>> pending_io_vec;
-	static std::unordered_map<uint64_t, std::unique_ptr<io_request>> completed_io_info;
-	static std::array<std::unordered_map<uint64_t, io_file_info>, NUM_OF_DEVS> xbox_handle_map;
+	static std::deque<std::unique_ptr<request_t>> curr_io_queue;
+	static std::vector<std::unique_ptr<request_t>> pending_io_vec;
+	static std::unordered_map<uint64_t, std::unique_ptr<request_t>> completed_io_info;
+	static std::array<std::unordered_map<uint64_t, file_info_t>, NUM_OF_DEVS> xbox_handle_map;
 	static std::mutex queue_mtx;
 	static std::mutex completed_io_mtx;
-	static std::atomic_flag io_pending;
+	static std::atomic_flag pending_io;
 
 	static std::filesystem::path hdd_path;
 	static std::filesystem::path dvd_path;
@@ -193,7 +193,7 @@ namespace io {
 				return false;
 			}
 			else {
-				auto pair = xbox_handle_map[handle].emplace(handle, io_file_info{ std::move(*opt), resolved_path.string(), handle == CDROM_HANDLE ? xiso::image_offset : 0 });
+				auto pair = xbox_handle_map[handle].emplace(handle, file_info_t{ std::move(*opt), resolved_path.string(), handle == CDROM_HANDLE ? xiso::image_offset : 0 });
 				assert(pair.second == true);
 				return true;
 			}
@@ -216,8 +216,8 @@ namespace io {
 		return true;
 	}
 
-	static io_path_info
-	parse_path(io_request *curr_io_request)
+	static path_info_t
+	parse_path(request_t *curr_io_request)
 	{
 		// NOTE1: Paths from the kernel should have the form "\device\<device name>\<partition number (optional)>\<file name>"
 		// "device name" can be CdRom0, Harddisk0 and "partition number" can be Partition0, Partition1, ...
@@ -230,7 +230,7 @@ namespace io {
 		assert(pos != std::string_view::npos);
 		util::xbox_string_view device = util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(path.substr(dev_pos + 1, pos - dev_pos - 1)); // extracts device name
 		std::filesystem::path resolved_path;
-		io_path_info path_info;
+		path_info_t path_info;
 		if (device.compare("CdRom0") == 0) {
 			resolved_path = dvd_path;
 			path_info.dev_path = resolved_path;
@@ -260,7 +260,7 @@ namespace io {
 		while (true) {
 
 			// Wait until there's some work to do
-			io_pending.wait(false);
+			pending_io.wait(false);
 
 			// Check to see if we need to terminate this thread
 			if (stok.stop_requested()) [[unlikely]] {
@@ -276,33 +276,33 @@ namespace io {
 
 			queue_mtx.lock();
 			if (curr_io_queue.empty()) {
-				io_pending.clear();
+				pending_io.clear();
 				queue_mtx.unlock();
 				continue;
 			}
-			std::unique_ptr<io_request> curr_io_request = std::move(curr_io_queue.front());
+			std::unique_ptr<request_t> curr_io_request = std::move(curr_io_queue.front());
 			curr_io_queue.pop_front();
 			queue_mtx.unlock();
 
-			io_request_type io_type = IO_GET_TYPE(curr_io_request->type);
+			request_type_t io_type = IO_GET_TYPE(curr_io_request->type);
 			uint32_t dev = IO_GET_DEV(curr_io_request->type);
 			if (io_type == open) {
 				// This code opens/creates the file according to the CreateDisposition parameter used by NtCreate/OpenFile
 
 				auto path_info = parse_path(curr_io_request.get());
-				io_info_block io_result(error, no_data, 0);
+				info_block_t io_result(error, no_data, 0);
 				uint32_t disposition = IO_GET_DISPOSITION(curr_io_request->type);
 				uint32_t flags = IO_GET_FLAGS(curr_io_request->type);
-				bool is_directory = flags & io_flags::is_directory;
+				bool is_directory = flags & flags_t::is_directory;
 
-				const auto add_to_map = [&curr_io_request, dev](auto &&opt, io_info_block *io_result, std::filesystem::path resolved_path, uint64_t file_offset) {
+				const auto add_to_map = [&curr_io_request, dev](auto &&opt, info_block_t *io_result, std::filesystem::path resolved_path, uint64_t file_offset) {
 					// NOTE: this insertion will fail when the guest creates a new handle to the same file. This, because it will pass the same host handle, and std::unordered_map
 					// doesn't allow duplicated keys. This is ok though, because we can reuse the same std::fstream for the same file and it will have the same path too
 					logger_en(info, "Opened %s with handle %" PRIu64 " and path %s", opt->is_open() ? "file" : "directory", curr_io_request->handle_oc, resolved_path.string().c_str());
-					auto pair = xbox_handle_map[dev].emplace(curr_io_request->handle_oc, io_file_info{ std::move(*opt), resolved_path.string(), file_offset });
+					auto pair = xbox_handle_map[dev].emplace(curr_io_request->handle_oc, file_info_t{ std::move(*opt), resolved_path.string(), file_offset });
 					io_result->status = success;
 					};
-				const auto check_dir_flags = [flags](bool host_is_directory, io_info_block *io_result) -> bool {
+				const auto check_dir_flags = [flags](bool host_is_directory, info_block_t *io_result) -> bool {
 					if ((flags & must_be_a_dir) && !host_is_directory) {
 						io_result->status = not_a_directory;
 						return false;
@@ -421,7 +421,7 @@ namespace io {
 				continue;
 			}
 
-			io_info_block io_result(success, no_data);
+			info_block_t io_result(success, no_data);
 			auto it = xbox_handle_map[dev].find(curr_io_request->handle);
 			if (it == xbox_handle_map[dev].end()) [[unlikely]] {
 				logger_en(warn, "Handle %" PRIu64 " not found", curr_io_request->handle); // this should not happen...
@@ -435,12 +435,12 @@ namespace io {
 			std::fstream *fs = &it->second.fs;
 			switch (io_type)
 			{
-			case io_request_type::close:
+			case request_type_t::close:
 				logger_en(info, "Closed file handle %" PRIu64 " with path %s", it->first, it->second.path.c_str());
 				xbox_handle_map[dev].erase(it);
 				break;
 
-			case io_request_type::read:
+			case request_type_t::read:
 				if (!fs->is_open()) [[unlikely]] {
 					// Read operation on a directory (this should not happen...)
 					logger_en(warn, "Read operation to directory handle %" PRIu64 " with path %s", it->first, it->second.path.c_str());
@@ -448,11 +448,11 @@ namespace io {
 					io_result.info = no_data;
 					break;
 				}
-				curr_io_request->io_buffer = std::unique_ptr<char[]>(new char[curr_io_request->size]);
+				curr_io_request->buffer = std::unique_ptr<char[]>(new char[curr_io_request->size]);
 				fs->seekg(curr_io_request->offset + it->second.offset);
-				fs->read(curr_io_request->io_buffer.get(), curr_io_request->size);
+				fs->read(curr_io_request->buffer.get(), curr_io_request->size);
 				if (fs->good()) {
-					io_result.info = static_cast<io_info>(fs->gcount());
+					io_result.info = static_cast<info_t>(fs->gcount());
 					logger_en(info, "Read operation to file handle %" PRIu64 ", offset=0x%08" PRIX32 ", size=0x%08" PRIX32 ", actual bytes transferred=0x%08" PRIX32 " -> OK!",
 						it->first, curr_io_request->offset, curr_io_request->size, io_result.info);
 				}
@@ -464,7 +464,7 @@ namespace io {
 				}
 				break;
 
-			case io_request_type::write:
+			case request_type_t::write:
 				if (!fs->is_open()) [[unlikely]] {
 					// Write operation on a directory (this should not happen...)
 					logger_en(warn, "Write operation to directory handle %" PRIu64 " with path %s", it->first, it->second.path.c_str());
@@ -473,7 +473,7 @@ namespace io {
 					break;
 				}
 				fs->seekg(curr_io_request->offset + it->second.offset);
-				fs->write(curr_io_request->io_buffer.get(), curr_io_request->size);
+				fs->write(curr_io_request->buffer.get(), curr_io_request->size);
 				if (!fs->good()) {
 					io_result.status = error;
 					io_result.info = no_data;
@@ -482,13 +482,13 @@ namespace io {
 						it->first, it->second.path.c_str(), curr_io_request->offset, curr_io_request->size);
 				}
 				else {
-					io_result.info = static_cast<io_info>(curr_io_request->size);
+					io_result.info = static_cast<info_t>(curr_io_request->size);
 					logger_en(info, "Write operation to file handle %" PRIu64 ", offset=0x%08" PRIX32 ", size=0x%08" PRIX32 " -> OK!",
 						it->first, curr_io_request->offset, curr_io_request->size);
 				}
 				break;
 
-			case io_request_type::remove1: {
+			case request_type_t::remove1: {
 				logger_en(info, "Deleted %s with handle %" PRIu64, fs->is_open() ? "file" : "directory", it->first);
 				std::string file_path(it->second.path);
 				xbox_handle_map[dev].erase(it);
@@ -509,14 +509,14 @@ namespace io {
 	}
 
 	static void
-	enqueue_io_packet(std::unique_ptr<io_request> curr_io_request)
+	enqueue_io_packet(std::unique_ptr<request_t> curr_io_request)
 	{
 		// If the I/O thread is currently holding the lock, we won't wait and instead retry the operation later
 		if (queue_mtx.try_lock()) {
 			curr_io_queue.push_back(std::move(curr_io_request));
 			// Signal that there's a new packet to process
-			io_pending.test_and_set();
-			io_pending.notify_one();
+			pending_io.test_and_set();
+			pending_io.notify_one();
 			queue_mtx.unlock();
 		}
 		else {
@@ -528,9 +528,9 @@ namespace io {
 	void
 	submit_io_packet(uint32_t addr)
 	{
-		packed_io_request packed_curr_io_request;
-		std::unique_ptr<io_request> curr_io_request = std::make_unique<io_request>();
-		mem_read_block_virt(lc86cpu, addr, sizeof(packed_io_request), (uint8_t *)&packed_curr_io_request);
+		packed_request_t packed_curr_io_request;
+		std::unique_ptr<request_t> curr_io_request = std::make_unique<request_t>();
+		mem_read_block_virt(lc86cpu, addr, sizeof(packed_request_t), (uint8_t *)&packed_curr_io_request);
 		curr_io_request->id = packed_curr_io_request.id;
 		curr_io_request->type = packed_curr_io_request.type;
 		curr_io_request->handle_oc = packed_curr_io_request.handle_or_address;
@@ -538,7 +538,7 @@ namespace io {
 		curr_io_request->size = packed_curr_io_request.size;
 		curr_io_request->handle = packed_curr_io_request.handle_or_path;
 
-		io_request_type io_type = IO_GET_TYPE(curr_io_request->type);
+		request_type_t io_type = IO_GET_TYPE(curr_io_request->type);
 		if (io_type == open) {
 			char *path = new char[curr_io_request->size + 1];
 			mem_read_block_virt(lc86cpu, (addr_t)curr_io_request->handle, curr_io_request->size, (uint8_t *)path);
@@ -548,7 +548,7 @@ namespace io {
 		else if (io_type == write) {
 			std::unique_ptr<char[]> io_buffer(new char[curr_io_request->size]);
 			mem_read_block_virt(lc86cpu, curr_io_request->address, curr_io_request->size, reinterpret_cast<uint8_t *>(io_buffer.get()));
-			curr_io_request->io_buffer = std::move(io_buffer);
+			curr_io_request->buffer = std::move(io_buffer);
 		}
 
 		enqueue_io_packet(std::move(curr_io_request));
@@ -566,8 +566,8 @@ namespace io {
 				pending_io_vec.clear();
 				pending_packets = false;
 				// Signal that there are new packets to process
-				io_pending.test_and_set();
-				io_pending.notify_one();
+				pending_io.test_and_set();
+				pending_io.notify_one();
 				queue_mtx.unlock();
 			}
 		}
@@ -577,17 +577,17 @@ namespace io {
 	query_io_packet(uint32_t addr)
 	{
 		if (completed_io_mtx.try_lock()) { // don't wait if the I/O thread is currently using the map
-			io_info_block block;
-			mem_read_block_virt(lc86cpu, addr, sizeof(io_info_block), (uint8_t *)&block);
+			info_block_t block;
+			mem_read_block_virt(lc86cpu, addr, sizeof(info_block_t), (uint8_t *)&block);
 			auto it = completed_io_info.find(block.info2_or_id);
 			if (it != completed_io_info.end()) {
-				io_request *request = it->second.get();
+				request_t *request = it->second.get();
 				if ((IO_GET_TYPE(request->type) == read) && (request->info.status == success)) {
-					mem_write_block_virt(lc86cpu, request->address, request->size, request->io_buffer.get());
+					mem_write_block_virt(lc86cpu, request->address, request->size, request->buffer.get());
 				}
 				block = request->info;
 				block.ready = 1;
-				mem_write_block_virt(lc86cpu, addr, sizeof(io_info_block), (uint8_t *)&block);
+				mem_write_block_virt(lc86cpu, addr, sizeof(info_block_t), (uint8_t *)&block);
 				completed_io_info.erase(it);
 			}
 			completed_io_mtx.unlock();
@@ -665,8 +665,8 @@ namespace io {
 			// Signal the I/O thread that it needs to exit
 			jthr.request_stop();
 			queue_mtx.lock();
-			io_pending.test_and_set();
-			io_pending.notify_one();
+			pending_io.test_and_set();
+			pending_io.notify_one();
 			queue_mtx.unlock();
 			jthr.join();
 		}
