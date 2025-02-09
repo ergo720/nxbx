@@ -42,6 +42,10 @@
 #define FATX32_CLUSTER_ROOT (uint32_t)0xFFFFFFF8
 #define FATX32_CLUSTER_EOC  (uint32_t)0xFFFFFFFF
 
+#define FATX_DIRENT_FREE1    0x00
+#define FATX_DIRENT_DELETED  0xE5
+#define FATX_DIRENT_FREE2    0xFF
+#define FATX_MAX_FILE_LENGTH 42
 
 namespace fatx {
 #pragma pack(1)
@@ -67,9 +71,22 @@ namespace fatx {
 		uint8_t Unused[FATX_RESERVED_LENGTH];
 	};
 	using PSUPERBLOCK = SUPERBLOCK *;
+
+	struct DIRENT {
+		uint8_t name_length;
+		uint8_t attributes;
+		uint8_t name[FATX_MAX_FILE_LENGTH];
+		uint32_t first_cluster;
+		uint32_t size;
+		uint32_t creation_time;
+		uint32_t last_write_time;
+		uint32_t last_access_time;
+	};
+	using PDIRENT = DIRENT *;
 #pragma pack()
 
 	static_assert(sizeof(SUPERBLOCK) == 4096);
+	static_assert(sizeof(DIRENT) == 64);
 
 	/*
 	Drive Letter  Description  Offset (bytes)  Size (bytes)  Filesystem       Device Object
@@ -104,6 +121,49 @@ namespace fatx {
 		}
 	};
 
+	static uint64_t cluster_size[XBOX_NUM_OF_PARTITIONS]; // in bytes
+
+	static constexpr uintmax_t metadata_fat_sizes[XBOX_NUM_OF_PARTITIONS] = {
+		0,             // don't use
+		1228 * 1024,   // partition1
+		68 * 1024,     // partition2
+		100 * 1024,    // partition3
+		100 * 1024,    // partition4
+		100 * 1024,    // partition5
+	};
+
+	static bool
+	setup_cluster_size(std::fstream *fs, unsigned partition_num)
+	{
+		assert(partition_num);
+		assert(partition_num < XBOX_NUM_OF_PARTITIONS);
+
+		char buffer[sizeof(SUPERBLOCK::ClusterSize)];
+		fs->seekg(offsetof(SUPERBLOCK, ClusterSize), fs->beg);
+		fs->read(buffer, sizeof(buffer));
+		if (!fs->good()) {
+			return false;
+		}
+		cluster_size[partition_num] = *(uint32_t *)buffer * XBOX_HDD_SECTOR_SIZE;
+
+		return true;
+	}
+
+	static bool
+	create_root_dirent(std::fstream *fs, unsigned partition_num)
+	{
+		assert(partition_num);
+		assert(partition_num < XBOX_NUM_OF_PARTITIONS);
+
+		uint64_t size = cluster_size[partition_num];
+		std::unique_ptr<char[]> buffer = std::make_unique_for_overwrite<char[]>(size);
+		std::fill_n(buffer.get(), size, FATX_DIRENT_FREE2);
+
+		fs->seekp(metadata_fat_sizes[partition_num], fs->beg);
+		fs->write(buffer.get(), size);
+		return fs->good();
+	}
+
 	static bool
 	create_fat(std::fstream *fs, std::filesystem::path partition_dir, unsigned partition_num)
 	{
@@ -127,16 +187,9 @@ namespace fatx {
 		}
 
 		if (partition_length) {
-			char buff[sizeof(SUPERBLOCK::ClusterSize)];
-			fs->seekg(offsetof(SUPERBLOCK, ClusterSize), fs->beg);
-			fs->read(buff, sizeof(buff));
-			if (!fs->good()) {
-				return false;
-			}
-
 			// NOTE: this assumes that the non-standard partitions are bigger than around 1GiB (fatx16/32 size boundary)
 			bool is_fatx16;
-			fat_length = partition_length / (*(uint32_t *)buff * XBOX_HDD_SECTOR_SIZE);
+			fat_length = partition_length / cluster_size[partition_num];
 			if ((partition_num >= 2) && (partition_num <= 5)) {
 				fat_length <<= 1;
 				is_fatx16 = true;
@@ -166,7 +219,7 @@ namespace fatx {
 				fatx32_buffer[1] = FATX32_CLUSTER_EOC;
 			}
 
-			fs->seekg(sizeof(SUPERBLOCK), fs->beg);
+			fs->seekp(sizeof(SUPERBLOCK), fs->beg);
 			fs->write(fat_buffer.get(), fat_length);
 			if (!fs->good()) {
 				return false;
@@ -192,7 +245,7 @@ create_partition_metadata_file(std::filesystem::path partition_dir, unsigned par
 				std::unique_ptr<char[]> partition0_buffer = std::make_unique<char[]>(XBOX_HDD_SECTOR_SIZE * XBOX_SWAPPART1_LBA_START);
 				std::copy_n(&fatx::hdd_partition_table.Magic[0], sizeof(fatx::XBOX_PARTITION_TABLE), partition0_buffer.get());
 				std::fstream &fs = opt.value();
-				fs.seekg(0, fs.beg);
+				fs.seekp(0, fs.beg);
 				fs.write(partition0_buffer.get(), XBOX_HDD_SECTOR_SIZE * XBOX_SWAPPART1_LBA_START);
 				if (!fs.good()) {
 					return false;
@@ -205,29 +258,44 @@ create_partition_metadata_file(std::filesystem::path partition_dir, unsigned par
 				superblock.RootDirCluster = 1;
 				std::fill_n(superblock.Unused, sizeof(superblock.Unused), 0xFF);
 				std::fstream &fs = opt.value();
-				fs.seekg(0, fs.beg);
+				fs.seekp(0, fs.beg);
 				fs.write((char *)&superblock, sizeof(fatx::SUPERBLOCK));
 				if (!fs.good()) {
 					return false;
 				}
+				fatx::cluster_size[partition_num] = superblock.ClusterSize * XBOX_HDD_SECTOR_SIZE;
 				if (!fatx::create_fat(&fs, partition_dir, partition_num)) {
+					return false;
+				}
+				if (!fatx::create_root_dirent(&fs, partition_num)) {
 					return false;
 				}
 			}
 		}
 	} else {
 		if (partition_num) {
-			std::error_code ec;
-			uintmax_t size = std::filesystem::file_size(partition_bin, ec);
-			if (ec) {
+			if (auto opt = open_file(partition_bin); !opt) {
 				return false;
-			} else if (size == sizeof(fatx::SUPERBLOCK)) {
-				// This is a legacy partition.bin file that lacks the FAT after the superblock
-				if (auto opt = open_file(partition_bin); !opt) {
+			} else {
+				std::fstream &fs = opt.value();
+				if (!fatx::setup_cluster_size(&fs, partition_num)) {
 					return false;
-				} else {
-					std::fstream &fs = opt.value();
+				}
+				std::error_code ec;
+				uintmax_t size = std::filesystem::file_size(partition_bin, ec);
+				if (ec) {
+					return false;
+				} else if (size == sizeof(fatx::SUPERBLOCK)) {
+					// This is a legacy partition.bin file that lacks the FAT after the superblock
 					if (!fatx::create_fat(&fs, partition_dir, partition_num)) {
+						return false;
+					}
+					if (!fatx::create_root_dirent(&fs, partition_num)) {
+						return false;
+					}
+				} else if (size == fatx::metadata_fat_sizes[partition_num]) {
+					// This is a legacy partition.bin file that lacks the root dirent after the FAT
+					if (!fatx::create_root_dirent(&fs, partition_num)) {
 						return false;
 					}
 				}
