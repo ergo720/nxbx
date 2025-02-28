@@ -7,7 +7,7 @@
 #include "settings.hpp"
 #include "files.hpp"
 #include "xbe.hpp"
-#include "xiso.hpp"
+#include "xdvdfs.hpp"
 
 
 namespace nxbx {
@@ -32,7 +32,7 @@ namespace nxbx {
 				return true;
 			}
 
-			if (xiso::validate(arg_str)) {
+			if (xdvdfs::validate(arg_str)) {
 				init_info.m_input_type = input_t::xiso;
 				return true;
 			}

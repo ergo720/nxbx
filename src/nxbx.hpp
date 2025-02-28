@@ -12,7 +12,8 @@
 #include <assert.h>
 #include "logger.hpp"
 
-#define nxbx_fatal(msg, ...) do { nxbx::fatal(log_module::MODULE_NAME, msg __VA_OPT__(,) __VA_ARGS__); } while(0)
+#define nxbx_mod_fatal(mod, msg, ...) do { nxbx::fatal(log_module::mod, msg __VA_OPT__(,) __VA_ARGS__); } while(0)
+#define nxbx_fatal(msg, ...) nxbx_mod_fatal(MODULE_NAME, msg __VA_OPT__(,) __VA_ARGS__)
 
 
 enum class disas_syntax : uint32_t {

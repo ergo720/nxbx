@@ -6,12 +6,12 @@
 #include "logger.hpp"
 #include "cpu.hpp"
 #include "kernel.hpp"
-#include "xiso.hpp"
-#include "xpartition.hpp"
+#include "xdvdfs.hpp"
+#include "fatx.hpp"
 #include "console.hpp"
 #include <thread>
 #include <deque>
-#include <unordered_map>
+#include <map>
 #include <mutex>
 #include <filesystem>
 #include <cinttypes>
@@ -19,32 +19,6 @@
 #include <array>
 
 #define MODULE_NAME io
-
-// Device number
-#define DEV_CDROM      0
-#define DEV_UNUSED     1
-#define DEV_PARTITION0 2
-#define DEV_PARTITION1 3
-#define DEV_PARTITION2 4
-#define DEV_PARTITION3 5
-#define DEV_PARTITION4 6
-#define DEV_PARTITION5 7
-#define DEV_PARTITION6 8 // non-standard
-#define DEV_PARTITION7 9 // non-standard
-#define NUM_OF_DEVS    10
-
-// Special internal handles used by the kernel
-#define CDROM_HANDLE      DEV_CDROM
-#define UNUSED_HANDLE     DEV_UNUSED
-#define PARTITION0_HANDLE DEV_PARTITION0
-#define PARTITION1_HANDLE DEV_PARTITION1
-#define PARTITION2_HANDLE DEV_PARTITION2
-#define PARTITION3_HANDLE DEV_PARTITION3
-#define PARTITION4_HANDLE DEV_PARTITION4
-#define PARTITION5_HANDLE DEV_PARTITION5
-#define PARTITION6_HANDLE DEV_PARTITION6 // non-standard
-#define PARTITION7_HANDLE DEV_PARTITION7 // non-standard
-#define FIRST_FREE_HANDLE NUM_OF_DEVS
 
 // Disposition flags (same as used by NtCreate/OpenFile)
 #define IO_SUPERSEDE    0
@@ -61,28 +35,12 @@
 
 namespace io {
 	// These definitions are the same used by nboxkrnl to submit I/O request, and should be kept synchronized with those
-	enum status_t : int32_t {
-		success = 0,
-		pending,
-		error,
-		failed,
-		is_a_directory,
-		not_a_directory,
-		not_found
-	};
-
 	enum request_type_t : uint32_t {
 		open = 1 << 28,
-		remove1 = 2 << 28,
+		remove = 2 << 28,
 		close = 3 << 28,
 		read = 4 << 28,
 		write = 5 << 28,
-	};
-
-	enum flags_t : uint32_t {
-		is_directory = 1 << 3,
-		must_be_a_dir = 1 << 4,
-		must_not_be_a_dir = 1 << 5
 	};
 
 	enum info_t : uint32_t {
@@ -95,30 +53,76 @@ namespace io {
 		not_exists
 	};
 
-	enum class dev_t : uint32_t {
-		hdd,
-		dvd,
+#pragma pack(1)
+	// io request packet and header as used in nboxkrnl, also packed to make sure it has the same padding and alignment
+	struct packed_request_header_t {
+		uint32_t id; // unique id to identify this request
+		uint32_t type; // type of request and flags
 	};
 
-	// io_request as used in nboxkrnl, also packed to make sure it has the same padding and alignment
-#pragma pack(1)
+	// Generic i/o request from the guest
+	struct packed_request_xx_t {
+		uint32_t handle; // file handle (it's the address of the kernel file info object that tracks the file)
+	};
+
+	// Specialized version of packed_request_xx_t for read/write requests only
+	struct packed_request_rw_t {
+		int64_t offset; // file offset from which to start the I/O
+		uint32_t size; // bytes to transfer
+		uint32_t address; // virtual address of the data to transfer
+		uint32_t handle; // file handle (it's the address of the kernel file info object that tracks the file)
+		uint32_t timestamp; // fatx timestamp
+	};
+
+	// Specialized version of packed_request_xx_t for open/create requests only
+	struct packed_request_oc_t {
+		int64_t initial_size; // file initial size
+		uint32_t size; // size of file path
+		uint32_t handle; // file handle (it's the address of the kernel file info object that tracks the file)
+		uint32_t path; // file path address
+		uint32_t attributes; // file attributes (only uses a single byte really)
+		uint32_t timestamp; // file timestamp
+		uint32_t desired_access; // the kind of access requested for the file
+		uint32_t create_options; // how the create the file
+	};
+
 	struct packed_request_t {
-		uint64_t id;
-		request_type_t type;
-		int64_t offset_or_size;
-		uint32_t size;
-		uint64_t handle_or_address;
-		uint64_t handle_or_path;
+		packed_request_header_t header;
+		union {
+			packed_request_oc_t m_oc;
+			packed_request_rw_t m_rw;
+			packed_request_xx_t m_xx;
+		};
 	};
 
 	// io_info_block as used in nboxkrnl, also packed to make sure it has the same padding and alignment
 	struct info_block_t {
-		status_t status;
-		info_t info;
-		uint64_t info2_or_id; // extra info or id of the io request to query
+		uint32_t id; // unique id to identify this request (it's the address of this io request itself)
+		status_t status; // the final status of the request
+		info_t info; // request-specific information
 		uint32_t ready; // set to 0 by the guest, then set to 1 by the host when the io request is complete
 	};
+
+	// Specialized version of info_block_t for open/create requests only
+	struct info_block_oc_t {
+		info_block_t header;
+		uint32_t file_size; // actual size of the opened file
+		union {
+			struct {
+				uint32_t free_clusters; // number of free clusters left
+				uint32_t creation_time;
+				uint32_t last_access_time;
+				uint32_t last_write_time;
+			} fatx;
+			int64_t xdvdfs_timestamp;
+		};
+	};
 #pragma pack()
+
+	static_assert(std::is_trivially_copyable_v<packed_request_t>);
+	static_assert(std::is_trivially_copyable_v<info_block_t>);
+	static_assert(sizeof(packed_request_t) == 44);
+	static_assert(sizeof(info_block_oc_t) == 36);
 
 	// Type layout of io_request
 	// io_request_type - dev_type - io_flags - disposition
@@ -127,39 +131,54 @@ namespace io {
 	// Host version of io_request
 	struct request_t {
 		~request_t();
-		uint64_t id; // unique id to identify this request
-		request_type_t type; // type of request and flags
+		uint32_t id; // unique id to identify this request
+		uint32_t type; // type of request and flags
 		union {
 			int64_t offset; // file offset from which to start the I/O
 			uint32_t initial_size; // initial file size for create requests only
 		};
-		uint32_t size; // bytes to transfer or size of path for open/create requests
 		union {
-			// virtual address of the data to transfer or file handle for open/create requests
-			uint64_t handle_oc;
+			// virtual address of the data to transfer or file path for open/create requests
 			uint32_t address;
-		};
-		union {
-			// file handle or file path for open/create requests
-			uint64_t handle;
 			char *path;
 		};
-		info_block_t info; // holds the result of the transfer
-		std::unique_ptr<char[]> buffer; // holds the data to be transferred (r/w requests only)
+		uint32_t size; // bytes to transfer or size of path for open/create requests
+		uint32_t handle; // file handle
+		uint32_t timestamp; // file timestamp
+		info_block_oc_t info; // holds the result of the transfer
 	};
 
-	// Info about an opened file
-	struct file_info_t {
+	struct request_oc_t : public request_t {
+		uint32_t attributes; // file attributes (only uses a single byte really)
+		uint32_t desired_access; // the kind of access requested for the file
+		uint32_t create_options; // how the create the file
+	};
+
+	struct request_rw_t : public request_t {
+		std::unique_ptr<char[]> buffer; // holds the data to be transferred
+	};
+
+	// Basic info about an opened file
+	struct file_info_base_t {
+		file_info_base_t(std::fstream &&f, std::string p) : fs(std::move(f)), path(p) {};
 		std::fstream fs; // opened file stream
-		std::string path; // host path of the file
-		uint64_t offset; // file offset inside xiso, or zero for everything else
+		std::string path; // same relative path returned by io::parse_path()
 	};
 
-	// Info about a parsed xbox file path
-	struct path_info_t {
-		std::filesystem::path dev_path;
-		std::string remaining_name;
-		dev_t dev_type;
+	// file_info_base_t that holds additional info about a fatx file
+	struct file_info_fatx_t : public file_info_base_t {
+		file_info_fatx_t(std::fstream &&f, std::string p, uint64_t o, fatx::DIRENT d) : file_info_base_t(std::move(f), p), dirent_offset(o), dirent(d) {};
+		uint64_t dirent_offset; // dirent offset in metadata.bin
+		fatx::DIRENT dirent; // a cached copy of the dirent
+		void last_access_time(uint32_t time) { dirent.last_access_time = time; };
+		void last_write_time(uint32_t time) { dirent.last_write_time = time; };
+		void set_dirent(fatx::DIRENT &dir) { dirent = dir; };
+	};
+
+	// file_info_base_t that holds additional info about a xdvdfs file
+	struct file_info_xdvdfs_t : public file_info_base_t  {
+		file_info_xdvdfs_t(std::fstream &&f, std::string p, uint64_t o) : file_info_base_t(std::move(f), p), offset(o) {};
+		uint64_t offset; // offset of the file inside the xiso image
 	};
 
 	request_t::~request_t()
@@ -176,13 +195,11 @@ namespace io {
 	static std::deque<std::unique_ptr<request_t>> curr_io_queue;
 	static std::vector<std::unique_ptr<request_t>> pending_io_vec;
 	static std::unordered_map<uint64_t, std::unique_ptr<request_t>> completed_io_info;
-	static std::array<std::unordered_map<uint64_t, file_info_t>, NUM_OF_DEVS> xbox_handle_map;
+	static std::array<std::map<uint64_t, std::unique_ptr<file_info_base_t>>, NUM_OF_DEVS> xbox_handle_map;
 	static std::mutex queue_mtx;
 	static std::mutex completed_io_mtx;
 	static std::atomic_flag pending_io;
-
-	static std::filesystem::path hdd_path;
-	static std::filesystem::path dvd_path;
+	static input_t dvd_input_type;
 
 
 	static bool
@@ -193,19 +210,19 @@ namespace io {
 				return false;
 			}
 			else {
-				auto pair = xbox_handle_map[handle].emplace(handle, file_info_t{ std::move(*opt), resolved_path.string(), handle == CDROM_HANDLE ? xiso::image_offset : 0 });
+				auto pair = xbox_handle_map[handle].emplace(handle, std::move(std::make_unique<file_info_base_t>(std::move(*opt), resolved_path.string())));
 				assert(pair.second == true);
 				return true;
 			}
 			};
 
 		if (dvd_input_type == input_t::xiso) {
-			if (!lambda((xiso::dvd_image_path).make_preferred(), CDROM_HANDLE)) {
+			if (!lambda((dvd_path /= xdvdfs::xiso_name).make_preferred(), CDROM_HANDLE)) {
 				return false;
 			}
 		}
 
-		for (unsigned i = 0; i < XBOX_NUM_OF_PARTITIONS; ++i) {
+		for (unsigned i = 0; i < XBOX_NUM_OF_HDD_PARTITIONS; ++i) {
 			std::filesystem::path curr_partition_dir = hdd_path / ("Partition" + std::to_string(i) + ".bin");
 			curr_partition_dir.make_preferred();
 			if (!lambda(curr_partition_dir, PARTITION0_HANDLE + i)) {
@@ -216,42 +233,39 @@ namespace io {
 		return true;
 	}
 
-	static path_info_t
-	parse_path(request_t *curr_io_request)
+	static std::string
+	parse_path(request_oc_t *host_io_request)
 	{
+		// This function takes an xbox path and converts it to a host path relative to the root folder of the device that contains the xbox file/directory
 		// NOTE1: Paths from the kernel should have the form "\device\<device name>\<partition number (optional)>\<file name>"
 		// "device name" can be CdRom0, Harddisk0 and "partition number" can be Partition0, Partition1, ...
 		// NOTE2: path comparisons are case-insensitive in the xbox kernel, so we need to do the same
 
-		std::string_view path(curr_io_request->path, curr_io_request->size);
+		std::string_view path(host_io_request->path, host_io_request->size);
 		size_t dev_pos = path.find_first_of('\\', 1); // discards "device"
 		assert(dev_pos != std::string_view::npos);
 		size_t pos = std::min(path.find_first_of('\\', dev_pos + 1), path.length() + 1);
 		assert(pos != std::string_view::npos);
 		util::xbox_string_view device = util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(path.substr(dev_pos + 1, pos - dev_pos - 1)); // extracts device name
 		std::filesystem::path resolved_path;
-		path_info_t path_info;
+
 		if (device.compare("CdRom0") == 0) {
-			resolved_path = dvd_path;
-			path_info.dev_path = resolved_path;
-			path_info.dev_type = dev_t::dvd;
+			resolved_path = "";
 		}
 		else {
-			resolved_path = hdd_path;
+			resolved_path = "Harddisk";
 			size_t pos2 = std::min(path.find_first_of('\\', pos + 1), path.length());
 			unsigned partition_num = std::strtoul(&path[pos2 - 1], nullptr, 10);
-			assert(partition_num < XBOX_NUM_OF_PARTITIONS);
+			assert(partition_num < XBOX_NUM_OF_HDD_PARTITIONS);
 			std::string partition = "Partition" + std::to_string(partition_num); // extracts partition number
 			resolved_path /= partition;
 			pos = pos2;
-			path_info.dev_path = resolved_path;
-			path_info.dev_type = dev_t::hdd;
 		}
 		std::string name(path.substr(std::min(pos + 1, path.length())));
 		xbox_to_host_separator(name);
-		path_info.remaining_name = name;
+		resolved_path /= name;
 
-		return path_info;
+		return resolved_path.string();
 	}
 
 	static void
@@ -264,6 +278,9 @@ namespace io {
 
 			// Check to see if we need to terminate this thread
 			if (stok.stop_requested()) [[unlikely]] {
+				for (unsigned i = DEV_PARTITION1; i < DEV_PARTITION6; ++i) {
+					flush_metadata_file(&xbox_handle_map[i].begin()->second->fs, i);
+				}
 				pending_packets = false;
 				curr_io_queue.clear();
 				completed_io_info.clear();
@@ -280,247 +297,408 @@ namespace io {
 				queue_mtx.unlock();
 				continue;
 			}
-			std::unique_ptr<request_t> curr_io_request = std::move(curr_io_queue.front());
+			std::unique_ptr<request_t> host_io_request = std::move(curr_io_queue.front());
 			curr_io_queue.pop_front();
 			queue_mtx.unlock();
 
-			request_type_t io_type = IO_GET_TYPE(curr_io_request->type);
-			uint32_t dev = IO_GET_DEV(curr_io_request->type);
+			request_type_t io_type = IO_GET_TYPE(host_io_request->type);
+			uint32_t dev = IO_GET_DEV(host_io_request->type);
 			if (io_type == open) {
 				// This code opens/creates the file according to the CreateDisposition parameter used by NtCreate/OpenFile
 
-				auto path_info = parse_path(curr_io_request.get());
-				info_block_t io_result(error, no_data, 0);
-				uint32_t disposition = IO_GET_DISPOSITION(curr_io_request->type);
-				uint32_t flags = IO_GET_FLAGS(curr_io_request->type);
-				bool is_directory = flags & flags_t::is_directory;
+				request_oc_t *curr_oc_request = (request_oc_t *)host_io_request.get();
+				std::string relative_path = parse_path(curr_oc_request);
+				info_block_oc_t io_result;
+				std::fill_n((char *)&io_result.header, sizeof(io_result.header), 0);
+				io_result.header.status = error;
+				uint32_t disposition = IO_GET_DISPOSITION(host_io_request->type);
+				uint32_t flags = IO_GET_FLAGS(host_io_request->type);
 
-				const auto add_to_map = [&curr_io_request, dev](auto &&opt, info_block_t *io_result, std::filesystem::path resolved_path, uint64_t file_offset) {
-					// NOTE: this insertion will fail when the guest creates a new handle to the same file. This, because it will pass the same host handle, and std::unordered_map
-					// doesn't allow duplicated keys. This is ok though, because we can reuse the same std::fstream for the same file and it will have the same path too
-					logger_en(info, "Opened %s with handle %" PRIu64 " and path %s", opt->is_open() ? "file" : "directory", curr_io_request->handle_oc, resolved_path.string().c_str());
-					auto pair = xbox_handle_map[dev].emplace(curr_io_request->handle_oc, file_info_t{ std::move(*opt), resolved_path.string(), file_offset });
-					io_result->status = success;
-					};
-				const auto check_dir_flags = [flags](bool host_is_directory, info_block_t *io_result) -> bool {
-					if ((flags & must_be_a_dir) && !host_is_directory) {
-						io_result->status = not_a_directory;
-						return false;
+				if (dev == DEV_CDROM) {
+					xdvdfs::file_info_t file_info;
+					std::optional<std::fstream> opt = std::fstream();
+					if (dvd_input_type == input_t::xiso) {
+						file_info = xdvdfs::search_file(relative_path); // search for the file in the xiso
+					} else {
+						assert(dvd_input_type == input_t::xbe);
+						std::filesystem::path resolved_path;
+						file_info.exists = file_exists(dvd_path, relative_path, resolved_path, &file_info.is_directory); // search for the file in the dvd folder
+						if (file_info.exists) {
+							file_info.offset = file_info.size = file_info.timestamp = 0;
+							if (!file_info.is_directory) {
+								if (opt = open_file(resolved_path, &file_info.size); opt) {
+									std::error_code ec;
+									file_info.size = std::filesystem::file_size(resolved_path, ec);
+									if (ec) {
+										file_info.exists = false; // make the request fail
+									}
+								}
+							}
+						}
 					}
-					else if ((flags & must_not_be_a_dir) && host_is_directory) {
-						io_result->status = is_a_directory;
-						return false;
-					}
-					else {
-						return true;
-					}
-					};
 
-				if ((path_info.dev_type == dev_t::dvd) && (dvd_input_type == input_t::xiso)) {
-					xiso::file_info_t file_info = xiso::search_file(path_info.remaining_name);
 					if (file_info.exists) {
 						assert((disposition == IO_OPEN) || (disposition == IO_OPEN_IF));
-						io_result.info = exists;
-						if (check_dir_flags(file_info.is_directory, &io_result)) {
-							io_result.info = opened;
-							if (is_directory) {
-								// Open directory
-								add_to_map(std::make_optional<std::fstream>(), &io_result, xiso::dvd_image_path, 0);
-							}
-							else {
-								// Open file
-								io_result.info2_or_id = file_info.size;
-								add_to_map(std::make_optional<std::fstream>(std::move(file_info.fs)), &io_result, xiso::dvd_image_path, file_info.offset);
-							}
+						io_result.header.info = exists;
+
+						if ((flags & io::flags_t::must_be_a_dir) && !file_info.is_directory) {
+							io_result.header.status = not_a_directory;
+						}
+						else if ((flags & io::flags_t::must_not_be_a_dir) && file_info.is_directory) {
+							io_result.header.status = is_a_directory;
+						}
+						else {
+							io_result.header.status = success;
+							io_result.header.info = opened;
+							io_result.file_size = file_info.size;
+							io_result.xdvdfs_timestamp = file_info.timestamp;
+							xbox_handle_map[dev].emplace(curr_oc_request->handle, std::move(std::make_unique<file_info_xdvdfs_t>(std::move(*opt), relative_path, file_info.offset)));
+							logger_en(info, "Opened %s with handle %" PRIu64 " and path %s", opt->is_open() ? "file" : "directory", curr_oc_request->handle, relative_path.c_str());
 						}
 					}
 				}
 				else {
-					bool host_is_directory;
+					const auto add_to_map = [curr_oc_request, dev, &relative_path](auto &&opt, info_block_oc_t *io_result, uint64_t dirent_offset, fatx::DIRENT &io_dirent) {
+							// NOTE: this insertion will fail when the guest creates a new handle to the same file. This, because it will pass the same host handle, and std::unordered_map
+							// doesn't allow duplicated keys. This is ok though, because we can reuse the same std::fstream for the same file and it will have the same path too
+							logger_en(info, "Opened %s with handle %" PRIu64 " and path %s", opt->is_open() ? "file" : "directory", curr_oc_request->handle, relative_path.c_str());
+							xbox_handle_map[dev].emplace(curr_oc_request->handle, std::move(std::make_unique<file_info_fatx_t>(std::move(*opt), relative_path, dirent_offset, io_dirent)));
+							io_result->header.status = success;
+							io_result->file_size = io_dirent.size;
+							io_result->fatx.creation_time = io_dirent.creation_time;
+							io_result->fatx.last_access_time = io_dirent.last_access_time;
+							io_result->fatx.last_write_time = io_dirent.last_write_time;
+							io_result->fatx.free_clusters = fatx::get_free_cluster_num(dev);
+						};
+
+					fatx::DIRENT io_dirent;
 					std::filesystem::path resolved_path;
-					if (file_exists(path_info.dev_path, path_info.remaining_name, resolved_path, &host_is_directory)) {
-						io_result.info = exists;
-						if (disposition == IO_CREATE) {
-							// Create if doesn't exist - FILE_CREATE
-							io_result.status = failed;
-							io_result.info = exists;
-						}
-						else if ((disposition == IO_OPEN) || (disposition == IO_OPEN_IF)) {
-							// Open if exists - FILE_OPEN
-							// Open always - FILE_OPEN_IF
-							if (check_dir_flags(host_is_directory, &io_result)) {
-								if (is_directory) {
-									// Open directory: nothing to do
-									io_result.info = opened;
-									add_to_map(std::make_optional<std::fstream>(), &io_result, resolved_path, 0);
-								}
-								else {
-									// Open file
-									if (auto opt = open_file(resolved_path, &io_result.info2_or_id); opt) {
-										io_result.info = opened;
-										add_to_map(opt, &io_result, resolved_path, 0);
+					uint64_t dirent_offset;
+					std::fstream *metadata_fs = &xbox_handle_map[dev].begin()->second->fs;
+					status_t fatx_search_status = fatx::find_dirent_for_file(relative_path, metadata_fs, dev, io_dirent, dirent_offset);
+
+					if (fatx_search_status == is_root_dir) {
+						assert((disposition == IO_OPEN) || (disposition == IO_OPEN_IF));
+
+						io_dirent.name_length = 1;
+						io_dirent.attributes = IO_FILE_DIRECTORY;
+						io_dirent.name[0] = '\\';
+						io_dirent.first_cluster = 1;
+						io_dirent.size = 0;
+						io_dirent.creation_time = curr_oc_request->timestamp;
+						io_dirent.last_write_time = curr_oc_request->timestamp;
+						io_dirent.last_access_time = curr_oc_request->timestamp;
+
+						io_result.header.info = opened;
+						add_to_map(std::make_optional<std::fstream>(), &io_result, 0, io_dirent);
+					}
+					else if (fatx_search_status == success) {
+						if (!file_exists(nxbx_path, relative_path, resolved_path)) {
+							// The fatx fs indicates that the file exists, but it doesn't on the host side. This can happen for example if the user manually moves/deletes
+							// the host file with the OS
+							logger_en(error, "File with path %s exists on fatx but doesn't on the host", relative_path.c_str());
+						} else {
+							bool is_directory = io_dirent.attributes & IO_FILE_DIRECTORY;
+							io_result.header.info = exists;
+							if (disposition == IO_CREATE) {
+								// Create if doesn't exist - FILE_CREATE
+								io_result.header.status = failed;
+								io_result.header.info = exists;
+							} else if ((disposition == IO_OPEN) || (disposition == IO_OPEN_IF)) {
+								// Open if exists - FILE_OPEN
+								// Open always - FILE_OPEN_IF
+								status_t status = fatx::check_file_access(curr_oc_request->desired_access, curr_oc_request->create_options, io_dirent.attributes, false, flags);
+								if (status == success) {
+									if (is_directory) {
+										// Open directory: nothing to do
+										io_result.header.info = opened;
+										add_to_map(std::make_optional<std::fstream>(), &io_result, dirent_offset, io_dirent);
+									} else {
+										// Open file
+										if (auto opt = open_file(resolved_path); opt) {
+											io_result.header.info = opened;
+											add_to_map(opt, &io_result, dirent_offset, io_dirent);
+										}
 									}
 								}
-							}
-						}
-						else {
-							// Create always - FILE_SUPERSEDE
-							// Truncate if exists - FILE_OVERWRITE
-							// Truncate always - FILE_OVERWRITE_IF
-							if (check_dir_flags(host_is_directory, &io_result)) {
-								if (is_directory) {
-									// Create directory: already exists
-									io_result.info = exists;
-									add_to_map(std::make_optional<std::fstream>(), &io_result, resolved_path, 0);
-								}
-								else {
-									// Create file
-									if (auto opt = create_file(resolved_path, curr_io_request->initial_size); opt) {
-										io_result.info = (disposition == IO_SUPERSEDE) ? superseded : overwritten;
-										add_to_map(opt, &io_result, resolved_path, 0);
+							} else {
+								// Create always - FILE_SUPERSEDE
+								// Truncate if exists - FILE_OVERWRITE
+								// Truncate always - FILE_OVERWRITE_IF
+								status_t status = fatx::check_file_access(curr_oc_request->desired_access, curr_oc_request->create_options, io_dirent.attributes, true, flags);
+								if (status == success) {
+									io_dirent.attributes = curr_oc_request->attributes;
+									io_dirent.last_write_time = curr_oc_request->timestamp;
+									if (is_directory) {
+										// Create directory: already exists
+										if (fatx::overwrite_dirent_for_file(io_dirent, metadata_fs, 0, dev, "") == success) {
+											io_result.header.info = exists;
+											add_to_map(std::make_optional<std::fstream>(), &io_result, dirent_offset, io_dirent);
+										}
+									} else {
+										// Create file
+										if (auto opt = create_file(resolved_path, curr_oc_request->initial_size); opt) {
+											if (fatx::overwrite_dirent_for_file(io_dirent, metadata_fs, curr_oc_request->initial_size, dev, relative_path) == success) {
+												io_result.header.info = (disposition == IO_SUPERSEDE) ? superseded : overwritten;
+												add_to_map(opt, &io_result, dirent_offset, io_dirent);
+											}
+										}
 									}
 								}
 							}
 						}
 					}
-					else {
-						io_result.info = not_exists;
+					else if (fatx_search_status == name_not_found) {
+						bool is_directory = curr_oc_request->attributes & IO_FILE_DIRECTORY;
+						io_result.header.info = not_exists;
+						resolved_path = nxbx_path / relative_path;
+
+						// Extract the filename to put in the dirent
+						size_t path_length = relative_path.length();
+						size_t pos = relative_path[path_length - 1] == std::filesystem::path::preferred_separator ? path_length - 2 : path_length - 1;
+						size_t pos2 = relative_path.find_last_of(std::filesystem::path::preferred_separator, pos);
+						assert(pos != std::string::npos);
+						std::string file_name(relative_path.substr(pos2 + 1, pos - pos2 + 1));
+
 						if ((disposition == IO_CREATE) || (disposition == IO_SUPERSEDE) || (disposition == IO_OPEN_IF) || (disposition == IO_OVERWRITE_IF)) {
 							// Create if doesn't exist - FILE_CREATE
 							// Create always - FILE_SUPERSEDE
 							// Open always - FILE_OPEN_IF
 							// Truncate always - FILE_OVERWRITE_IF
-							if (is_directory) {
-								// Create directory
-								if (::create_directory(resolved_path)) {
-									io_result.info = created;
-									add_to_map(std::make_optional<std::fstream>(), &io_result, resolved_path, 0);
+							status_t status = fatx::check_file_access(curr_oc_request->desired_access, curr_oc_request->create_options, curr_oc_request->attributes, true, flags);
+							if (status == success) {
+								io_dirent.name_length = file_name.length();
+								io_dirent.attributes = curr_oc_request->attributes;
+								std::copy_n(file_name.c_str(), file_name.length(), io_dirent.name);
+								io_dirent.first_cluster = 0; // replaced by create_dirent_for_file()
+								io_dirent.creation_time = curr_oc_request->timestamp;
+								io_dirent.last_write_time = curr_oc_request->timestamp;
+								io_dirent.last_access_time = curr_oc_request->timestamp;
+								if (is_directory) {
+									// Create directory
+									if (::create_directory(resolved_path)) {
+										io_dirent.size = 0;
+										if (fatx::create_dirent_for_file(io_dirent, metadata_fs, dev, relative_path) == status_t::success) {
+											io_result.header.info = created;
+											add_to_map(std::make_optional<std::fstream>(), &io_result, dirent_offset, io_dirent);
+										}
+									}
+								} else {
+									// Create file
+									if (auto opt = create_file(resolved_path, curr_oc_request->initial_size); opt) {
+										io_dirent.size = curr_oc_request->initial_size;
+										if (fatx::create_dirent_for_file(io_dirent, metadata_fs, dev, relative_path) == status_t::success) {
+											io_result.header.info = created;
+											add_to_map(opt, &io_result, dirent_offset, io_dirent);
+										}
+									}
 								}
 							}
-							else {
-								// Create file
-								if (auto opt = create_file(resolved_path, curr_io_request->initial_size); opt) {
-									io_result.info = created;
-									add_to_map(opt, &io_result, resolved_path, 0);
-								}
-							}
-						}
-						else {
+						} else {
 							// Open if exists - FILE_OPEN
 							// Truncate if exists - FILE_OVERWRITE
-							io_result.status = not_found;
-							io_result.info = not_exists;
+							io_result.header.status = name_not_found;
+							io_result.header.info = not_exists;
 						}
+					}
+					else {
+						assert((fatx_search_status == corrupt) || // dirent stream is full or it has an invalid cluster number
+							(fatx_search_status == error) || // host i/o error
+							(fatx_search_status == path_not_found)); // a directory in the middle of the path doesn't exist
+						io_result.header.status = fatx_search_status;
 					}
 				}
 
-				curr_io_request->info = io_result;
+				curr_oc_request->info = io_result;
 				completed_io_mtx.lock();
-				completed_io_info.emplace(curr_io_request->id, std::move(curr_io_request));
+				completed_io_info.emplace(curr_oc_request->id, std::move(host_io_request));
 				completed_io_mtx.unlock();
 				continue;
 			}
 
-			info_block_t io_result(success, no_data);
-			auto it = xbox_handle_map[dev].find(curr_io_request->handle);
+			info_block_t io_result;
+			std::fill_n((char *)&io_result, sizeof(io_result), 0);
+			auto it = xbox_handle_map[dev].find(host_io_request->handle);
 			if (it == xbox_handle_map[dev].end()) [[unlikely]] {
-				logger_en(warn, "Handle %" PRIu64 " not found", curr_io_request->handle); // this should not happen...
+				logger_en(warn, "Handle %" PRIu64 " not found", host_io_request->handle); // this should not happen...
 				io_result.status = error;
 				completed_io_mtx.lock();
-				completed_io_info.emplace(curr_io_request->id, std::move(curr_io_request));
+				completed_io_info.emplace(host_io_request->id, std::move(host_io_request));
 				completed_io_mtx.unlock();
 				continue;
 			}
 
-			std::fstream *fs = &it->second.fs;
+			std::fstream *fs = &it->second->fs;
 			switch (io_type)
 			{
 			case request_type_t::close:
-				logger_en(info, "Closed file handle %" PRIu64 " with path %s", it->first, it->second.path.c_str());
+				if (dev != DEV_CDROM) {
+					file_info_fatx_t *file_info_fatx = (file_info_fatx_t *)(it->second.get());
+					if (file_info_fatx->dirent.name[0] != '\\') { // the root directory hasn't a dirent to flush
+						fatx::flush_dirent_for_file(file_info_fatx->dirent, file_info_fatx->dirent_offset, &xbox_handle_map[dev].begin()->second->fs, dev);
+					}
+				}
+				logger_en(info, "Closed file handle %" PRIu64 " with path %s", it->first, it->second->path.c_str());
 				xbox_handle_map[dev].erase(it);
 				break;
 
-			case request_type_t::read:
-				if (!fs->is_open()) [[unlikely]] {
-					// Read operation on a directory (this should not happen...)
-					logger_en(warn, "Read operation to directory handle %" PRIu64 " with path %s", it->first, it->second.path.c_str());
-					io_result.status = error;
-					io_result.info = no_data;
-					break;
-				}
-				curr_io_request->buffer = std::unique_ptr<char[]>(new char[curr_io_request->size]);
-				fs->seekg(curr_io_request->offset + it->second.offset);
-				fs->read(curr_io_request->buffer.get(), curr_io_request->size);
-				if (fs->good()) {
-					io_result.info = static_cast<info_t>(fs->gcount());
-					logger_en(info, "Read operation to file handle %" PRIu64 ", offset=0x%08" PRIX32 ", size=0x%08" PRIX32 ", actual bytes transferred=0x%08" PRIX32 " -> OK!",
-						it->first, curr_io_request->offset, curr_io_request->size, io_result.info);
+			case request_type_t::read: {
+				io_result.status = error;
+				io_result.info = no_data;
+
+				request_rw_t *curr_rw_request = (request_rw_t *)host_io_request.get();
+				if (IS_DEV_HANDLE(curr_rw_request->handle)) {
+					if (curr_rw_request->handle == CDROM_HANDLE) {
+						if (dvd_input_type != input_t::xiso) {
+							// We can only handle raw disc accesses if the user has booted from an xiso
+							logger_en(error, "Unhandled raw dvd disc read, boot from an xiso to solve this; offset=0x%016" PRIX64 ", size=0x%08" PRIX32,
+								curr_rw_request->offset, curr_rw_request->size);
+						}
+						io_result.status = fatx::read_raw_partition(curr_rw_request->offset, curr_rw_request->size,
+							curr_rw_request->buffer.get(), DEV_CDROM, &xbox_handle_map[DEV_CDROM].begin()->second->fs);
+						if (io_result.status == success) {
+							io_result.info = static_cast<info_t>(curr_rw_request->size);
+						}
+					} else {
+						uint64_t offset = curr_rw_request->offset;
+						if (curr_rw_request->handle == PARTITION0_HANDLE) {
+							// Partition zero can access the whole disk, so figure out the target offset first
+							offset = disk_offset_to_partition_offset(curr_rw_request->offset, dev);
+							fs = &xbox_handle_map[dev].begin()->second->fs;
+						}
+						io_result.status = fatx::read_raw_partition(offset, curr_rw_request->size, curr_rw_request->buffer.get(), dev, fs);
+						if (io_result.status == success) {
+							io_result.info = static_cast<info_t>(curr_rw_request->size);
+						}
+					}
 				}
 				else {
-					io_result.status = error;
+					uint64_t offset = 0;
+					if ((dev == DEV_CDROM) && (dvd_input_type == input_t::xiso)) {
+						fs = &xbox_handle_map[dev].begin()->second->fs;
+						offset = xdvdfs::xiso_offset + static_cast<file_info_xdvdfs_t &&>(*it->second).offset;
+					}
+					if (!fs->is_open()) [[unlikely]] {
+						// Read operation on a directory (this should not happen...)
+						logger_en(warn, "Read operation to directory handle %" PRIu64 " with path %s", it->first, it->second->path.c_str());
+						break;
+					}
+					fs->seekg(curr_rw_request->offset + offset);
+					fs->read(curr_rw_request->buffer.get(), curr_rw_request->size);
+					if (fs->good() || fs->eof()) {
+						if (dev != DEV_CDROM) {
+							static_cast<file_info_fatx_t &&>(*it->second).last_access_time(curr_rw_request->timestamp);
+						}
+						io_result.status = success;
+						io_result.info = static_cast<info_t>(fs->gcount());
+						logger_en(info, "Read operation to file handle %" PRIu64 ", offset=0x%08" PRIX32 ", size=0x%08" PRIX32 ", actual bytes transferred=0x%08" PRIX32 " -> %s",
+							it->first, curr_rw_request->offset, curr_rw_request->size, io_result.info, fs->good() ? "OK!" : "EOF!");
+					} else {
+						logger_en(info, "Read operation to file handle %" PRIu64 " with path %s, offset=0x%08" PRIX32 ", size=0x%08" PRIX32 " -> FAILED!",
+							it->first, it->second->path.c_str(), curr_rw_request->offset, curr_rw_request->size);
+					}
 					fs->clear();
-					logger_en(info, "Read operation to file handle %" PRIu64 " with path %s, offset=0x%08" PRIX32 ", size=0x%08" PRIX32 " -> FAILED!",
-						it->first, it->second.path.c_str(), curr_io_request->offset, curr_io_request->size);
 				}
-				break;
+			}
+			break;
 
-			case request_type_t::write:
-				if (!fs->is_open()) [[unlikely]] {
-					// Write operation on a directory (this should not happen...)
-					logger_en(warn, "Write operation to directory handle %" PRIu64 " with path %s", it->first, it->second.path.c_str());
-					io_result.status = error;
-					io_result.info = no_data;
-					break;
-				}
-				fs->seekg(curr_io_request->offset + it->second.offset);
-				fs->write(curr_io_request->buffer.get(), curr_io_request->size);
-				if (!fs->good()) {
-					io_result.status = error;
-					io_result.info = no_data;
-					fs->clear();
-					logger_en(info, "Write operation to file handle %" PRIu64 " with path %s, offset=0x%08" PRIX32 ", size=0x%08" PRIX32 " -> FAILED!",
-						it->first, it->second.path.c_str(), curr_io_request->offset, curr_io_request->size);
+			case request_type_t::write: {
+				io_result.status = error;
+				io_result.info = no_data;
+
+				request_rw_t *curr_rw_request = (request_rw_t *)host_io_request.get();
+				if (IS_DEV_HANDLE(curr_rw_request->handle)) {
+					if (curr_rw_request->handle == CDROM_HANDLE) [[unlikely]] {
+						// Raw write to the dvd disc (this should not happen...)
+						io_result.status = error;
+						logger_en(error, "Unexpected dvd raw disc write; offset=0x%016" PRIX64 ", size=0x%08" PRIX32 " -> IGNORED!",
+							curr_rw_request->offset, curr_rw_request->size);
+					} else {
+						uint64_t offset = curr_rw_request->offset;
+						if (curr_rw_request->handle == PARTITION0_HANDLE) {
+							// Partition zero can access the whole disk, so figure out the target offset first
+							offset = disk_offset_to_partition_offset(curr_rw_request->offset, dev);
+							fs = &xbox_handle_map[dev].begin()->second->fs;
+						}
+						io_result.status = fatx::write_raw_partition(offset, curr_rw_request->size, curr_rw_request->buffer.get(), dev, fs);
+						if (io_result.status == success) {
+							io_result.info = static_cast<info_t>(curr_rw_request->size);
+						}
+					}
 				}
 				else {
-					io_result.info = static_cast<info_t>(curr_io_request->size);
-					logger_en(info, "Write operation to file handle %" PRIu64 ", offset=0x%08" PRIX32 ", size=0x%08" PRIX32 " -> OK!",
-						it->first, curr_io_request->offset, curr_io_request->size);
+					if (dev == DEV_CDROM) [[unlikely]] {
+						// Write to a dvd file (this should not happen...)
+						io_result.status = error;
+						logger_en(error, "Unexpected dvd file write; offset=0x%016" PRIX64 ", size=0x%08" PRIX32 " -> IGNORED!",
+							curr_rw_request->offset, curr_rw_request->size);
+					} else {
+						if (!fs->is_open()) [[unlikely]] {
+							// Write operation on a directory (this should not happen...)
+							logger_en(warn, "Write operation to directory handle %" PRIu64 " with path %s", it->first, it->second->path.c_str());
+							break;
+						}
+						fs->seekg(curr_rw_request->offset);
+						fs->write(curr_rw_request->buffer.get(), curr_rw_request->size);
+						fatx::DIRENT file_dirent = static_cast<file_info_fatx_t &&>(*it->second).dirent;
+						if (!fs->good() || (fatx::append_clusters_to_file(file_dirent, &xbox_handle_map[dev].begin()->second->fs,
+							curr_rw_request->offset, curr_rw_request->size, dev, it->second->path) != success)) {
+							fs->clear();
+							logger_en(info, "Write operation to file handle %" PRIu64 " with path %s, offset=0x%08" PRIX32 ", size=0x%08" PRIX32 " -> FAILED!",
+								it->first, it->second->path.c_str(), curr_rw_request->offset, curr_rw_request->size);
+						} else {
+							static_cast<file_info_fatx_t &&>(*it->second).set_dirent(file_dirent);
+							static_cast<file_info_fatx_t &&>(*it->second).last_access_time(curr_rw_request->timestamp);
+							static_cast<file_info_fatx_t &&>(*it->second).last_write_time(curr_rw_request->timestamp);
+							io_result.status = success;
+							io_result.info = static_cast<info_t>(curr_rw_request->size);
+							logger_en(info, "Write operation to file handle %" PRIu64 ", offset=0x%08" PRIX32 ", size=0x%08" PRIX32 " -> OK!",
+								it->first, curr_rw_request->offset, curr_rw_request->size);
+						}
+					}
 				}
-				break;
+			}
+			break;
 
-			case request_type_t::remove1: {
-				logger_en(info, "Deleted %s with handle %" PRIu64, fs->is_open() ? "file" : "directory", it->first);
-				std::string file_path(it->second.path);
-				xbox_handle_map[dev].erase(it);
-				std::error_code ec;
-				std::filesystem::remove(file_path, ec);
+			case request_type_t::remove: {
+				if (dev == DEV_CDROM) [[unlikely]] {
+					// File delete operation to the dvd disc (this should not happen...)
+					io_result.status = error;
+					logger_en(error, "Unexpected dvd file delete operation -> IGNORED!");
+				} else {
+					file_info_fatx_t *file_info_fatx = (file_info_fatx_t *)(it->second.get());
+					fatx::delete_dirent_for_file(file_info_fatx->dirent, &xbox_handle_map[dev].begin()->second->fs, dev);
+
+					// NOTE: We don't need to delete the actual host file, because file deletion is set in the fatx dirents, and not by its presence of the host
+					xbox_handle_map[dev].erase(it);
+				}
 			}
 			break;
 
 			default:
-				logger_en(warn, "Unknown io request of type %" PRId32, curr_io_request->type);
+				logger_en(warn, "Unknown io request of type %" PRId32, host_io_request->type);
 			}
 
-			curr_io_request->info = io_result;
+			host_io_request->info.header = io_result;
 			completed_io_mtx.lock();
-			completed_io_info.emplace(curr_io_request->id, std::move(curr_io_request));
+			completed_io_info.emplace(host_io_request->id, std::move(host_io_request));
 			completed_io_mtx.unlock();
 		}
 	}
 
 	static void
-	enqueue_io_packet(std::unique_ptr<request_t> curr_io_request)
+	enqueue_io_packet(std::unique_ptr<request_t> host_io_request)
 	{
 		// If the I/O thread is currently holding the lock, we won't wait and instead retry the operation later
 		if (queue_mtx.try_lock()) {
-			curr_io_queue.push_back(std::move(curr_io_request));
+			curr_io_queue.push_back(std::move(host_io_request));
 			// Signal that there's a new packet to process
 			pending_io.test_and_set();
 			pending_io.notify_one();
 			queue_mtx.unlock();
 		}
 		else {
-			pending_io_vec.push_back(std::move(curr_io_request));
+			pending_io_vec.push_back(std::move(host_io_request));
 			pending_packets = true;
 		}
 	}
@@ -528,30 +706,48 @@ namespace io {
 	void
 	submit_io_packet(uint32_t addr)
 	{
-		packed_request_t packed_curr_io_request;
-		std::unique_ptr<request_t> curr_io_request = std::make_unique<request_t>();
-		mem_read_block_virt(lc86cpu, addr, sizeof(packed_request_t), (uint8_t *)&packed_curr_io_request);
-		curr_io_request->id = packed_curr_io_request.id;
-		curr_io_request->type = packed_curr_io_request.type;
-		curr_io_request->handle_oc = packed_curr_io_request.handle_or_address;
-		curr_io_request->offset = packed_curr_io_request.offset_or_size;
-		curr_io_request->size = packed_curr_io_request.size;
-		curr_io_request->handle = packed_curr_io_request.handle_or_path;
+		packed_request_t io_request;
+		mem_read_block_virt(lc86cpu, addr, sizeof(packed_request_t), (uint8_t *)&io_request);
 
-		request_type_t io_type = IO_GET_TYPE(curr_io_request->type);
-		if (io_type == open) {
-			char *path = new char[curr_io_request->size + 1];
-			mem_read_block_virt(lc86cpu, (addr_t)curr_io_request->handle, curr_io_request->size, (uint8_t *)path);
-			curr_io_request->path = path;
-			curr_io_request->path[curr_io_request->size] = '\0';
+		if (request_type_t io_type = IO_GET_TYPE(io_request.header.type); io_type == open) {
+			std::unique_ptr<request_oc_t> host_io_request = std::make_unique<request_oc_t>();
+			host_io_request->id = io_request.header.id;
+			host_io_request->type = io_request.header.type;
+			host_io_request->initial_size = io_request.m_oc.initial_size;
+			host_io_request->size = io_request.m_oc.size;
+			host_io_request->handle = io_request.m_oc.handle;
+			host_io_request->path = new char[io_request.m_oc.size + 1];
+			mem_read_block_virt(lc86cpu, io_request.m_oc.path, host_io_request->size, (uint8_t *)host_io_request->path);
+			host_io_request->path[io_request.m_oc.size] = '\0';
+			host_io_request->attributes = io_request.m_oc.attributes;
+			host_io_request->timestamp = io_request.m_oc.timestamp;
+			host_io_request->desired_access = io_request.m_oc.desired_access;
+			host_io_request->create_options = io_request.m_oc.create_options;
+			enqueue_io_packet(std::move(host_io_request));
 		}
-		else if (io_type == write) {
-			std::unique_ptr<char[]> io_buffer(new char[curr_io_request->size]);
-			mem_read_block_virt(lc86cpu, curr_io_request->address, curr_io_request->size, reinterpret_cast<uint8_t *>(io_buffer.get()));
-			curr_io_request->buffer = std::move(io_buffer);
+		else {
+			if ((io_type == write) || (io_type == read)) {
+				std::unique_ptr<request_rw_t> host_io_request = std::make_unique<request_rw_t>();
+				host_io_request->id = io_request.header.id;
+				host_io_request->type = io_request.header.type;
+				host_io_request->offset = io_request.m_rw.offset;
+				host_io_request->address = io_request.m_rw.address;
+				host_io_request->size = io_request.m_rw.size;
+				host_io_request->handle = io_request.m_rw.handle;
+				host_io_request->timestamp = io_request.m_rw.timestamp;
+				host_io_request->buffer = std::make_unique_for_overwrite<char[]>(host_io_request->size);
+				if (io_type == write) {
+					mem_read_block_virt(lc86cpu, host_io_request->address, host_io_request->size, reinterpret_cast<uint8_t *>(host_io_request->buffer.get()));
+				}
+				enqueue_io_packet(std::move(host_io_request));
+			} else {
+				std::unique_ptr<request_t> host_io_request = std::make_unique<request_t>();
+				host_io_request->id = io_request.header.id;
+				host_io_request->type = io_request.header.type;
+				host_io_request->handle = io_request.m_xx.handle;
+				enqueue_io_packet(std::move(host_io_request));
+			}
 		}
-
-		enqueue_io_packet(std::move(curr_io_request));
 	}
 
 	void
@@ -577,17 +773,26 @@ namespace io {
 	query_io_packet(uint32_t addr)
 	{
 		if (completed_io_mtx.try_lock()) { // don't wait if the I/O thread is currently using the map
-			info_block_t block;
-			mem_read_block_virt(lc86cpu, addr, sizeof(info_block_t), (uint8_t *)&block);
-			auto it = completed_io_info.find(block.info2_or_id);
+			info_block_oc_t block;
+			mem_read_block_virt(lc86cpu, addr, sizeof(info_block_oc_t), (uint8_t *)&block);
+			auto it = completed_io_info.find(block.header.id);
 			if (it != completed_io_info.end()) {
+				uint64_t size_of_request;
 				request_t *request = it->second.get();
-				if ((IO_GET_TYPE(request->type) == read) && (request->info.status == success)) {
-					mem_write_block_virt(lc86cpu, request->address, request->size, request->buffer.get());
+				if ((IO_GET_TYPE(request->type) == read) && (request->info.header.status == success)) {
+					// Do the transfer here instead of the IO thread to avoid races with the cpu thread
+					request_rw_t *request_rw = (request_rw_t *)request;
+					mem_write_block_virt(lc86cpu, request_rw->address, request_rw->size, request_rw->buffer.get());
 				}
-				block = request->info;
-				block.ready = 1;
-				mem_write_block_virt(lc86cpu, addr, sizeof(info_block_t), (uint8_t *)&block);
+				if (IO_GET_TYPE(request->type) == open) {
+					block = request->info;
+					size_of_request = sizeof(info_block_oc_t);
+				} else {
+					block.header = request->info.header;
+					size_of_request = sizeof(info_block_t);
+				}
+				block.header.ready = 1;
+				mem_write_block_virt(lc86cpu, addr, size_of_request, &block);
 				completed_io_info.erase(it);
 			}
 			completed_io_mtx.unlock();
@@ -598,13 +803,14 @@ namespace io {
 	init(const init_info_t &init_info, cpu_t *cpu)
 	{
 		lc86cpu = cpu;
-		std::filesystem::path hdd_dir = std::filesystem::path(init_info.m_nxbx_path).remove_filename();
+		nxbx_path = init_info.m_nxbx_path;
+		std::filesystem::path hdd_dir = nxbx_path.remove_filename();
 		hdd_dir /= "Harddisk/";
 		hdd_dir.make_preferred();
 		if (!::create_directory(hdd_dir)) {
 			return false;
 		}
-		for (unsigned i = 0; i < XBOX_NUM_OF_PARTITIONS; ++i) {
+		for (unsigned i = 0; i < XBOX_NUM_OF_HDD_PARTITIONS; ++i) {
 			std::filesystem::path curr_partition_dir = hdd_dir / ("Partition" + std::to_string(i));
 			curr_partition_dir.make_preferred();
 			if (i) {

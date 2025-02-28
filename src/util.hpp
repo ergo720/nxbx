@@ -38,7 +38,7 @@ namespace util {
 	}
 
 	template<typename T>
-	bool in_range(T val, T low, T high)
+	bool in_range(T val, T low, T high) // true if val is inside [low, high], false otherwise
 	{
 		return !((val < low) || (high < val));
 	}

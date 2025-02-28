@@ -24,7 +24,7 @@ public:
 			if (!((init_info.m_console_type == console_t::xbox) ||
 				(init_info.m_console_type == console_t::chihiro) ||
 				(init_info.m_console_type == console_t::devkit))) {
-				logger_nxbx(error, "Attempted to create unrecognized machine of type %" PRIu32, (uint32_t)init_info.m_console_type);
+				logger_mod_en(error, nxbx, "Attempted to create unrecognized machine of type %" PRIu32, (uint32_t)init_info.m_console_type);
 				return false;
 			}
 			timer::init();

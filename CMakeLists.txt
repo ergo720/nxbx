@@ -46,7 +46,9 @@ message("Building nxbx")
 include_directories(
  ${NXBX_ROOT_DIR}/import/lib86cpu/include
  ${NXBX_ROOT_DIR}/import/simpleini
+ ${NXBX_ROOT_DIR}/src/fs
  ${NXBX_ROOT_DIR}/src/hw
+ ${NXBX_ROOT_DIR}/src
 )
 
 set(HEADERS
@@ -61,8 +63,8 @@ set(HEADERS
  "${NXBX_ROOT_DIR}/src/settings.hpp"
  "${NXBX_ROOT_DIR}/src/util.hpp"
  "${NXBX_ROOT_DIR}/src/xbe.hpp"
- "${NXBX_ROOT_DIR}/src/xiso.hpp"
- "${NXBX_ROOT_DIR}/src/xpartition.hpp"
+ "${NXBX_ROOT_DIR}/src/fs/fatx.hpp"
+ "${NXBX_ROOT_DIR}/src/fs/xdvdfs.hpp"
  "${NXBX_ROOT_DIR}/src/hw/adm1032.hpp"
  "${NXBX_ROOT_DIR}/src/hw/cmos.hpp"
  "${NXBX_ROOT_DIR}/src/hw/cpu.hpp"
@@ -100,8 +102,8 @@ set(SOURCES
  "${NXBX_ROOT_DIR}/src/settings.cpp"
  "${NXBX_ROOT_DIR}/src/util.cpp"
  "${NXBX_ROOT_DIR}/src/xbe.cpp"
- "${NXBX_ROOT_DIR}/src/xiso.cpp"
- "${NXBX_ROOT_DIR}/src/xpartition.cpp"
+ "${NXBX_ROOT_DIR}/src/fs/fatx.cpp"
+ "${NXBX_ROOT_DIR}/src/fs/xdvdfs.cpp"
  "${NXBX_ROOT_DIR}/src/hw/adm1032.cpp"
  "${NXBX_ROOT_DIR}/src/hw/cmos.cpp"
  "${NXBX_ROOT_DIR}/src/hw/cpu.cpp"
