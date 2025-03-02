@@ -19,7 +19,7 @@ namespace xdvdfs {
 #pragma pack(1)
 	struct volume_desc_t {
 		uint8_t magic1[20];
-		uint32_t root_dirent_first_sector;
+		uint32_t m_root_dirent_first_sector;
 		uint32_t root_dirent_file_size;
 		int64_t timestamp;
 		uint8_t unused[1992];
@@ -37,25 +37,15 @@ namespace xdvdfs {
 	};
 #pragma pack()
 
-	struct file_entry_t {
-		uint16_t left_idx; // offset to add to reach the left dirent on this directory level
-		uint16_t right_idx; // offset to add to reach the right dirent on this directory level
-		uint32_t file_sector; // sector number of the file pointed by the current dirent
-		uint32_t file_size; // size of the file pointed by the current dirent
-		uint8_t attributes; // attributes of the file pointed by the current dirent
-		char file_name[256]; // name of the file pointed by the current dirent
-	};
-
 
 	static_assert(sizeof(volume_desc_t) == 2048);
 	static constexpr char magic[] = { 'M', 'I', 'C', 'R', 'O', 'S', 'O', 'F', 'T', '*', 'X', 'B', 'O', 'X', '*', 'M', 'E', 'D', 'I', 'A' };
-	static uint32_t root_dirent_first_sector;
-	static std::fstream xiso_fs;
-	static int64_t xiso_timestamp;
+	uint64_t driver::g_xiso_offset;
+	std::string driver::g_xiso_name;
 
 
 	bool
-	validate(std::string_view arg_str)
+	driver::validate(std::string_view arg_str)
 	{
 		if (auto opt = open_file(arg_str)) {
 			// XDVDFS: magic is 20 bytes at start of sector 32 and also at offset 0x7EC of the same sector
@@ -68,13 +58,13 @@ namespace xdvdfs {
 				if (opt->good() &&
 					(std::memcmp(volume_desc->magic1, magic, 20) == 0) &&
 					(std::memcmp(volume_desc->magic2, magic, 20) == 0) &&
-					(volume_desc->root_dirent_first_sector) &&
+					(volume_desc->m_root_dirent_first_sector) &&
 					(volume_desc->root_dirent_file_size))
 				{
-					root_dirent_first_sector = volume_desc->root_dirent_first_sector;
-					xiso_fs = std::move(*opt);
-					xiso_offset = offset;
-					xiso_name = std::filesystem::path(arg_str).filename().string();
+					m_root_dirent_first_sector = volume_desc->m_root_dirent_first_sector;
+					m_xiso_fs = std::move(*opt);
+					g_xiso_offset = offset;
+					g_xiso_name = std::filesystem::path(arg_str).filename().string();
 					return true;
 				}
 				return false;
@@ -91,19 +81,19 @@ namespace xdvdfs {
 			}
 		}
 
-		xiso_name = "";
+		g_xiso_name = "";
 
 		return false;
 	}
 
 	bool
-	read_dirent(std::fstream *fs, file_entry_t &file_entry, uint64_t sector, uint64_t offset)
+	driver::read_dirent(file_entry_t &file_entry, uint64_t sector, uint64_t offset)
 	{
 		char buff[SECTOR_SIZE];
-		fs->seekg(SECTOR_SIZE * sector + xiso_offset + offset);
-		fs->read(buff, 255 + sizeof(dirent_t) - 1);
-		if (!fs->good()) {
-			fs->clear();
+		m_xiso_fs.seekg(SECTOR_SIZE * sector + g_xiso_offset + offset);
+		m_xiso_fs.read(buff, 255 + sizeof(dirent_t) - 1);
+		if (!m_xiso_fs.good()) {
+			m_xiso_fs.clear();
 			return false;
 		}
 		
@@ -120,7 +110,7 @@ namespace xdvdfs {
 	}
 
 	file_info_t
-	search_file(std::string_view arg_str)
+	driver::search_file(std::string_view arg_str)
 	{
 		if (arg_str.empty()) {
 			// special case: open the root directory of the dvd
@@ -128,21 +118,21 @@ namespace xdvdfs {
 			{
 				.exists = true,
 				.is_directory = true,
-				.offset = xiso_offset,
+				.offset = g_xiso_offset,
 				.size = 0,
-				.timestamp = xiso_timestamp
+				.timestamp = m_xiso_timestamp
 			};
 		}
 
 		uint64_t offset = 0, curr_pos = 0;
-		uint32_t curr_sector = root_dirent_first_sector;
+		uint32_t curr_sector = m_root_dirent_first_sector;
 		file_entry_t file_entry;
 		util::xbox_string_view path_to_parse = util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(arg_str);
 		uint64_t pos = std::min(path_to_parse.find_first_of(std::filesystem::path::preferred_separator, curr_pos), path_to_parse.length());
 		util::xbox_string_view curr_name = path_to_parse.substr(curr_pos, pos - curr_pos);
 
 		while (true) {
-			if (read_dirent(&xiso_fs, file_entry, curr_sector, offset)) {
+			if (read_dirent(file_entry, curr_sector, offset)) {
 				int ret = curr_name.compare(file_entry.file_name);
 				if (ret < 0) {
 					uint64_t new_offset = (uint64_t)file_entry.left_idx << 2;
@@ -168,15 +158,15 @@ namespace xdvdfs {
 						{
 							.exists = true,
 							.is_directory = (bool)(file_entry.attributes & FILE_DIRECTORY),
-							.offset = file_entry.file_sector * SECTOR_SIZE + xiso_offset,
+							.offset = file_entry.file_sector * SECTOR_SIZE + g_xiso_offset,
 							.size = file_entry.file_size,
-							.timestamp = xiso_timestamp
+							.timestamp = m_xiso_timestamp
 						};
 					}
 					// Some path still remains -> we can only proceed if the current file is a directory
 					if (file_entry.attributes & FILE_DIRECTORY) {
 						offset = 0;
-						curr_sector = file_entry.file_sector * SECTOR_SIZE + xiso_offset;
+						curr_sector = file_entry.file_sector * SECTOR_SIZE + g_xiso_offset;
 						curr_name = path_to_parse.substr(curr_pos, pos - curr_pos);
 						continue;
 					}
@@ -187,5 +177,13 @@ namespace xdvdfs {
 		}
 
 		return file_info_t{ .exists = false };
+	}
+
+	io::status_t
+	driver::read_raw_disc(uint64_t offset, uint32_t size, char *buffer)
+	{
+		m_xiso_fs.seekg(offset, m_xiso_fs.beg);
+		m_xiso_fs.read(buffer, size);
+		return m_xiso_fs.good() ? io::status_t::success : io::status_t::error;
 	}
 }

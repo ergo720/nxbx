@@ -32,7 +32,7 @@ namespace nxbx {
 				return true;
 			}
 
-			if (xdvdfs::validate(arg_str)) {
+			if (xdvdfs::driver::get().validate(arg_str)) {
 				init_info.m_input_type = input_t::xiso;
 				return true;
 			}

@@ -64,7 +64,6 @@ namespace io {
 	};
 
 	enum flags_t : uint32_t {
-		//is_directory = 1 << 3,
 		must_be_a_dir = 1 << 4,
 		must_not_be_a_dir = 1 << 5,
 	};

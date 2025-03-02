@@ -161,7 +161,7 @@ namespace io {
 	// Basic info about an opened file
 	struct file_info_base_t {
 		file_info_base_t(std::fstream &&f, std::string p) : fs(std::move(f)), path(p) {};
-		std::fstream fs; // opened file stream
+		std::fstream fs; // fs of a file
 		std::string path; // same relative path returned by io::parse_path()
 	};
 
@@ -202,35 +202,37 @@ namespace io {
 	static input_t dvd_input_type;
 
 
-	static bool
-	open_special_files()
+	static void
+	flush_all_files()
 	{
-		const auto &lambda = [](std::filesystem::path resolved_path, uint64_t handle) -> bool {
-			if (auto opt = open_file(resolved_path); !opt) {
-				return false;
-			}
-			else {
-				auto pair = xbox_handle_map[handle].emplace(handle, std::move(std::make_unique<file_info_base_t>(std::move(*opt), resolved_path.string())));
-				assert(pair.second == true);
-				return true;
-			}
+		for (unsigned i = DEV_PARTITION1; i < DEV_PARTITION6; ++i) {
+			xbox_handle_map[i].erase(xbox_handle_map[i].begin()); // delete the partition file object
+			std::for_each(xbox_handle_map[i].begin(), xbox_handle_map[i].end(), [i](auto &pair)
+				{
+					file_info_fatx_t *file_info_fatx = (file_info_fatx_t *)(pair.second.get());
+					if (file_info_fatx->dirent.name[0] != '\\') { // the root directory hasn't a dirent to flush
+						fatx::driver::get(i).flush_dirent_for_file(file_info_fatx->dirent, file_info_fatx->dirent_offset);
+					}
+				});
+		}
+	}
+
+	static void
+	add_device_handles()
+	{
+		const auto &lambda = [](std::filesystem::path resolved_path, uint64_t handle) {
+			auto pair = xbox_handle_map[handle].emplace(handle, std::move(std::make_unique<file_info_base_t>(std::move(std::fstream()), resolved_path.string())));
+			assert(pair.second == true);
 			};
 
 		if (dvd_input_type == input_t::xiso) {
-			if (!lambda((dvd_path /= xdvdfs::xiso_name).make_preferred(), CDROM_HANDLE)) {
-				return false;
-			}
+			lambda((dvd_path / xdvdfs::driver::g_xiso_name).make_preferred(), CDROM_HANDLE);
 		}
 
 		for (unsigned i = 0; i < XBOX_NUM_OF_HDD_PARTITIONS; ++i) {
-			std::filesystem::path curr_partition_dir = hdd_path / ("Partition" + std::to_string(i) + ".bin");
-			curr_partition_dir.make_preferred();
-			if (!lambda(curr_partition_dir, PARTITION0_HANDLE + i)) {
-				return false;
-			}
+			std::filesystem::path curr_partition_dir = (hdd_path / ("Partition" + std::to_string(i) + ".bin")).make_preferred();
+			lambda(curr_partition_dir, PARTITION0_HANDLE + i);
 		}
-
-		return true;
 	}
 
 	static std::string
@@ -278,9 +280,8 @@ namespace io {
 
 			// Check to see if we need to terminate this thread
 			if (stok.stop_requested()) [[unlikely]] {
-				for (unsigned i = DEV_PARTITION1; i < DEV_PARTITION6; ++i) {
-					flush_metadata_file(&xbox_handle_map[i].begin()->second->fs, i);
-				}
+				flush_all_files();
+				fatx::driver::deinit();
 				pending_packets = false;
 				curr_io_queue.clear();
 				completed_io_info.clear();
@@ -318,7 +319,7 @@ namespace io {
 					xdvdfs::file_info_t file_info;
 					std::optional<std::fstream> opt = std::fstream();
 					if (dvd_input_type == input_t::xiso) {
-						file_info = xdvdfs::search_file(relative_path); // search for the file in the xiso
+						file_info = xdvdfs::driver::get().search_file(relative_path); // search for the file in the xiso
 					} else {
 						assert(dvd_input_type == input_t::xbe);
 						std::filesystem::path resolved_path;
@@ -353,7 +354,7 @@ namespace io {
 							io_result.file_size = file_info.size;
 							io_result.xdvdfs_timestamp = file_info.timestamp;
 							xbox_handle_map[dev].emplace(curr_oc_request->handle, std::move(std::make_unique<file_info_xdvdfs_t>(std::move(*opt), relative_path, file_info.offset)));
-							logger_en(info, "Opened %s with handle %" PRIu64 " and path %s", opt->is_open() ? "file" : "directory", curr_oc_request->handle, relative_path.c_str());
+							logger_en(info, "Opened %s with handle %" PRIu64 " and path %s", file_info.is_directory ? "directory" : "file", curr_oc_request->handle, relative_path.c_str());
 						}
 					}
 				}
@@ -368,14 +369,13 @@ namespace io {
 							io_result->fatx.creation_time = io_dirent.creation_time;
 							io_result->fatx.last_access_time = io_dirent.last_access_time;
 							io_result->fatx.last_write_time = io_dirent.last_write_time;
-							io_result->fatx.free_clusters = fatx::get_free_cluster_num(dev);
+							io_result->fatx.free_clusters = fatx::driver::get(dev).get_free_cluster_num();
 						};
 
 					fatx::DIRENT io_dirent;
 					std::filesystem::path resolved_path;
 					uint64_t dirent_offset;
-					std::fstream *metadata_fs = &xbox_handle_map[dev].begin()->second->fs;
-					status_t fatx_search_status = fatx::find_dirent_for_file(relative_path, metadata_fs, dev, io_dirent, dirent_offset);
+					status_t fatx_search_status = fatx::driver::get(dev).find_dirent_for_file(relative_path, io_dirent, dirent_offset);
 
 					if (fatx_search_status == is_root_dir) {
 						assert((disposition == IO_OPEN) || (disposition == IO_OPEN_IF));
@@ -407,7 +407,7 @@ namespace io {
 							} else if ((disposition == IO_OPEN) || (disposition == IO_OPEN_IF)) {
 								// Open if exists - FILE_OPEN
 								// Open always - FILE_OPEN_IF
-								status_t status = fatx::check_file_access(curr_oc_request->desired_access, curr_oc_request->create_options, io_dirent.attributes, false, flags);
+								status_t status = fatx::driver::get(dev).check_file_access(curr_oc_request->desired_access, curr_oc_request->create_options, io_dirent.attributes, false, flags);
 								if (status == success) {
 									if (is_directory) {
 										// Open directory: nothing to do
@@ -425,20 +425,20 @@ namespace io {
 								// Create always - FILE_SUPERSEDE
 								// Truncate if exists - FILE_OVERWRITE
 								// Truncate always - FILE_OVERWRITE_IF
-								status_t status = fatx::check_file_access(curr_oc_request->desired_access, curr_oc_request->create_options, io_dirent.attributes, true, flags);
+								status_t status = fatx::driver::get(dev).check_file_access(curr_oc_request->desired_access, curr_oc_request->create_options, io_dirent.attributes, true, flags);
 								if (status == success) {
 									io_dirent.attributes = curr_oc_request->attributes;
 									io_dirent.last_write_time = curr_oc_request->timestamp;
 									if (is_directory) {
 										// Create directory: already exists
-										if (fatx::overwrite_dirent_for_file(io_dirent, metadata_fs, 0, dev, "") == success) {
+										if (fatx::driver::get(dev).overwrite_dirent_for_file(io_dirent, 0, "") == success) {
 											io_result.header.info = exists;
 											add_to_map(std::make_optional<std::fstream>(), &io_result, dirent_offset, io_dirent);
 										}
 									} else {
 										// Create file
 										if (auto opt = create_file(resolved_path, curr_oc_request->initial_size); opt) {
-											if (fatx::overwrite_dirent_for_file(io_dirent, metadata_fs, curr_oc_request->initial_size, dev, relative_path) == success) {
+											if (fatx::driver::get(dev).overwrite_dirent_for_file(io_dirent, curr_oc_request->initial_size, relative_path) == success) {
 												io_result.header.info = (disposition == IO_SUPERSEDE) ? superseded : overwritten;
 												add_to_map(opt, &io_result, dirent_offset, io_dirent);
 											}
@@ -465,7 +465,7 @@ namespace io {
 							// Create always - FILE_SUPERSEDE
 							// Open always - FILE_OPEN_IF
 							// Truncate always - FILE_OVERWRITE_IF
-							status_t status = fatx::check_file_access(curr_oc_request->desired_access, curr_oc_request->create_options, curr_oc_request->attributes, true, flags);
+							status_t status = fatx::driver::get(dev).check_file_access(curr_oc_request->desired_access, curr_oc_request->create_options, curr_oc_request->attributes, true, flags);
 							if (status == success) {
 								io_dirent.name_length = file_name.length();
 								io_dirent.attributes = curr_oc_request->attributes;
@@ -478,7 +478,7 @@ namespace io {
 									// Create directory
 									if (::create_directory(resolved_path)) {
 										io_dirent.size = 0;
-										if (fatx::create_dirent_for_file(io_dirent, metadata_fs, dev, relative_path) == status_t::success) {
+										if (fatx::driver::get(dev).create_dirent_for_file(io_dirent, relative_path) == status_t::success) {
 											io_result.header.info = created;
 											add_to_map(std::make_optional<std::fstream>(), &io_result, dirent_offset, io_dirent);
 										}
@@ -487,7 +487,7 @@ namespace io {
 									// Create file
 									if (auto opt = create_file(resolved_path, curr_oc_request->initial_size); opt) {
 										io_dirent.size = curr_oc_request->initial_size;
-										if (fatx::create_dirent_for_file(io_dirent, metadata_fs, dev, relative_path) == status_t::success) {
+										if (fatx::driver::get(dev).create_dirent_for_file(io_dirent, relative_path) == status_t::success) {
 											io_result.header.info = created;
 											add_to_map(opt, &io_result, dirent_offset, io_dirent);
 										}
@@ -535,7 +535,7 @@ namespace io {
 				if (dev != DEV_CDROM) {
 					file_info_fatx_t *file_info_fatx = (file_info_fatx_t *)(it->second.get());
 					if (file_info_fatx->dirent.name[0] != '\\') { // the root directory hasn't a dirent to flush
-						fatx::flush_dirent_for_file(file_info_fatx->dirent, file_info_fatx->dirent_offset, &xbox_handle_map[dev].begin()->second->fs, dev);
+						fatx::driver::get(dev).flush_dirent_for_file(file_info_fatx->dirent, file_info_fatx->dirent_offset);
 					}
 				}
 				logger_en(info, "Closed file handle %" PRIu64 " with path %s", it->first, it->second->path.c_str());
@@ -554,8 +554,7 @@ namespace io {
 							logger_en(error, "Unhandled raw dvd disc read, boot from an xiso to solve this; offset=0x%016" PRIX64 ", size=0x%08" PRIX32,
 								curr_rw_request->offset, curr_rw_request->size);
 						}
-						io_result.status = fatx::read_raw_partition(curr_rw_request->offset, curr_rw_request->size,
-							curr_rw_request->buffer.get(), DEV_CDROM, &xbox_handle_map[DEV_CDROM].begin()->second->fs);
+						io_result.status = xdvdfs::driver::get().read_raw_disc(curr_rw_request->offset, curr_rw_request->size, curr_rw_request->buffer.get());
 						if (io_result.status == success) {
 							io_result.info = static_cast<info_t>(curr_rw_request->size);
 						}
@@ -564,9 +563,8 @@ namespace io {
 						if (curr_rw_request->handle == PARTITION0_HANDLE) {
 							// Partition zero can access the whole disk, so figure out the target offset first
 							offset = disk_offset_to_partition_offset(curr_rw_request->offset, dev);
-							fs = &xbox_handle_map[dev].begin()->second->fs;
 						}
-						io_result.status = fatx::read_raw_partition(offset, curr_rw_request->size, curr_rw_request->buffer.get(), dev, fs);
+						io_result.status = fatx::driver::get(dev).read_raw_partition(offset, curr_rw_request->size, curr_rw_request->buffer.get());
 						if (io_result.status == success) {
 							io_result.info = static_cast<info_t>(curr_rw_request->size);
 						}
@@ -575,8 +573,8 @@ namespace io {
 				else {
 					uint64_t offset = 0;
 					if ((dev == DEV_CDROM) && (dvd_input_type == input_t::xiso)) {
-						fs = &xbox_handle_map[dev].begin()->second->fs;
-						offset = xdvdfs::xiso_offset + static_cast<file_info_xdvdfs_t &&>(*it->second).offset;
+						fs = &xdvdfs::driver::get().m_xiso_fs;
+						offset = xdvdfs::driver::g_xiso_offset + static_cast<file_info_xdvdfs_t &&>(*it->second).offset;
 					}
 					if (!fs->is_open()) [[unlikely]] {
 						// Read operation on a directory (this should not happen...)
@@ -618,9 +616,8 @@ namespace io {
 						if (curr_rw_request->handle == PARTITION0_HANDLE) {
 							// Partition zero can access the whole disk, so figure out the target offset first
 							offset = disk_offset_to_partition_offset(curr_rw_request->offset, dev);
-							fs = &xbox_handle_map[dev].begin()->second->fs;
 						}
-						io_result.status = fatx::write_raw_partition(offset, curr_rw_request->size, curr_rw_request->buffer.get(), dev, fs);
+						io_result.status = fatx::driver::get(dev).write_raw_partition(offset, curr_rw_request->size, curr_rw_request->buffer.get());
 						if (io_result.status == success) {
 							io_result.info = static_cast<info_t>(curr_rw_request->size);
 						}
@@ -641,8 +638,7 @@ namespace io {
 						fs->seekg(curr_rw_request->offset);
 						fs->write(curr_rw_request->buffer.get(), curr_rw_request->size);
 						fatx::DIRENT file_dirent = static_cast<file_info_fatx_t &&>(*it->second).dirent;
-						if (!fs->good() || (fatx::append_clusters_to_file(file_dirent, &xbox_handle_map[dev].begin()->second->fs,
-							curr_rw_request->offset, curr_rw_request->size, dev, it->second->path) != success)) {
+						if (!fs->good() || (fatx::driver::get(dev).append_clusters_to_file(file_dirent, curr_rw_request->offset, curr_rw_request->size, it->second->path) != success)) {
 							fs->clear();
 							logger_en(info, "Write operation to file handle %" PRIu64 " with path %s, offset=0x%08" PRIX32 ", size=0x%08" PRIX32 " -> FAILED!",
 								it->first, it->second->path.c_str(), curr_rw_request->offset, curr_rw_request->size);
@@ -667,10 +663,9 @@ namespace io {
 					logger_en(error, "Unexpected dvd file delete operation -> IGNORED!");
 				} else {
 					file_info_fatx_t *file_info_fatx = (file_info_fatx_t *)(it->second.get());
-					fatx::delete_dirent_for_file(file_info_fatx->dirent, &xbox_handle_map[dev].begin()->second->fs, dev);
+					fatx::driver::get(dev).delete_dirent_for_file(file_info_fatx->dirent);
 
 					// NOTE: We don't need to delete the actual host file, because file deletion is set in the fatx dirents, and not by its presence of the host
-					xbox_handle_map[dev].erase(it);
 				}
 			}
 			break;
@@ -810,18 +805,15 @@ namespace io {
 		if (!::create_directory(hdd_dir)) {
 			return false;
 		}
-		for (unsigned i = 0; i < XBOX_NUM_OF_HDD_PARTITIONS; ++i) {
-			std::filesystem::path curr_partition_dir = hdd_dir / ("Partition" + std::to_string(i));
-			curr_partition_dir.make_preferred();
-			if (i) {
-				if (!::create_directory(curr_partition_dir)) {
-					return false;
-				}
-			}
-			if (!create_partition_metadata_file(curr_partition_dir, i)) {
-				logger_en(error, "Failed to create partition metadata bin files");
+		for (unsigned i = 1; i < XBOX_NUM_OF_HDD_PARTITIONS; ++i) {
+			if (!::create_directory((hdd_dir / ("Partition" + std::to_string(i))).make_preferred())) {
 				return false;
 			}
+		}
+
+		if (!fatx::driver::init(hdd_dir)) {
+			logger_en(error, "Failed to initialize the FATX driver");
+			return false;
 		}
 
 		if (init_info.m_input_type == input_t::xiso) {
@@ -854,10 +846,7 @@ namespace io {
 			}
 		}
 
-		if (!open_special_files()) {
-			logger_en(error, "Failed to open partition metadata bin files");
-			return false;
-		}
+		add_device_handles();
 
 		jthr = std::jthread(&io::worker);
 
