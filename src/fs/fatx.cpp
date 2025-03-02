@@ -683,8 +683,7 @@ namespace fatx {
 		}
 
 		if (tot_bytes_read == fat_length) [[unlikely]] {
-			assert(0); // unreachable if the assert at the beginning holds
-			return io::status_t::error;
+			std::unreachable();
 		}
 
 		// If we reach here, scan the FAT from the beginning up to last_allocated_cluster_num, since there might be some freed clusters there
@@ -1199,7 +1198,7 @@ namespace fatx {
 				return io::status_t::success;
 			}
 
-			return io::status_t::error; // unreachable
+			std::unreachable();
 		}
 	}
 

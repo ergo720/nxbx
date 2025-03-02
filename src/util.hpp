@@ -8,34 +8,12 @@
 #include <string>
 #include <cinttypes>
 #include <stdexcept>
+#include <utility>
 
 
 namespace util {
 	uint64_t muldiv128(uint64_t a, uint64_t b, uint64_t c);
 	char xbox_toupper(char c);
-
-	template<typename T>
-	T byteswap(T value)
-	{
-		// NOTE: this can be removed with std::byteswap of C++23
-		if constexpr (sizeof(T) == 1) {
-			return value;
-		}
-		else if constexpr (sizeof(T) == 2) {
-			return (value << 8) | (value >> 8);
-		}
-		else if constexpr (sizeof(T) == 4) {
-			return (value << 24) | ((value << 8) & 0x00FF0000) | ((value >> 8) & 0x0000FF00) | (value >> 24);
-		}
-		else if constexpr (sizeof(T) == 8) {
-			return (value << 56) | ((value << 40) & 0x00FF000000000000) | ((value << 24) & 0x0000FF0000000000)
-				| ((value << 8) & 0x000000FF00000000) | ((value >> 8) & 0x00000000FF000000)
-				| ((value >> 24) & 0x0000000000FF0000) | ((value >> 40) & 0x000000000000FF00) | (value >> 56);
-		}
-		else {
-			throw std::logic_error("Unexpected value size");
-		}
-	}
 
 	template<typename T>
 	bool in_range(T val, T low, T high) // true if val is inside [low, high], false otherwise

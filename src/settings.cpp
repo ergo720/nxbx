@@ -47,7 +47,7 @@ settings::load_config_values()
 	m_core.version = m_ini.GetLongValue(m_core_str.name, m_core_str.version, m_version);
 	m_core.log_version = m_ini.GetLongValue(m_core_str.name, m_core_str.log_version, m_log_version);
 	m_core.sys_time_bias = get_int64_value(m_core_str.name, m_core_str.sys_time_bias, 0);
-	m_core.log_level = static_cast<log_lv>(m_ini.GetLongValue(m_core_str.name, m_core_str.log_level, static_cast<std::underlying_type_t<log_lv>>(default_log_lv)));
+	m_core.log_level = static_cast<log_lv>(m_ini.GetLongValue(m_core_str.name, m_core_str.log_level, std::to_underlying(default_log_lv)));
 	if (!is_log_lv_in_range(m_core.log_level)) {
 		m_core.log_level = default_log_lv;
 	}

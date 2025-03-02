@@ -18,10 +18,10 @@
 static consteval bool
 check_cpu_log_lv()
 {
-	return ((std::underlying_type_t<log_level>)(log_level::debug) == (std::underlying_type_t<log_lv>)(log_lv::debug)) &&
-		((std::underlying_type_t<log_level>)(log_level::info) == (std::underlying_type_t<log_lv>)(log_lv::info)) &&
-		((std::underlying_type_t<log_level>)(log_level::warn) == (std::underlying_type_t<log_lv>)(log_lv::warn)) &&
-		((std::underlying_type_t<log_level>)(log_level::error) == (std::underlying_type_t<log_lv>)(log_lv::error));
+	return (std::to_underlying(log_level::debug) == std::to_underlying(log_lv::debug)) &&
+		(std::to_underlying(log_level::info) == std::to_underlying(log_lv::info)) &&
+		(std::to_underlying(log_level::warn) == std::to_underlying(log_lv::warn)) &&
+		(std::to_underlying(log_level::error) == std::to_underlying(log_lv::error));
 }
 
 // Make sure that our log levels are the same used in lib86cpu too

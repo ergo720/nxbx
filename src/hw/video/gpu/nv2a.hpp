@@ -16,6 +16,7 @@
 #include "pvideo.hpp"
 #include "puser.hpp"
 #include "cpu.hpp"
+#include <bit>
 
 
 struct dma_obj {
@@ -67,7 +68,7 @@ T nv2a_read(uint32_t addr, void *opaque)
 {
 	T value = cpu_read<D, T, f, base>(addr, opaque);
 	if constexpr (is_be) {
-		value = util::byteswap<T>(value);
+		value = std::byteswap<T>(value);
 	}
 	return value;
 }
@@ -76,7 +77,7 @@ template<typename D, typename T, auto f, bool is_be = false, uint32_t base = 0>
 void nv2a_write(uint32_t addr, T value, void *opaque)
 {
 	if constexpr (is_be) {
-		value = util::byteswap<T>(value);
+		value = std::byteswap<T>(value);
 	}
 	cpu_write<D, T, f, base>(addr, value, opaque);
 }

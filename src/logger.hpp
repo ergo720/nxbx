@@ -10,6 +10,7 @@
 #include <atomic>
 #include <array>
 #include <algorithm>
+#include <utility>
 
 #define logger_en(lv, msg, ...) do { logger<log_lv::lv, log_module::MODULE_NAME, true>(msg __VA_OPT__(,) __VA_ARGS__); } while(0)
 #define logger_mod_en(lv, mod, msg, ...) do { logger<log_lv::lv, log_module::mod, true>(msg __VA_OPT__(,) __VA_ARGS__); } while(0)
@@ -17,7 +18,7 @@
 #define log_io_write() do { logger<log_lv::debug,log_module::MODULE_NAME, false>("Write at address 0x%08X of value 0x%08X", addr, data); } while(0)
 #define module_enabled() check_if_enabled<log_module::MODULE_NAME>()
 
-#define NUM_OF_LOG_MODULES32 static_cast<std::underlying_type_t<log_module>>(log_module::max) / 32 + 1
+#define NUM_OF_LOG_MODULES32 std::to_underlying(log_module::max) / 32 + 1
 
 
 enum class log_lv : int32_t {
@@ -111,15 +112,15 @@ inline std::atomic_uint32_t g_log_modules[NUM_OF_LOG_MODULES32] = {
 inline constexpr bool
 is_log_lv_in_range(log_lv lv)
 {
-	return ((std::underlying_type_t<log_lv>)(lv) > (std::underlying_type_t<log_lv>)(log_lv::lowest)) &&
-		((std::underlying_type_t<log_lv>)(lv) < (std::underlying_type_t<log_lv>)(log_lv::max));
+	return (std::to_underlying(lv) > std::to_underlying(log_lv::lowest)) &&
+		(std::to_underlying(lv) < std::to_underlying(log_lv::max));
 }
 
 inline constexpr bool
 is_log_module_in_range(log_module name)
 {
-	return ((std::underlying_type_t<log_module>)(name) > (std::underlying_type_t<log_module>)(log_module::lowest)) &&
-		((std::underlying_type_t<log_module>)(name) < (std::underlying_type_t<log_module>)(log_module::max));
+	return (std::to_underlying(name) > std::to_underlying(log_module::lowest)) &&
+		(std::to_underlying(name) < std::to_underlying(log_module::max));
 }
 
 inline bool
@@ -170,8 +171,8 @@ inline void logger(const char *msg, std::va_list vlist)
 				return;
 			}
 		}
-		std::string str(lv_to_str[static_cast<std::underlying_type_t<log_lv>>(lv)]);
-		str += module_to_str[static_cast<std::underlying_type_t<log_module>>(name)];
+		std::string str(lv_to_str[std::to_underlying(lv)]);
+		str += module_to_str[std::to_underlying(name)];
 		str += msg;
 		str += '\n';
 		std::vprintf(str.c_str(), vlist);
@@ -200,8 +201,8 @@ inline void logger(log_lv lv, const char *msg, std::va_list vlist)
 					return;
 				}
 			}
-			std::string str(lv_to_str[static_cast<std::underlying_type_t<log_lv>>(lv)]);
-			str += module_to_str[static_cast<std::underlying_type_t<log_module>>(name)];
+			std::string str(lv_to_str[std::to_underlying(lv)]);
+			str += module_to_str[std::to_underlying(name)];
 			str += msg;
 			str += '\n';
 			std::vprintf(str.c_str(), vlist);
@@ -234,8 +235,8 @@ inline void logger(log_module name, const char *msg, std::va_list vlist)
 					return;
 				}
 			}
-			std::string str(lv_to_str[static_cast<std::underlying_type_t<log_lv>>(lv)]);
-			str += module_to_str[static_cast<std::underlying_type_t<log_module>>(name)];
+			std::string str(lv_to_str[std::to_underlying(lv)]);
+			str += module_to_str[std::to_underlying(name)];
 			str += msg;
 			str += '\n';
 			std::vprintf(str.c_str(), vlist);
