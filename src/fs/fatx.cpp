@@ -6,6 +6,7 @@
 #include <array>
 #include <algorithm>
 #include <limits>
+#include <cstring>
 #include <assert.h>
 
 #ifdef __GNUC__

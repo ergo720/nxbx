@@ -7,6 +7,7 @@
 #include "files.hpp"
 #include "io.hpp"
 #include <unordered_map>
+#include <vector>
 
 #define FATX_MAX_FILE_LENGTH 42
 
