@@ -16,7 +16,7 @@
 #pragma GCC diagnostic ignored "-Wmultichar"
 #endif
 
-#define METADATA_VERSION_NUM 0
+#define METADATA_VERSION_NUM 1
 #define METADATA_FAT_OFFSET (sizeof(USER_DATA_AREA) + sizeof(fatx::SUPERBLOCK))
 #define CLUSTER_TABLE_ELEM_SIZE 4096
 #define CLUSTER_TABLE_ENTRIES_PER_ELEM (CLUSTER_TABLE_ELEM_SIZE / sizeof(CLUSTER_DATA_ENTRY))
@@ -1658,7 +1658,7 @@ namespace fatx {
 		for (unsigned i = DEV_PARTITION0; i < DEV_PARTITION6; ++i) {
 			std::filesystem::path curr_partition_dir = (hdd_dir / ("Partition" + std::to_string(i - DEV_PARTITION0))).make_preferred();
 			if (!get(i).init(curr_partition_dir, i)) {
-				logger_mod_en(error, io, "Failed to create partition%u.bin file", i);
+				logger_mod_en(error, io, "Failed to create partition%u.bin file", i - DEV_PARTITION0);
 				return false;
 			}
 		}
@@ -1682,7 +1682,7 @@ namespace fatx {
 						return false;
 					} else {
 						m_ct_fs = std::move(*opt_table);
-						return format_partition(m_pt_num);
+						return format_partition();
 					}
 				}
 				std::error_code ec;
@@ -1728,7 +1728,7 @@ namespace fatx {
 								std::copy_n(&g_hdd_partitiong_table.table_entries[m_pt_num - DEV_PARTITION0 - 1], 1, &g_current_partition_table.table_entries[m_pt_num - DEV_PARTITION0 - 1]);
 								m_pt_fs = std::move(*opt_metadata);
 								m_ct_fs = std::move(*opt_table);
-								return format_partition(m_pt_num);
+								return format_partition();
 							}
 						}
 						return setup_cluster_info(partition_dir);
