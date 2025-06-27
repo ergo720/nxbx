@@ -7,3 +7,6 @@
 
 # Visual Studio Code Cache
 .vscode/
+
+#Test files
+src/kernel_head_ref.hpp

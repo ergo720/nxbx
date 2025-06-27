@@ -15,6 +15,21 @@ set(NXBX_ROOT_DIR ${CMAKE_CURRENT_LIST_DIR})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 23)
 
+find_package(Git)
+if(Git_FOUND)
+ execute_process(
+  COMMAND git ls-remote https://github.com/ergo720/nboxkrnl HEAD
+  OUTPUT_VARIABLE _NBOXKRNL_HEAD_REF
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+ )
+ configure_file(
+  "${NXBX_ROOT_DIR}/src/kernel_head_ref.hpp.in" "${NXBX_ROOT_DIR}/src/kernel_head_ref.hpp" @ONLY
+  NEWLINE_STYLE LF
+ )
+else ()
+ message(FATAL_ERROR "Git was not found")
+endif()
+
 option(LIB86CPU_BUILD_SHARED_LIB "Build shared libraries" OFF)
 option(LIB86CPU_XBOX_BUILD "Building Xbox version" ON)
 add_subdirectory("import/lib86cpu")
@@ -57,6 +72,7 @@ set(HEADERS
  "${NXBX_ROOT_DIR}/src/files.hpp"
  "${NXBX_ROOT_DIR}/src/io.hpp"
  "${NXBX_ROOT_DIR}/src/kernel.hpp"
+ "${NXBX_ROOT_DIR}/src/kernel_head_ref.hpp"
  "${NXBX_ROOT_DIR}/src/logger.hpp"
  "${NXBX_ROOT_DIR}/src/nxbx.hpp"
  "${NXBX_ROOT_DIR}/src/pe.hpp"

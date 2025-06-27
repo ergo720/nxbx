@@ -1,0 +1,3 @@
+#pragma once
+
+#cmakedefine _NBOXKRNL_HEAD_REF "@_NBOXKRNL_HEAD_REF@"

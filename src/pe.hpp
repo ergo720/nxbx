@@ -14,7 +14,9 @@
 #define IMAGE_SUBSYSTEM_NATIVE 1
 #define IMAGE_NUMBEROF_DIRECTORY_ENTRIES 16
 #define IMAGE_SIZEOF_SHORT_NAME 8
+#define IMAGE_DIRECTORY_ENTRY_EXPORT 0
 
+#pragma pack(1)
 typedef struct _IMAGE_DOS_HEADER {
 	uint16_t e_magic;
 	uint16_t e_cblp;
@@ -108,3 +110,18 @@ typedef struct _IMAGE_SECTION_HEADER {
 	uint16_t NumberOfLinenumbers;
 	uint32_t Characteristics;
 } IMAGE_SECTION_HEADER, *PIMAGE_SECTION_HEADER;
+
+typedef struct _IMAGE_EXPORT_DIRECTORY {
+	uint32_t Characteristics;
+	uint32_t TimeDateStamp;
+	uint16_t MajorVersion;
+	uint16_t MinorVersion;
+	uint32_t Name;
+	uint32_t Base;
+	uint32_t NumberOfFunctions;
+	uint32_t NumberOfNames;
+	uint32_t AddressOfFunctions;
+	uint32_t AddressOfNames;
+	uint32_t AddressOfNameOrdinals;
+} IMAGE_EXPORT_DIRECTORY, *PIMAGE_EXPORT_DIRECTORY;
+#pragma pack()
