@@ -18,7 +18,7 @@ options:\n\
 -i <path>    Path to the XBE (xbox executable) or XISO (xbox disk image) to run\n\
 -keys <path> Path of xbox keys.bin file\n\
 -k <path>    Path to nboxkrnl (xbox kernel) to run\n\
--s <num>     Specify assembly syntax (default is AT&T)\n\
+-s <num>     Specify assembly syntax (default is Intel)\n\
 -c <name>    Specify the console type to emulate (default is xbox)\n\
 -d           Start with debugger\n\
 -h           Print this message";
@@ -31,7 +31,7 @@ main(int argc, char **argv)
 {
 	init_info_t init_info;
 	init_info.m_keys_path = "";
-	init_info.m_syntax = disas_syntax::att;
+	init_info.m_syntax = disas_syntax::intel;
 	init_info.m_console_type = console_t::xbox;
 	init_info.m_use_dbg = 0;
 	char option = ' ';
