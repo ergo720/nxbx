@@ -89,6 +89,7 @@ namespace fatx {
 		io::status_t read_raw_partition(uint64_t offset, uint32_t size, char *buffer);
 		io::status_t write_raw_partition(uint64_t offset, uint32_t size, const char *buffer);
 		static io::status_t check_file_access(uint32_t desired_access, uint32_t create_options, uint32_t attributes, bool is_create, uint32_t flags);
+		void sync_partition_files();
 
 
 	private:

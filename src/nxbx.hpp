@@ -42,6 +42,7 @@ struct init_info_t {
 	uint32_t m_use_dbg;
 	console_t m_console_type;
 	input_t m_input_type;
+	int32_t m_sync_part;
 };
 
 // Settings struct declarations, used in the settings class

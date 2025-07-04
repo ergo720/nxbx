@@ -846,6 +846,17 @@ namespace io {
 			}
 		}
 
+		if (init_info.m_sync_part >= 0) {
+			if (init_info.m_sync_part) {
+				fatx::driver::get(init_info.m_sync_part + DEV_PARTITION0).sync_partition_files();
+			}
+			else {
+				for (unsigned partition_num = 1; partition_num < XBOX_NUM_OF_HDD_PARTITIONS; ++partition_num) {
+					fatx::driver::get(partition_num + DEV_PARTITION0).sync_partition_files();
+				}
+			}
+		}
+
 		add_device_handles();
 
 		jthr = std::jthread(&io::worker);

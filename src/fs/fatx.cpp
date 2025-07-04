@@ -1372,7 +1372,7 @@ namespace fatx {
 	bool
 	driver::format_partition()
 	{
-		// NOTE: this overload should only be called at startup by create_partition_metadata_file(), because it resets the partition table and the superblock to their default states
+		// NOTE: this overload should only be called at startup, because it resets the partition table and the superblock to their default states
 
 		if (m_pt_num == DEV_PARTITION0) {
 			// NOTE: place partition0_buffer on the heap instead of the stack because it's quite big
@@ -1769,6 +1769,53 @@ namespace fatx {
 		}
 
 		return true;
+	}
+
+	void
+	driver::sync_partition_files()
+	{
+		// Reset the partition bin file to its default state
+		format_partition();
+
+		// Now, enumerate all files in the partition folder, and create a dirent for each of them
+		std::filesystem::path partition_dir = (io::hdd_path / ("Partition" + std::to_string(m_pt_num - DEV_PARTITION0))).make_preferred();
+		try {
+			for (const auto &dir_entry : std::filesystem::recursive_directory_iterator(partition_dir)) {
+				std::error_code ec;
+				DIRENT io_dirent;
+				std::string file_name(dir_entry.path().filename().string());
+				std::string file_path(dir_entry.path().string());
+				bool is_directory = dir_entry.is_directory();
+				io_dirent.size = is_directory ? 0 : dir_entry.file_size(ec);
+				if (ec) {
+					logger_mod_en(warn, io, "Failed to determine the size of file %s, skipping it", file_path.c_str());
+					continue;
+				}
+				io_dirent.name_length = file_name.length();
+				io_dirent.attributes = is_directory ? FATX_FILE_DIRECTORY : 0;
+				std::copy_n(file_name.c_str(), file_name.length(), io_dirent.name);
+				io_dirent.first_cluster = 0; // replaced by create_dirent_for_file()
+				io_dirent.creation_time = 0;
+				io_dirent.last_write_time = 0;
+				io_dirent.last_access_time = 0;
+				uint64_t dirent_offset;
+				io::status_t io_status = find_dirent_for_file(file_path.substr(io::hdd_path.string().length() - 9), io_dirent, dirent_offset);
+				assert(io_status != io::status_t::success);
+				if ((io_status = create_dirent_for_file(io_dirent, file_path)) != io::status_t::success) {
+					if (io_status == io::status_t::full) {
+						logger_mod_en(warn, io, "Partition %u is full, skipping all remaining file(s)", m_pt_num - DEV_PARTITION0);
+						break;
+					}
+					else {
+						logger_mod_en(warn, io, "Failed to synchronize file %s with io status %u, skipping it", file_path.c_str(), io_status);
+						continue;
+					}
+				}
+			}
+		}
+		catch (const std::filesystem::filesystem_error &err) {
+			logger_mod_en(warn, io, "Failed to iterate through directory %s, the error was %s", err.path1(), err.what());
+		}
 	}
 }
 

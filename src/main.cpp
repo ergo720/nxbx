@@ -15,13 +15,14 @@ print_help()
 	static const char *help =
 		"usage: nxbx [options]\n\
 options:\n\
--i <path>    Path to the XBE (xbox executable) or XISO (xbox disk image) to run\n\
--keys <path> Path of xbox keys.bin file\n\
--k <path>    Path to nboxkrnl (xbox kernel) to run\n\
--s <num>     Specify assembly syntax (default is Intel)\n\
--c <name>    Specify the console type to emulate (default is xbox)\n\
--d           Start with debugger\n\
--h           Print this message";
+-i <path>       Path to the XBE (xbox executable) or XISO (xbox disk image) to run\n\
+-keys <path>    Path of xbox keys.bin file\n\
+-k <path>       Path to nboxkrnl (xbox kernel) to run\n\
+-s <num>        Specify assembly syntax (default is Intel)\n\
+-c <name>       Specify the console type to emulate (default is xbox)\n\
+-sync_hdd <num> Synchronize hard disk partition metadata with partition folder\n\
+-d              Start with debugger\n\
+-h              Print this message";
 
 	logger("%s", help);
 }
@@ -34,6 +35,7 @@ main(int argc, char **argv)
 	init_info.m_syntax = disas_syntax::intel;
 	init_info.m_console_type = console_t::xbox;
 	init_info.m_use_dbg = 0;
+	init_info.m_sync_part = -1; // -1=don't sync, 0=sync all partitions, [1-7]=sync that partition
 	char option = ' ';
 
 	const auto print_unk_opt = [](std::string_view arg_str) {
@@ -149,6 +151,16 @@ main(int argc, char **argv)
 							return 0;
 						}
 						init_info.m_keys_path = argv[idx];
+					}
+					else if (arg_str.compare("-sync_hdd") == 0) {
+						if (check_missing_arg(idx, arg_str.c_str())) {
+							return 0;
+						}
+						init_info.m_sync_part = std::stoul(argv[idx]);
+						if (init_info.m_sync_part > 5) {
+							logger("Invalid partition number %u specified by option -sync_hdd (must be in the range [0-5])", init_info.m_sync_part);
+							return 0;
+						}
 					}
 					else {
 						return print_unk_opt(arg_str);
