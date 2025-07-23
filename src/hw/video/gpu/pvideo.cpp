@@ -45,7 +45,7 @@ void pvideo::write32(uint32_t addr, const uint32_t data)
 	case NV_PVIDEO_DS_DX(1):
 	case NV_PVIDEO_DT_DY(0):
 	case NV_PVIDEO_DT_DY(1):
-		regs[(addr - NV_PVIDEO_BASE(0)) >> 2] = data;
+		m_regs[(addr - NV_PVIDEO_BASE(0)) >> 2] = data;
 		break;
 
 	default:
@@ -90,7 +90,7 @@ uint32_t pvideo::read32(uint32_t addr)
 	case NV_PVIDEO_DS_DX(1):
 	case NV_PVIDEO_DT_DY(0):
 	case NV_PVIDEO_DT_DY(1):
-		value = regs[(addr - NV_PVIDEO_BASE(0)) >> 2];
+		value = m_regs[(addr - NV_PVIDEO_BASE(0)) >> 2];
 		break;
 
 	default:

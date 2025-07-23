@@ -52,5 +52,5 @@ private:
 	machine *const m_machine;
 	// registers
 	uint32_t debug[11];
-	uint32_t regs[24];
+	uint32_t m_regs[24];
 };

@@ -91,5 +91,5 @@ private:
 	machine *const m_machine;
 	uint8_t *m_ram;
 	// registers
-	uint32_t regs[NV_PFIFO_SIZE / 4];
+	uint32_t m_regs[NV_PFIFO_SIZE / 4];
 };

@@ -15,7 +15,7 @@ void puser::write32(uint32_t addr, const uint32_t data)
 	}
 
 	uint32_t chan_id = ((addr - NV_PUSER_BASE) >> 16) & (NV2A_MAX_NUM_CHANNELS - 1); // addr increases of 0x10000 for each channel
-	uint32_t curr_chan_info = m_machine->get<pfifo>().regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_PUSH1)];
+	uint32_t curr_chan_info = m_machine->get<pfifo>().m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_PUSH1)];
 	uint32_t curr_chan_id = curr_chan_info & NV_PFIFO_CACHE1_PUSH1_CHID_MASK;
 	uint32_t curr_chan_mode = curr_chan_info & NV_PFIFO_CACHE1_PUSH1_MODE_MASK;
 
@@ -27,7 +27,7 @@ void puser::write32(uint32_t addr, const uint32_t data)
 			{
 			case NV_PUSER_DMA_PUT:
 				// The pb put pointer changed, so notify the pusher
-				m_machine->get<pfifo>().regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_PUT)] = data;
+				m_machine->get<pfifo>().m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_PUT)] = data;
 				m_machine->get<pfifo>().pusher();
 				break;
 
@@ -58,7 +58,7 @@ uint32_t puser::read32(uint32_t addr)
 {
 	uint32_t value = 0;
 	uint32_t chan_id = ((addr - NV_PUSER_BASE) >> 16) & (NV2A_MAX_NUM_CHANNELS - 1); // addr increases of 0x10000 for each channel
-	uint32_t curr_chan_info = m_machine->get<pfifo>().regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_PUSH1)];
+	uint32_t curr_chan_info = m_machine->get<pfifo>().m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_PUSH1)];
 	uint32_t curr_chan_id = curr_chan_info & NV_PFIFO_CACHE1_PUSH1_CHID_MASK;
 	uint32_t curr_chan_mode = curr_chan_info & NV_PFIFO_CACHE1_PUSH1_MODE_MASK;
 
@@ -69,15 +69,15 @@ uint32_t puser::read32(uint32_t addr)
 			switch (addr)
 			{
 			case NV_PUSER_DMA_PUT:
-				value = m_machine->get<pfifo>().regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_PUT)];
+				value = m_machine->get<pfifo>().m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_PUT)];
 				break;
 
 			case NV_PUSER_DMA_GET:
-				value = m_machine->get<pfifo>().regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_GET)];
+				value = m_machine->get<pfifo>().m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_GET)];
 				break;
 
 			case NV_PUSER_REF:
-				value = m_machine->get<pfifo>().regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_REF)];
+				value = m_machine->get<pfifo>().m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_REF)];
 				break;
 
 			default:
