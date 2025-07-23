@@ -70,7 +70,6 @@ public:
 	{
 		m_cpu.deinit();
 		m_cmos.deinit();
-		m_nv2a.deinit();
 		m_smbus.deinit();
 	}
 	void start() { m_cpu.start(); }

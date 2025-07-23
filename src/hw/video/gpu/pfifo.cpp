@@ -38,14 +38,12 @@ void pfifo::write32(uint32_t addr, const uint32_t data)
 
 	case NV_PFIFO_CACHE1_DMA_PUT:
 		regs[addr_off] = data;
-		signal++;
-		signal.notify_one();
+		pusher();
 		break;
 
 	case NV_PFIFO_CACHE1_DMA_GET:
 		regs[addr_off] = data;
-		signal++;
-		signal.notify_one();
+		pusher();
 		break;
 
 	default:
@@ -71,7 +69,7 @@ uint32_t pfifo::read32(uint32_t addr)
 }
 
 void
-pfifo::pusher(auto &err_handler)
+pfifo::pusher()
 {
 	if ((
 		((regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_PUSH0)] & NV_PFIFO_CACHE1_PUSH0_ACCESS_MASK) << 1) |
@@ -81,6 +79,12 @@ pfifo::pusher(auto &err_handler)
 		// Pusher is either disabled or suspended, so don't do anything
 		return;
 	}
+
+	const auto &err_handler = [this](const char *msg) {
+		regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_PUSH)] |= NV_PFIFO_CACHE1_DMA_PUSH_STATUS_MASK; // suspend pusher
+		regs[REGS_PFIFO_idx(NV_PFIFO_INTR_0)] |= NV_PFIFO_INTR_0_DMA_PUSHER; // raise pusher interrupt
+		m_machine->get<pmc>().update_irq();
+		};
 
 	// We are running, so set the busy flag
 	regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_PUSH)] |= NV_PFIFO_CACHE1_DMA_PUSH_STATE_MASK;
@@ -201,32 +205,6 @@ pfifo::puller()
 	// TODO
 }
 
-void
-pfifo::worker(std::stop_token stok)
-{
-	// This function is called in a separate thread, and acts as the pfifo pusher and puller
-
-	// This lambda is called when the pusher encounters an error
-	const auto lambda = [this](const char *msg) {
-		regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_PUSH)] |= NV_PFIFO_CACHE1_DMA_PUSH_STATUS_MASK; // suspend pusher
-		regs[REGS_PFIFO_idx(NV_PFIFO_INTR_0)] |= NV_PFIFO_INTR_0_DMA_PUSHER; // raise pusher interrupt
-		m_machine->get<pmc>().update_irq();
-		};
-
-	while (true) {
-		// Wait until there's some work to do
-		signal.wait(0);
-
-		if (stok.stop_requested()) [[unlikely]] {
-			return;
-		}
-
-		pusher(lambda);
-
-		signal--;
-	}
-}
-
 template<bool is_write>
 auto pfifo::get_io_func(bool log, bool enabled, bool is_be)
 {
@@ -296,19 +274,6 @@ pfifo::init()
 	}
 
 	reset();
-	signal = 0;
 	m_ram = get_ram_ptr(m_machine->get<cpu_t *>());
-	jthr = std::jthread(std::bind_front(&pfifo::worker, this));
 	return true;
-}
-
-void
-pfifo::deinit()
-{
-	if (jthr.joinable()) {
-		jthr.request_stop();
-		signal++;
-		signal.notify_one();
-		jthr.join();
-	}
 }

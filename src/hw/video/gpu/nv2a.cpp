@@ -89,9 +89,3 @@ nv2a::apply_log_settings()
 	m_pvideo.update_io();
 	m_puser.update_io();
 }
-
-void
-nv2a::deinit()
-{
-	m_pfifo.deinit();
-}

@@ -5,8 +5,6 @@
 #pragma once
 
 #include <cstdint>
-#include <thread>
-#include <atomic>
 #include "nv2a_defs.hpp"
 
 #define NV_PFIFO 0x00002000
@@ -73,7 +71,6 @@ class pfifo {
 public:
 	pfifo(machine *machine) : m_machine(machine) {}
 	bool init();
-	void deinit();
 	void reset();
 	void update_io() { update_io(true); }
 	template<bool log = false, bool enabled = true>
@@ -85,19 +82,14 @@ private:
 	bool update_io(bool is_update);
 	template<bool is_write>
 	auto get_io_func(bool log, bool enabled, bool is_be);
-	void worker(std::stop_token stok);
-	void pusher(auto &err_handler);
+	void pusher();
 	void puller();
 
 	friend class nv2a;
 	friend class pmc;
 	friend class puser;
-	std::jthread jthr;
-	std::atomic_uint32_t signal;
 	machine *const m_machine;
 	uint8_t *m_ram;
 	// registers
-	std::atomic_uint32_t regs[NV_PFIFO_SIZE / 4];
+	uint32_t regs[NV_PFIFO_SIZE / 4];
 };
-
-static_assert(sizeof(std::atomic_uint32_t) == 4);

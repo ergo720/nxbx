@@ -32,7 +32,6 @@ public:
 		m_pfb(machine), m_pbus(machine), m_pramin(machine), m_pfifo(machine), m_pvga(machine), m_pvideo(machine),
 		m_puser(machine) {}
 	bool init();
-	void deinit();
 	uint64_t get_next_update_time(uint64_t now);
 	pmc &get_pmc() { return m_pmc; }
 	pcrtc &get_pcrtc() { return m_pcrtc; }

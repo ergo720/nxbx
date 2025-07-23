@@ -28,8 +28,7 @@ void puser::write32(uint32_t addr, const uint32_t data)
 			case NV_PUSER_DMA_PUT:
 				// The pb put pointer changed, so notify the pusher
 				m_machine->get<pfifo>().regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_PUT)] = data;
-				m_machine->get<pfifo>().signal++;
-				m_machine->get<pfifo>().signal.notify_one();
+				m_machine->get<pfifo>().pusher();
 				break;
 
 			case NV_PUSER_DMA_GET:
