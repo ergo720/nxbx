@@ -16,7 +16,7 @@ T pramin::read(uint32_t addr)
 	T value = *(T *)ram_ptr;
 
 	if constexpr (log) {
-		log_io_read();
+		log_read(addr, value);
 	}
 
 	return value;
@@ -26,7 +26,7 @@ template<typename T, bool log>
 void pramin::write(uint32_t addr, const T data)
 {
 	if constexpr (log) {
-		log_io_write();
+		log_write(addr, data);
 	}
 
 	uint8_t *ram_ptr = m_ram + ramin_to_ram_addr(addr);
@@ -38,6 +38,18 @@ pramin::ramin_to_ram_addr(uint32_t ramin_addr)
 {
 	ramin_addr -= NV_PRAMIN_BASE;
 	return m_machine->get<pfb>().cstatus - (ramin_addr - (ramin_addr % RAMIN_UNIT_SIZE)) - RAMIN_UNIT_SIZE + (ramin_addr % RAMIN_UNIT_SIZE);
+}
+
+void
+pramin::log_read(uint32_t addr, uint32_t value)
+{
+	logger<log_lv::debug, log_module::pramin, false>("Read at NV_PRAMIN_BASE + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PRAMIN_BASE, addr, value);
+}
+
+void
+pramin::log_write(uint32_t addr, uint32_t data)
+{
+	logger<log_lv::debug, log_module::pramin, false>("Write at NV_PRAMIN_BASE + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PRAMIN_BASE, addr, data);
 }
 
 template<bool is_write, typename T>

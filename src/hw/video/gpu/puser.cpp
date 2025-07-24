@@ -11,7 +11,7 @@ template<bool log>
 void puser::write32(uint32_t addr, const uint32_t data)
 {
 	if constexpr (log) {
-		log_io_write();
+		nv2a_log_write();
 	}
 
 	uint32_t chan_id = ((addr - NV_PUSER_BASE) >> 16) & (NV2A_MAX_NUM_CHANNELS - 1); // addr increases of 0x10000 for each channel
@@ -94,7 +94,7 @@ uint32_t puser::read32(uint32_t addr)
 	}
 
 	if constexpr (log) {
-		log_io_read();
+		nv2a_log_read();
 	}
 
 	return value;

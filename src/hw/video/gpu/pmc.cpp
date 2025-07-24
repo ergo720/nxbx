@@ -11,7 +11,7 @@ template<bool log>
 void pmc::write32(uint32_t addr, const uint32_t data)
 {
 	if constexpr (log) {
-		log_io_write();
+		nv2a_log_write();
 	}
 
 	switch (addr)
@@ -124,7 +124,7 @@ uint32_t pmc::read32(uint32_t addr)
 	}
 
 	if constexpr (log) {
-		log_io_read();
+		nv2a_log_read();
 	}
 
 	return value;

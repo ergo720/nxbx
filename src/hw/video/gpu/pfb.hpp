@@ -42,4 +42,10 @@ private:
 	uint32_t cfg0, cfg1;
 	uint32_t nvm;
 	uint32_t cstatus;
+	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+		{ NV_PFB_CFG0, "NV_PFB_CFG0" },
+		{ NV_PFB_CFG1, "NV_PFB_CFG1" },
+		{ NV_PFB_CSTATUS, "NV_PFB_CSTATUS" },
+		{ NV_PFB_NVM, "NV_PFB_NVM" },
+	};
 };

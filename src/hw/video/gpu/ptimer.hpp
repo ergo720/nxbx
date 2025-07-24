@@ -68,4 +68,13 @@ private:
 	uint32_t int_enabled;
 	uint32_t multiplier, divider;
 	uint32_t alarm;
+	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+		{ NV_PTIMER_INTR_0, "NV_PTIMER_INTR_0" },
+		{ NV_PTIMER_INTR_EN_0, "NV_PTIMER_INTR_EN_0" },
+		{ NV_PTIMER_NUMERATOR, "NV_PTIMER_NUMERATOR" },
+		{ NV_PTIMER_DENOMINATOR, "NV_PTIMER_DENOMINATOR" },
+		{ NV_PTIMER_TIME_0, "NV_PTIMER_TIME_0" },
+		{ NV_PTIMER_TIME_1, "NV_PTIMER_TIME_1" },
+		{ NV_PTIMER_ALARM_0, "NV_PTIMER_ALARM_0" }
+	};
 };

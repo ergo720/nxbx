@@ -45,4 +45,10 @@ private:
 	uint32_t int_enabled;
 	uint32_t fb_addr;
 	uint32_t unknown[1];
+	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+		{ NV_PCRTC_INTR_0, "NV_PCRTC_INTR_0" },
+		{ NV_PCRTC_INTR_EN_0, "NV_PCRTC_INTR_EN_0" },
+		{ NV_PCRTC_START, "NV_PCRTC_START" },
+		{ NV_PCRTC_UNKNOWN0, "NV_PCRTC_UNKNOWN0" },
+	};
 };

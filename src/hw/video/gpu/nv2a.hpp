@@ -17,6 +17,8 @@
 #include "puser.hpp"
 #include "cpu.hpp"
 #include <bit>
+#include <unordered_map>
+#include <string>
 
 
 struct dma_obj {
@@ -44,6 +46,19 @@ public:
 	pvga &get_pvga() { return m_pvga; }
 	pvideo &get_pvideo() { return m_pvideo; }
 	void apply_log_settings();
+	template<log_module name>
+	void log_write(const std::unordered_map<uint32_t, const std::string> &regs_info, uint32_t addr, uint32_t data)
+	{
+		const auto it = regs_info.find(addr & ~3);
+		logger<log_lv::debug, name, false>("Write at %s (0x%08X) of value 0x%08X", it != regs_info.end() ? it->second.c_str() : "UNKNOWN", addr, data);
+	}
+
+	template<log_module name>
+	void log_read(const std::unordered_map<uint32_t, const std::string> &regs_info, uint32_t addr, uint32_t value)
+	{
+		const auto it = regs_info.find(addr & ~3);
+		logger<log_lv::debug, name, false>("Read at %s (0x%08X) of value 0x%08X", it != regs_info.end() ? it->second.c_str() : "UNKNOWN", addr, value);
+	}
 
 private:
 	dma_obj get_dma_obj(uint32_t addr);
@@ -61,6 +76,9 @@ private:
 	pvideo m_pvideo;
 	puser m_puser;
 };
+
+#define nv2a_log_read() m_machine->get<nv2a>().log_read<log_module::MODULE_NAME>(m_regs_info, addr, value);
+#define nv2a_log_write() m_machine->get<nv2a>().log_write<log_module::MODULE_NAME>(m_regs_info, addr, data);
 
 template<typename D, typename T, auto f, bool is_be = false, uint32_t base = 0>
 T nv2a_read(uint32_t addr, void *opaque)

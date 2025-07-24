@@ -85,7 +85,7 @@ template<bool log>
 void pbus::write32(uint32_t addr, const uint32_t data)
 {
 	if constexpr (log) {
-		log_io_write();
+		nv2a_log_write();
 	}
 
 	switch (addr)
@@ -115,7 +115,7 @@ uint32_t pbus::read32(uint32_t addr)
 	}
 
 	if constexpr (log) {
-		log_io_read();
+		nv2a_log_read();
 	}
 
 	return value;
@@ -125,7 +125,7 @@ template<bool log>
 void pbus::pci_write32(uint32_t addr, const uint32_t data)
 {
 	if constexpr (log) {
-		log_io_write();
+		pci_log_write(addr, data);
 	}
 
 	uint32_t *pci_conf = (uint32_t *)m_pci_conf;
@@ -139,10 +139,22 @@ uint32_t pbus::pci_read32(uint32_t addr)
 	uint32_t value = pci_conf[(addr - NV_PBUS_PCI_BASE) / 4];
 
 	if constexpr (log) {
-		log_io_read();
+		pci_log_read(addr, value);
 	}
 
 	return value;
+}
+
+void
+pbus::pci_log_read(uint32_t addr, uint32_t value)
+{
+	logger<log_lv::debug, log_module::pbus, false>("Read at NV_PBUS_PCI_NV_0 + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PBUS_PCI_BASE, addr, value);
+}
+
+void
+pbus::pci_log_write(uint32_t addr, uint32_t data)
+{
+	logger<log_lv::debug, log_module::pbus, false>("Write at NV_PBUS_PCI_NV_0 + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PBUS_PCI_BASE, addr, data);
 }
 
 void

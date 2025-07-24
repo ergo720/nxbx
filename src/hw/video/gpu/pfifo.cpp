@@ -15,7 +15,7 @@ void pfifo::write32(uint32_t addr, const uint32_t data)
 		return;
 	}
 	if constexpr (log) {
-		log_io_write();
+		log_write(addr, data);
 	}
 
 	uint32_t addr_off = REGS_PFIFO_idx(addr);
@@ -62,7 +62,7 @@ uint32_t pfifo::read32(uint32_t addr)
 	uint32_t value = m_regs[addr_off];
 
 	if constexpr (log) {
-		log_io_read();
+		log_read(addr, value);
 	}
 
 	return value;
@@ -203,6 +203,44 @@ void
 pfifo::puller()
 {
 	// TODO
+}
+
+void
+pfifo::log_read(uint32_t addr, uint32_t value)
+{
+	const auto it = m_regs_info.find(addr & ~3);
+	if (it != m_regs_info.end()) {
+		logger<log_lv::debug, log_module::pfifo, false>("Read at %s (0x%08X) of value 0x%08X", it->second.c_str(), addr, value);
+	}
+	else {
+		if (util::in_range(addr, NV_PFIFO_CACHE1_METHOD(0), NV_PFIFO_CACHE1_DATA(127) + 3)) {
+			bool is_data = addr & 7;
+			logger<log_lv::debug, log_module::pfifo, false>("Read at %s %u (0x%08X) of value 0x%08X", is_data ? "NV_PFIFO_CACHE1_DATA" : "NV_PFIFO_CACHE1_METHOD",
+				is_data ? (addr - NV_PFIFO_CACHE1_DATA(0)) >> 3 : (addr - NV_PFIFO_CACHE1_METHOD(0)) >> 3, addr, value);
+		}
+		else {
+			logger<log_lv::debug, log_module::pfifo, false>("Read at UNKNOWN + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PFIFO_BASE, addr, value);
+		}
+	}
+}
+
+void
+pfifo::log_write(uint32_t addr, uint32_t data)
+{
+	const auto it = m_regs_info.find(addr & ~3);
+	if (it != m_regs_info.end()) {
+		logger<log_lv::debug, log_module::pfifo, false>("Write at %s (0x%08X) of value 0x%08X", it->second.c_str(), addr, data);
+	}
+	else {
+		if (util::in_range(addr, NV_PFIFO_CACHE1_METHOD(0), NV_PFIFO_CACHE1_DATA(127) + 3)) {
+			bool is_data = addr & 7;
+			logger<log_lv::debug, log_module::pfifo, false>("Write at %s %u (0x%08X) of value 0x%08X", is_data ? "NV_PFIFO_CACHE1_DATA" : "NV_PFIFO_CACHE1_METHOD",
+				is_data ? (addr - NV_PFIFO_CACHE1_DATA(0)) >> 3 : (addr - NV_PFIFO_CACHE1_METHOD(0)) >> 3, addr, data);
+		}
+		else {
+			logger<log_lv::debug, log_module::pfifo, false>("Write at UNKNOWN + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PFIFO_BASE, addr, data);
+		}
+	}
 }
 
 template<bool is_write>

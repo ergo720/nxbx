@@ -45,4 +45,9 @@ private:
 	uint64_t core_freq; // gpu frequency
 	// registers
 	uint32_t nvpll_coeff, mpll_coeff, vpll_coeff;
+	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+		{ NV_PRAMDAC_NVPLL_COEFF, "NV_PRAMDAC_NVPLL_COEFF" },
+		{ NV_PRAMDAC_MPLL_COEFF, "NV_PRAMDAC_MPLL_COEFF" },
+		{ NV_PRAMDAC_VPLL_COEFF, "NV_PRAMDAC_VPLL_COEFF" }
+	};
 };

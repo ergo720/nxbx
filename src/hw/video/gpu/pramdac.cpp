@@ -12,7 +12,7 @@ template<bool log>
 void pramdac::write32(uint32_t addr, const uint32_t data)
 {
 	if constexpr (log) {
-		log_io_write();
+		nv2a_log_write();
 	}
 
 	switch (addr)
@@ -68,7 +68,7 @@ uint32_t pramdac::read32(uint32_t addr)
 	}
 
 	if constexpr (log) {
-		log_io_read();
+		nv2a_log_read();
 	}
 
 	return value;
@@ -86,7 +86,7 @@ uint8_t pramdac::read8(uint32_t addr)
 	uint8_t value = uint8_t((value32 & (0xFF << addr_offset)) >> addr_offset);
 
 	if constexpr (log) {
-		log_io_read();
+		nv2a_log_read();
 	}
 
 	return value;

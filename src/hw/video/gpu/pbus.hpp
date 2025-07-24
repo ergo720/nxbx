@@ -35,6 +35,8 @@ public:
 	void pci_write32(uint32_t addr, const uint32_t data);
 
 private:
+	void pci_log_read(uint32_t addr, uint32_t value);
+	void pci_log_write(uint32_t addr, uint32_t data);
 	bool update_io(bool is_update);
 	template<bool is_write, bool is_pci>
 	auto get_io_func(bool log, bool is_be);
@@ -44,4 +46,7 @@ private:
 	void *m_pci_conf;
 	// registers
 	uint32_t fbio_ram; // Contains the ram type, among other unknown info about the ram modules
+	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+		{ NV_PBUS_FBIO_RAM, "NV_PBUS_FBIO_RAM" }
+	};
 };

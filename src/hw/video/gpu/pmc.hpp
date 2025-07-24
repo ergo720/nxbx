@@ -86,4 +86,12 @@ private:
 	uint32_t int_status;
 	uint32_t int_enabled;
 	uint32_t engine_enabled;
+	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+		{ NV_PMC_BOOT_0, "NV_PMC_BOOT_0" },
+		{ NV_PMC_BOOT_1, "NV_PMC_BOOT_1" },
+		{ NV_PMC_INTR_0, "NV_PMC_INTR_0" },
+		{ NV_PMC_INTR_0, "NV_PMC_INTR_0" },
+		{ NV_PMC_INTR_EN_0, "NV_PMC_INTR_EN_0" },
+		{ NV_PMC_ENABLE, "NV_PMC_ENABLE" }
+	};
 };

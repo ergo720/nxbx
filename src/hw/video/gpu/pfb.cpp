@@ -14,7 +14,7 @@ void pfb::write32(uint32_t addr, const uint32_t data)
 		return;
 	}
 	if constexpr (log) {
-		log_io_write();
+		nv2a_log_write();
 	}
 
 	switch (addr)
@@ -72,7 +72,7 @@ uint32_t pfb::read32(uint32_t addr)
 	}
 
 	if constexpr (log) {
-		log_io_read();
+		nv2a_log_read();
 	}
 
 	return value;
