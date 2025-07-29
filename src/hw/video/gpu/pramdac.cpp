@@ -9,7 +9,7 @@
 
 
 template<bool log>
-void pramdac::write32(uint32_t addr, const uint32_t data)
+void pramdac::write32(uint32_t addr, const uint32_t value)
 {
 	if constexpr (log) {
 		nv2a_log_write();
@@ -19,10 +19,10 @@ void pramdac::write32(uint32_t addr, const uint32_t data)
 	{
 	case NV_PRAMDAC_NVPLL_COEFF: {
 		// NOTE: if the m value is zero, then the final frequency is also zero
-		nvpll_coeff = data;
-		uint64_t m = data & NV_PRAMDAC_NVPLL_COEFF_MDIV_MASK;
-		uint64_t n = (data & NV_PRAMDAC_NVPLL_COEFF_NDIV_MASK) >> 8;
-		uint64_t p = (data & NV_PRAMDAC_NVPLL_COEFF_PDIV_MASK) >> 16;
+		nvpll_coeff = value;
+		uint64_t m = value & NV_PRAMDAC_NVPLL_COEFF_MDIV_MASK;
+		uint64_t n = (value & NV_PRAMDAC_NVPLL_COEFF_NDIV_MASK) >> 8;
+		uint64_t p = (value & NV_PRAMDAC_NVPLL_COEFF_PDIV_MASK) >> 16;
 		core_freq = m ? ((NV2A_CRYSTAL_FREQ * n) / (1ULL << p) / m) : 0;
 		if (m_machine->get<ptimer>().counter_active) {
 			m_machine->get<ptimer>().counter_period = m_machine->get<ptimer>().counter_to_us();
@@ -32,15 +32,15 @@ void pramdac::write32(uint32_t addr, const uint32_t data)
 	break;
 
 	case NV_PRAMDAC_MPLL_COEFF:
-		mpll_coeff = data;
+		mpll_coeff = value;
 		break;
 
 	case NV_PRAMDAC_VPLL_COEFF:
-		vpll_coeff = data;
+		vpll_coeff = value;
 		break;
 
 	default:
-		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
+		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, value);
 	}
 }
 

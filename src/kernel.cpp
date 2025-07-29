@@ -89,10 +89,9 @@ namespace kernel {
 	}
 
 	template<bool log>
-	void write32(addr_t addr, const uint32_t data, void *opaque)
+	void write32(addr_t addr, const uint32_t value, void *opaque)
 	{
 		if constexpr (log) {
-			uint32_t value = data;
 			log_io_write();
 		}
 
@@ -102,7 +101,7 @@ namespace kernel {
 			// The debug strings from nboxkrnl are 512 byte long at most
 			// Also, they might not be contiguous in physical memory, so we use mem_read_block_virt to avoid issues with allocations spanning pages
 			uint8_t buff[512];
-			mem_read_block_virt(static_cast<cpu_t *>(opaque), data, sizeof(buff), buff);
+			mem_read_block_virt(static_cast<cpu_t *>(opaque), value, sizeof(buff), buff);
 			logger_en(info, "%s", buff);
 		}
 		break;
@@ -112,7 +111,7 @@ namespace kernel {
 			break;
 
 		case IO_START:
-			io::submit_io_packet(data);
+			io::submit_io_packet(value);
 			break;
 
 		case IO_RETRY:
@@ -120,11 +119,11 @@ namespace kernel {
 			break;
 
 		case IO_QUERY:
-			io::query_io_packet(data);
+			io::query_io_packet(value);
 			break;
 
 		case XE_DVD_XBE_ADDR:
-			mem_write_block_virt(static_cast<cpu_t *>(opaque), data, (uint32_t)io::xbe_path.size(), io::xbe_path.c_str());
+			mem_write_block_virt(static_cast<cpu_t *>(opaque), value, (uint32_t)io::xbe_path.size(), io::xbe_path.c_str());
 			break;
 
 		default:
@@ -134,6 +133,6 @@ namespace kernel {
 
 	template uint32_t read32<true>(addr_t addr, void *opaque);
 	template uint32_t read32<false>(addr_t addr, void *opaque);
-	template void write32<true>(addr_t addr, const uint32_t data, void *opaque);
-	template void write32<false>(addr_t addr, const uint32_t data, void *opaque);
+	template void write32<true>(addr_t addr, const uint32_t value, void *opaque);
+	template void write32<false>(addr_t addr, const uint32_t value, void *opaque);
 }

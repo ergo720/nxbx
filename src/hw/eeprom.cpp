@@ -56,9 +56,9 @@ eeprom::read_byte(uint8_t command)
 }
 
 std::optional<uint16_t>
-eeprom::write_byte(uint8_t command, uint8_t data)
+eeprom::write_byte(uint8_t command, uint8_t value)
 {
-	m_eeprom[command] = data;
+	m_eeprom[command] = value;
 	return 0;
 }
 
@@ -69,10 +69,10 @@ eeprom::read_word(uint8_t command)
 }
 
 std::optional<uint16_t>
-eeprom::write_word(uint8_t command, uint16_t data)
+eeprom::write_word(uint8_t command, uint16_t value)
 {
-	m_eeprom[command] = data & 0xFF;
-	m_eeprom[command + 1] = data >> 8;
+	m_eeprom[command] = value & 0xFF;
+	m_eeprom[command + 1] = value >> 8;
 	return 0;
 }
 

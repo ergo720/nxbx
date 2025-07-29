@@ -45,7 +45,7 @@ ptimer::get_next_alarm_time(uint64_t now)
 }
 
 template<bool log, bool enabled>
-void ptimer::write32(uint32_t addr, const uint32_t data)
+void ptimer::write32(uint32_t addr, const uint32_t value)
 {
 	if constexpr (!enabled) {
 		return;
@@ -57,17 +57,17 @@ void ptimer::write32(uint32_t addr, const uint32_t data)
 	switch (addr)
 	{
 	case NV_PTIMER_INTR_0:
-		int_status &= ~data;
+		int_status &= ~value;
 		m_machine->get<pmc>().update_irq();
 		break;
 
 	case NV_PTIMER_INTR_EN_0:
-		int_enabled = data;
+		int_enabled = value;
 		m_machine->get<pmc>().update_irq();
 		break;
 
 	case NV_PTIMER_NUMERATOR:
-		divider = data & NV_PTIMER_NUMERATOR_MASK;
+		divider = value & NV_PTIMER_NUMERATOR_MASK;
 		if (counter_active) {
 			counter_period = counter_to_us();
 			cpu_set_timeout(m_machine->get<cpu_t *>(), m_machine->get<cpu>().check_periodic_events(timer::get_now()));
@@ -75,7 +75,7 @@ void ptimer::write32(uint32_t addr, const uint32_t data)
 		break;
 
 	case NV_PTIMER_DENOMINATOR: {
-		multiplier = data & NV_PTIMER_DENOMINATOR_MASK;
+		multiplier = value & NV_PTIMER_DENOMINATOR_MASK;
 		if (multiplier > divider) [[unlikely]] {
 			// Testing on a Retail 1.0 xbox shows that, when this condition is hit, the console hangs. We don't actually want to freeze the emulator, so
 			// we will just terminate the emulation instead
@@ -96,11 +96,11 @@ void ptimer::write32(uint32_t addr, const uint32_t data)
 
 		// Tested on a Retail 1.0 xbox: writing to the NV_PTIMER_TIME_0/1 registers causes the timer to start counting from the written value
 	case NV_PTIMER_TIME_0:
-		counter_offset = (counter_offset & (0xFFFFFFFFULL << 32)) | data;
+		counter_offset = (counter_offset & (0xFFFFFFFFULL << 32)) | value;
 		break;
 
 	case NV_PTIMER_TIME_1:
-		counter_offset = (counter_offset & 0xFFFFFFFFULL) | ((uint64_t)data << 32);
+		counter_offset = (counter_offset & 0xFFFFFFFFULL) | ((uint64_t)value << 32);
 		break;
 
 	case NV_PTIMER_ALARM_0: {
@@ -116,7 +116,7 @@ void ptimer::write32(uint32_t addr, const uint32_t data)
 		                    a1                          n bias+ (period larger for one cycle)
 		*/
 		uint32_t old_alarm = alarm >> 5;
-		alarm = data & ~0x1F; // tested on hw: writes of 1s to the first five bits have no impact
+		alarm = value & ~0x1F; // tested on hw: writes of 1s to the first five bits have no impact
 		uint32_t new_alarm = alarm >> 5;
 		counter_bias = new_alarm - old_alarm;
 		if (counter_active) {
@@ -126,7 +126,7 @@ void ptimer::write32(uint32_t addr, const uint32_t data)
 	break;
 
 	default:
-		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
+		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, value);
 	}
 }
 

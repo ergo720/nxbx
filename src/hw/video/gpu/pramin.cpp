@@ -23,14 +23,14 @@ T pramin::read(uint32_t addr)
 }
 
 template<typename T, bool log>
-void pramin::write(uint32_t addr, const T data)
+void pramin::write(uint32_t addr, const T value)
 {
 	if constexpr (log) {
-		log_write(addr, data);
+		log_write(addr, value);
 	}
 
 	uint8_t *ram_ptr = m_ram + ramin_to_ram_addr(addr);
-	*(T *)ram_ptr = data;
+	*(T *)ram_ptr = value;
 }
 
 uint32_t
@@ -47,9 +47,9 @@ pramin::log_read(uint32_t addr, uint32_t value)
 }
 
 void
-pramin::log_write(uint32_t addr, uint32_t data)
+pramin::log_write(uint32_t addr, uint32_t value)
 {
-	logger<log_lv::debug, log_module::pramin, false>("Write at NV_PRAMIN_BASE + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PRAMIN_BASE, addr, data);
+	logger<log_lv::debug, log_module::pramin, false>("Write at NV_PRAMIN_BASE + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PRAMIN_BASE, addr, value);
 }
 
 template<bool is_write, typename T>

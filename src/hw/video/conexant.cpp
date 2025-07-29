@@ -20,7 +20,7 @@ conexant::receive_byte()
 }
 
 std::optional<uint16_t>
-conexant::send_byte(uint8_t data)
+conexant::send_byte(uint8_t value)
 {
 	return 0;
 }
@@ -32,9 +32,9 @@ conexant::read_byte(uint8_t command)
 }
 
 std::optional<uint16_t>
-conexant::write_byte(uint8_t command, uint8_t data)
+conexant::write_byte(uint8_t command, uint8_t value)
 {
-	m_regs[command] = data;
+	m_regs[command] = value;
 	return 0;
 }
 
@@ -45,10 +45,10 @@ conexant::read_word(uint8_t command)
 }
 
 std::optional<uint16_t>
-conexant::write_word(uint8_t command, uint16_t data)
+conexant::write_word(uint8_t command, uint16_t value)
 {
-	m_regs[command] = data & 0xFF;
-	m_regs[command + 1] = data >> 8;
+	m_regs[command] = value & 0xFF;
+	m_regs[command + 1] = value >> 8;
 	return 0;
 }
 

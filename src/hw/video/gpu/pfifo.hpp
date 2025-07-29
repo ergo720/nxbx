@@ -76,11 +76,11 @@ public:
 	template<bool log = false, bool enabled = true>
 	uint32_t read32(uint32_t addr);
 	template<bool log = false, bool enabled = true>
-	void write32(uint32_t addr, const uint32_t data);
+	void write32(uint32_t addr, const uint32_t value);
 
 private:
 	void log_read(uint32_t addr, uint32_t value);
-	void log_write(uint32_t addr, uint32_t data);
+	void log_write(uint32_t addr, uint32_t value);
 	bool update_io(bool is_update);
 	template<bool is_write>
 	auto get_io_func(bool log, bool enabled, bool is_be);

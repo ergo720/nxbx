@@ -8,7 +8,7 @@
 
 
 template<bool log, bool enabled>
-void pvideo::write32(uint32_t addr, const uint32_t data)
+void pvideo::write32(uint32_t addr, const uint32_t value)
 {
 	if constexpr (!enabled) {
 		return;
@@ -30,7 +30,7 @@ void pvideo::write32(uint32_t addr, const uint32_t data)
 	case NV_PVIDEO_DEBUG_8:
 	case NV_PVIDEO_DEBUG_9:
 	case NV_PVIDEO_DEBUG_10:
-		debug[(addr - NV_PVIDEO_DEBUG_0) >> 2] = data;
+		debug[(addr - NV_PVIDEO_DEBUG_0) >> 2] = value;
 		break;
 
 	case NV_PVIDEO_LUMINANCE(0):
@@ -45,11 +45,11 @@ void pvideo::write32(uint32_t addr, const uint32_t data)
 	case NV_PVIDEO_DS_DX(1):
 	case NV_PVIDEO_DT_DY(0):
 	case NV_PVIDEO_DT_DY(1):
-		m_regs[(addr - NV_PVIDEO_BASE(0)) >> 2] = data;
+		m_regs[(addr - NV_PVIDEO_BASE(0)) >> 2] = value;
 		break;
 
 	default:
-		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
+		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, value);
 	}
 }
 

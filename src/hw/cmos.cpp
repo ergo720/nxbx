@@ -9,28 +9,28 @@
 
 
 uint8_t
-cmos::to_bcd(uint8_t data) // binary -> bcd
+cmos::to_bcd(uint8_t value) // binary -> bcd
 {
 	if (!(ram[0x0B] & 4)) {
 		// Binary format enabled, convert
-		uint8_t tens = data / 10;
-		uint8_t units = data % 10;
+		uint8_t tens = value / 10;
+		uint8_t units = value % 10;
 		return (tens << 4) | units;
 	}
 	
-	return data;
+	return value;
 }
 
 uint8_t
-cmos::from_bcd(uint8_t data) // bcd -> binary
+cmos::from_bcd(uint8_t value) // bcd -> binary
 {
 	if (ram[0x0B] & 4) {
 		// Binary format enabled, don't convert
-		return data;
+		return value;
 	}
 
-	uint8_t tens = data >> 4;
-	uint8_t units = data & 0x0F;
+	uint8_t tens = value >> 4;
+	uint8_t units = value & 0x0F;
 	return (tens * 10) + units;
 }
 
@@ -132,18 +132,18 @@ uint8_t cmos::read8(uint32_t addr)
 }
 
 template<bool log>
-void cmos::write8(uint32_t addr, const uint8_t data)
+void cmos::write8(uint32_t addr, const uint8_t value)
 {
 	if constexpr (log) {
 		log_io_write();
 	}
 
-	uint8_t data1 = data;
+	uint8_t value1 = value;
 
 	switch (addr)
 	{
 	case 0x70:
-		reg_idx = data;
+		reg_idx = value;
 		break;
 
 	case 0x71:
@@ -159,23 +159,23 @@ void cmos::write8(uint32_t addr, const uint8_t data)
 			case 1:
 			case 3:
 			case 5:
-				ram[reg_idx] = data1;
+				ram[reg_idx] = value1;
 				break;
 
 			case 0:
-				local_time->tm_sec = from_bcd(data1);
+				local_time->tm_sec = from_bcd(value1);
 				break;
 
 			case 2:
-				local_time->tm_min = from_bcd(data1);
+				local_time->tm_min = from_bcd(value1);
 				break;
 
 			case 4: {
-				uint8_t masked_data = data1 & 0x7F;
+				uint8_t masked_data = value1 & 0x7F;
 				local_time->tm_hour = from_bcd(masked_data);
 				if (!(ram[0xB] & 2)) {
 					// 12 hour format enabled
-					if (data & 0x80) {
+					if (value & 0x80) {
 						// time is pm
 						if (masked_data < 12) {
 							local_time->tm_hour += 12;
@@ -190,23 +190,23 @@ void cmos::write8(uint32_t addr, const uint8_t data)
 			break;
 
 			case 6:
-				local_time->tm_wday = from_bcd(data1) - 1;
+				local_time->tm_wday = from_bcd(value1) - 1;
 				break;
 
 			case 7:
-				local_time->tm_mday = from_bcd(data1);
+				local_time->tm_mday = from_bcd(value1);
 				break;
 
 			case 8:
-				local_time->tm_mon = from_bcd(data1) - 1;
+				local_time->tm_mon = from_bcd(value1) - 1;
 				break;
 
 			case 9:
-				local_time->tm_year = (ram[0x7F] * 100 - 1900) + from_bcd(data1);
+				local_time->tm_year = (ram[0x7F] * 100 - 1900) + from_bcd(value1);
 				break;
 
 			case 0x7F:
-				ram[0x7F] = from_bcd(data1);
+				ram[0x7F] = from_bcd(value1);
 				break;
 			}
 
@@ -223,14 +223,14 @@ void cmos::write8(uint32_t addr, const uint8_t data)
 			switch (reg_idx)
 			{
 			case 0xA:
-				data1 &= ~0x80; // UIP is read-only
+				value1 &= ~0x80; // UIP is read-only
 				break;
 
 			case 0xB:
-				if (data1 & 0x78) {
+				if (value1 & 0x78) {
 					nxbx_fatal("CMOS interrupts and square wave outputs are not supported");
 				}
-				else if (data1 & 0x80) {
+				else if (value1 & 0x80) {
 					ram[0xA] &= ~0x80; // clears UIP
 				}
 				break;
@@ -247,7 +247,7 @@ void cmos::write8(uint32_t addr, const uint8_t data)
 				}
 			}
 
-			ram[reg_idx] = data1;
+			ram[reg_idx] = value1;
 		}
 		break;
 	}

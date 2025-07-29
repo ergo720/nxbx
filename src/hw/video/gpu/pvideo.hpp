@@ -42,7 +42,7 @@ public:
 	template<bool log = false, bool enabled = true>
 	uint32_t read32(uint32_t addr);
 	template<bool log = false, bool enabled = true>
-	void write32(uint32_t addr, const uint32_t data);
+	void write32(uint32_t addr, const uint32_t value);
 
 private:
 	bool update_io(bool is_update);

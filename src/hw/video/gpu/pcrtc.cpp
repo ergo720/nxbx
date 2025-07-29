@@ -8,7 +8,7 @@
 
 
 template<bool log, bool enabled>
-void pcrtc::write32(uint32_t addr, const uint32_t data)
+void pcrtc::write32(uint32_t addr, const uint32_t value)
 {
 	if constexpr (!enabled) {
 		return;
@@ -20,25 +20,25 @@ void pcrtc::write32(uint32_t addr, const uint32_t data)
 	switch (addr)
 	{
 	case NV_PCRTC_INTR_0:
-		int_status &= ~data;
+		int_status &= ~value;
 		m_machine->get<pmc>().update_irq();
 		break;
 
 	case NV_PCRTC_INTR_EN_0:
-		int_enabled = data;
+		int_enabled = value;
 		m_machine->get<pmc>().update_irq();
 		break;
 
 	case NV_PCRTC_START:
-		fb_addr = data & 0x7FFFFFC; // fb is 4 byte aligned
+		fb_addr = value & 0x7FFFFFC; // fb is 4 byte aligned
 		break;
 
 	case NV_PCRTC_UNKNOWN0:
-		unknown[0] = data;
+		unknown[0] = value;
 		break;
 
 	default:
-		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
+		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, value);
 	}
 }
 

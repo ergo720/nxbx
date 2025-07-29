@@ -8,7 +8,7 @@
 
 
 template<bool log>
-void puser::write32(uint32_t addr, const uint32_t data)
+void puser::write32(uint32_t addr, const uint32_t value)
 {
 	if constexpr (log) {
 		nv2a_log_write();
@@ -27,7 +27,7 @@ void puser::write32(uint32_t addr, const uint32_t data)
 			{
 			case NV_PUSER_DMA_PUT:
 				// The pb put pointer changed, so notify the pusher
-				m_machine->get<pfifo>().m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_PUT)] = data;
+				m_machine->get<pfifo>().m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_PUT)] = value;
 				m_machine->get<pfifo>().pusher();
 				break;
 

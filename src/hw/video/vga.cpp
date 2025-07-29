@@ -86,7 +86,7 @@ b8to32(uint8_t x)
 	return y | (y << 16);
 }
 
-// If a bit in "mask_enabled" is set, then replace value with the data in "mask," otherwise keep the same
+// If a bit in "mask_enabled" is set, then replace value with the value in "mask," otherwise keep the same
 // Example: value=0x12345678 mask=0x9ABCDEF0 mask_enabled=0b1010 result=0x9A34DE78
 static inline uint32_t
 do_mask(uint32_t value, uint32_t mask, int mask_enabled)
@@ -261,10 +261,10 @@ vga::update_size()
 }
 
 void
-vga::io_write8(uint32_t addr, const uint8_t data)
+vga::io_write8(uint32_t addr, const uint8_t value)
 {
 	if ((addr >= 0x3B0 && addr <= 0x3BF && (misc & 1)) || (addr >= 0x3D0 && addr <= 0x3DF && !(misc & 1))) {
-		logger_en(warn, "Ignoring unsupported write to addr=%04" PRIX32 " data=%02" PRIX8 " misc=%02" PRIX8, addr, data, misc);
+		logger_en(warn, "Ignoring unsupported write to addr=%04" PRIX32 " value=%02" PRIX8 " misc=%02" PRIX8, addr, value, misc);
 		return;
 	}
 
@@ -274,19 +274,19 @@ vga::io_write8(uint32_t addr, const uint8_t data)
 	case 0x3C0: // Attribute controller register
 		if (!(attr_index & 0x80)) {
 			// Select attribute index
-			diffxor = (attr_index ^ data);
-			attr_index = data & 0x7F /* | (attr_index & 0x80) */; // We already know that attr_index is zero
+			diffxor = (attr_index ^ value);
+			attr_index = value & 0x7F /* | (attr_index & 0x80) */; // We already know that attr_index is zero
 			if (diffxor & 0x20) {
 				change_renderer();
 			}
-			attr_index = data & 0x7F /* | (attr_index & 0x80) */; // We already know that attr_index is zero
+			attr_index = value & 0x7F /* | (attr_index & 0x80) */; // We already know that attr_index is zero
 		}
 		else {
-			// Select attribute data
+			// Select attribute value
 			uint8_t index = attr_index & 0x1F;
-			diffxor = attr[index] ^ data;
+			diffxor = attr[index] ^ value;
 			if (diffxor) {
-				attr[index] = data;
+				attr[index] = value;
 				switch (index)
 				{
 				case 0x00:
@@ -345,20 +345,20 @@ bit   0  Graphics mode if set, Alphanumeric mode else.
 						) {
 						complete_redraw();
 					}
-					logger_en(debug, "Mode Control Register: %02" PRIX8, data);
+					logger_en(debug, "Mode Control Register: %02" PRIX8, value);
 					break;
 
 				case 17: // Overscan color register break;
-					logger_en(debug, "Overscan color (currently unused): %02" PRIX8, data);
+					logger_en(debug, "Overscan color (currently unused): %02" PRIX8, value);
 					break;
 
 				case 18: // Color Plane Enable
-					logger_en(debug, "Color plane enable: %02" PRIX8, data);
+					logger_en(debug, "Color plane enable: %02" PRIX8, value);
 					attr[18] &= 0x0F;
 					break;
 
 				case 19: // Horizontal PEL Panning Register
-					// This register enables you to shift display data "x" pixels to the left.
+					// This register enables you to shift display value "x" pixels to the left.
 					// However, in an effort to confuse people, this value is interpreted differently based on graphics mode
 					//
 					//    pixels to shift left
@@ -374,20 +374,20 @@ bit   0  Graphics mode if set, Alphanumeric mode else.
 					//   8     -     0       -
 					//   9 and above: all undefined
 					// Note that due to these restrictions, it's impossible to obscure a full col of characters (and why would you want to do such a thing?)
-					if (data > 8) {
+					if (value > 8) {
 						nxbx_fatal("Unknown PEL pixel panning value");
 					}
 					if (gfx[5] & 0x40) {
-						pixel_panning = data >> 1 & 3;
+						pixel_panning = value >> 1 & 3;
 					}
 					else {
-						pixel_panning = (data & 7) + (char_width & 1);
+						pixel_panning = (value & 7) + (char_width & 1);
 					}
-					logger_en(debug, "Pixel panning: %" PRIX8 " [raw], %" PRIX8 " [effective value]", data, pixel_panning);
+					logger_en(debug, "Pixel panning: %" PRIX8 " [raw], %" PRIX8 " [effective value]", value, pixel_panning);
 					break;
 
 				case 20: // Color Select Register
-					logger_en(debug, "Color select register: %02" PRIX8, data);
+					logger_en(debug, "Color select register: %02" PRIX8, value);
 					if (diffxor & 15) {
 						for (int i = 0; i < 16; i++) {
 							change_attr_cache(i);
@@ -401,7 +401,7 @@ bit   0  Graphics mode if set, Alphanumeric mode else.
 		break;
 
 	case 0x3C2: // Miscellaneous Output Register
-		logger_en(debug, "Write VGA miscellaneous register: 0x%02" PRIX8, data);
+		logger_en(debug, "Write VGA miscellaneous register: 0x%02" PRIX8, value);
 		/*
 bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 		 Address=3Bxh.
@@ -420,7 +420,7 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 			  2=350(EGA)  350(VGA)
 			  3=          480(VGA).
 		*/
-		misc = data;
+		misc = value;
 		break;
 
 	case 0x3B8:
@@ -429,11 +429,11 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 	case 0x3DA:
 	case 0x3D8:
 	case 0x3CD:
-		logger_en(warn, "Unknown write to %x: %02" PRIX8, addr, data);
+		logger_en(warn, "Unknown write to %x: %02" PRIX8, addr, value);
 		break;
 
 	case 0x3C4: // Sequencer Index
-		seq_index = data & 7;
+		seq_index = value & 7;
 		break;
 
 	case 0x3C5: { // Sequencer Data
@@ -448,10 +448,10 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 			MASK(0b11111111), // 6
 			MASK(0b11111111) // 7
 		};
-		uint8_t data1 = data & mask[seq_index];
-		diffxor = seq[seq_index] ^ data1;
+		uint8_t value1 = value & mask[seq_index];
+		diffxor = seq[seq_index] ^ value1;
 		if (diffxor) {
-			seq[seq_index] = data1;
+			seq[seq_index] = value1;
 			switch (seq_index)
 			{
 			case 0: // Sequencer Reset
@@ -459,7 +459,7 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 				break;
 
 			case 1: // Clocking Mode
-				logger_en(debug, "SEQ: Setting Clocking Mode to 0x%02" PRIX8, data1);
+				logger_en(debug, "SEQ: Setting Clocking Mode to 0x%02" PRIX8, value1);
 				if (diffxor & 0x20) { // Screen Off
 					change_renderer();
 				}
@@ -468,25 +468,25 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 					update_size();
 				}
 				if (diffxor & 0x01) { // 8/9 Dot Clocks
-					char_width = 9 ^ (data1 & 1);
+					char_width = 9 ^ (value1 & 1);
 					update_size();
 					complete_redraw();
 				}
 				break;
 
 			case 2: // Memory Write Access
-				logger_en(debug, "SEQ: Memory plane write access: 0x%02" PRIX8, data1);
+				logger_en(debug, "SEQ: Memory plane write access: 0x%02" PRIX8, value1);
 				break;
 
 			case 3: // Character Map Select
 				// Note these are font addresses in plane 2
-				logger_en(debug, "SEQ: Memory plane write access: 0x%02" PRIX8, data1);
-				character_map[0] = char_map_address((data1 >> 5 & 1) | (data1 >> 1 & 6));
-				character_map[1] = char_map_address((data1 >> 4 & 1) | (data1 << 1 & 6));
+				logger_en(debug, "SEQ: Memory plane write access: 0x%02" PRIX8, value1);
+				character_map[0] = char_map_address((value1 >> 5 & 1) | (value1 >> 1 & 6));
+				character_map[1] = char_map_address((value1 >> 4 & 1) | (value1 << 1 & 6));
 				break;
 
 			case 4: // Memory Mode
-				logger_en(debug, "SEQ: Memory Mode: 0x%02" PRIX8, data1);
+				logger_en(debug, "SEQ: Memory Mode: 0x%02" PRIX8, value1);
 				if (diffxor & 0b1100) {
 					update_mem_access();
 				}
@@ -498,23 +498,23 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 
 	case 0x3C6: // DAC Palette Mask
 		// Used to play around with which colors can be accessed in the 256 DAC cache
-		dac_mask = data;
+		dac_mask = value;
 		complete_redraw(); // Doing something as drastic as this deserves a redraw
 		break;
 
 	case 0x3C7: // DAC Read Address
-		dac_read_address = data;
+		dac_read_address = value;
 		dac_color = 0;
 		break;
 
 	case 0x3C8: // PEL Address Write Mode
-		dac_address = data;
+		dac_address = value;
 		dac_color = 0;
 		break;
 
 	case 0x3C9: // PEL Data Write
 		dac_state = 3;
-		dac[(dac_address << 2) | dac_color++] = data;
+		dac[(dac_address << 2) | dac_color++] = value;
 		if (dac_color == 3) { // 0: red, 1: green, 2: blue, 3: ???
 			update_one_dac_entry(dac_address);
 			dac_address++; // This will wrap around because it is a uint8_t
@@ -523,7 +523,7 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 		break;
 
 	case 0x3CE: // Graphics Register Index
-		gfx_index = data & 15;
+		gfx_index = value & 15;
 		break;
 
 	case 0x3CF: { // Graphics Register Data
@@ -547,34 +547,34 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 			//MASK(0b00000000), // 18 - scratch room vga
 		};
 
-		uint8_t data1 = data & mask[gfx_index];
-		diffxor = gfx[gfx_index] ^ data1;
+		uint8_t value1 = value & mask[gfx_index];
+		diffxor = gfx[gfx_index] ^ value1;
 		if (diffxor) {
-			gfx[gfx_index] = data1;
+			gfx[gfx_index] = value1;
 			switch (gfx_index)
 			{
 			case 0: // Set/Reset Plane
-				logger_en(debug, "Set/Reset Plane: %02" PRIX8, data1);
+				logger_en(debug, "Set/Reset Plane: %02" PRIX8, value1);
 				break;
 
 			case 1: // Enable Set/Reset Plane
-				logger_en(debug, "Enable Set/Reset Plane: %02" PRIX8, data1);
+				logger_en(debug, "Enable Set/Reset Plane: %02" PRIX8, value1);
 				break;
 
 			case 2: // Color Comare
-				logger_en(debug, "Color Compare: %02" PRIX8, data1);
+				logger_en(debug, "Color Compare: %02" PRIX8, value1);
 				break;
 
 			case 3: // Data Rotate/ALU Operation Select
-				logger_en(debug, "Data Rotate: %02" PRIX8, data1);
+				logger_en(debug, "Data Rotate: %02" PRIX8, value1);
 				break;
 
 			case 4: // Read Plane Select
-				logger_en(debug, "Read Plane Select: %02" PRIX8, data1);
+				logger_en(debug, "Read Plane Select: %02" PRIX8, value1);
 				break;
 
 			case 5: //  Graphics Mode
-				logger_en(debug, "Graphics Mode: %02" PRIX8, data1);
+				logger_en(debug, "Graphics Mode: %02" PRIX8, value1);
 				if (diffxor & (3 << 5)) { // Shift Register Control
 					change_renderer();
 				}
@@ -584,8 +584,8 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 				break;
 
 			case 6: // Miscellaneous Register
-				logger_en(debug, "Miscellaneous Register: %02" PRIX8, data);
-				switch (data >> 2 & 3)
+				logger_en(debug, "Miscellaneous Register: %02" PRIX8, value);
+				switch (value >> 2 & 3)
 				{
 				case 0:
 					vram_window_base = 0xA0000;
@@ -613,11 +613,11 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 				break;
 
 			case 7:
-				logger_en(debug, "Color Don't Care: %02" PRIX8, data1);
+				logger_en(debug, "Color Don't Care: %02" PRIX8, value1);
 				break;
 
 			case 8:
-				logger_en(debug, "Bit Mask Register: %02" PRIX8, data1);
+				logger_en(debug, "Bit Mask Register: %02" PRIX8, value1);
 				break;
 			}
 		}
@@ -626,11 +626,11 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 
 	case 0x3D4:
 	case 0x3B4: // CRT index
-		crt_index = data;
+		crt_index = value;
 		break;
 
 	case 0x3D5:
-	case 0x3B5: { // CRT data
+	case 0x3B5: { // CRT value
 		static uint8_t mask[64] = {
 			// 0-7 are changed based on CR11 bit 7
 			MASK(0b00000000), // 0
@@ -666,48 +666,48 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 			{
 			case 0x1F:
 				// Lock register, 0x57 -> unlock, 0x99 -> lock
-				if (data == 0x57) {
+				if (value == 0x57) {
 					crt[0x1F] = 1;
 				}
-				else if (data == 0x99) {
+				else if (value == 0x99) {
 					crt[0x1F] = 0;
 				}
 				break;
 
 			default:
 				if (crt[0x1F]) {
-					crt[crt_index] = data;
+					crt[crt_index] = value;
 				}
 			}
 			return;
 		}
 		// The extra difficulty here comes from the fact that the mask is used here to allow masking of CR0-7 in addition to keeping out undefined bits
-		uint8_t data1 = data & mask[crt_index];
+		uint8_t value1 = value & mask[crt_index];
 		// consider the case when we write 0x33 to CR01 (which is currently 0x66) and write protection is on
 		// In this case, we would be doing (0x33 & 0) ^ 0x66 which would result in 0x66 being put in diffxor
 		// However, if we masked the result, the following would occur: ((0x33 & 0) ^ 0x66) & 0 = 0
-		diffxor = (data1 ^ crt[crt_index]) & mask[crt_index];
+		diffxor = (value1 ^ crt[crt_index]) & mask[crt_index];
 		if (diffxor) {
-			crt[crt_index] = data1 | (crt[crt_index] & ~mask[crt_index]);
+			crt[crt_index] = value1 | (crt[crt_index] & ~mask[crt_index]);
 			switch (crt_index)
 			{
 			case 1:
-				logger_en(debug, "End Horizontal Display: %02" PRIX8, data1);
+				logger_en(debug, "End Horizontal Display: %02" PRIX8, value1);
 				update_size();
 				break;
 
 			case 2:
-				logger_en(debug, "Start Horizontal Blanking: %02" PRIX8, data1);
+				logger_en(debug, "Start Horizontal Blanking: %02" PRIX8, value1);
 				update_size();
 				break;
 
 			case 7:
-				logger_en(debug, "CRT Overflow: %02" PRIX8, data1);
+				logger_en(debug, "CRT Overflow: %02" PRIX8, value1);
 				update_size();
 				break;
 
 			case 9:
-				logger_en(debug, "Start Horizontal Blanking: %02" PRIX8, data1);
+				logger_en(debug, "Start Horizontal Blanking: %02" PRIX8, value1);
 				if (diffxor & 0x20) {
 					update_size();
 				}
@@ -720,17 +720,17 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 						mask[i] = fill_value;
 					}
 					mask[7] &= ~0x10;
-					data1 &= mask[crt_index];
+					value1 &= mask[crt_index];
 				}
 				break;
 
 			case 0x12:
-				logger_en(debug, "Vertical Display End: %02" PRIX8, data1);
+				logger_en(debug, "Vertical Display End: %02" PRIX8, value1);
 				update_size();
 				break;
 
 			case 0x15:
-				logger_en(debug, "Start Vertical Blanking: %02" PRIX8, data1);
+				logger_en(debug, "Start Vertical Blanking: %02" PRIX8, value1);
 				update_size();
 				break;
 			}
@@ -738,15 +738,15 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 		break;
 	}
 	default:
-		logger_en(warn, "VGA write: 0x%08" PRIX32 " [data: 0x%02" PRIX8 "]", addr, data);
+		logger_en(warn, "VGA write: 0x%08" PRIX32 " [value: 0x%02" PRIX8 "]", addr, value);
 	}
 }
 
 void
-vga::io_write16(uint32_t addr, const uint16_t data)
+vga::io_write16(uint32_t addr, const uint16_t value)
 {
-	io_write8(addr, data & 0xFF);
-	io_write8(addr + 1, (data >> 8) & 0xFF);
+	io_write8(addr, value & 0xFF);
+	io_write8(addr + 1, (value >> 8) & 0xFF);
 }
 
 uint8_t
@@ -784,12 +784,12 @@ vga::io_read8(uint32_t addr)
 
 	case 0x3C9: {
 		dac_state = 0;
-		uint8_t data = dac[(dac_read_address << 2) | (dac_color++)];
+		uint8_t value = dac[(dac_read_address << 2) | (dac_color++)];
 		if (dac_color == 3) {
 			dac_read_address++;
 			dac_color = 0;
 		}
-		return data;
+		return value;
 	}
 
 	case 0x3CC:
@@ -828,7 +828,7 @@ vga::io_read8(uint32_t addr)
 }
 
 void
-vga::mem_write8(uint32_t addr, const uint8_t data)
+vga::mem_write8(uint32_t addr, const uint8_t value)
 {
 	addr -= vram_window_base;
 	if (addr > vram_window_size) { // Note: will catch the case where addr < vram_window_base as well
@@ -854,12 +854,12 @@ vga::mem_write8(uint32_t addr, const uint8_t data)
 		break;
 	}
 
-	uint32_t data32 = data, and_value = 0xFFFFFFFF; // this will be expanded to 32 bits later, but for now keep it as 8 bits to keep things simple
+	uint32_t data32 = value, and_value = 0xFFFFFFFF; // this will be expanded to 32 bits later, but for now keep it as 8 bits to keep things simple
 	int run_alu = 1;
 	switch (write_mode)
 	{
 	case 0:
-		data32 = b8to32(alu_rotate(data));
+		data32 = b8to32(alu_rotate(value));
 		data32 = do_mask(data32, expand32(gfx[0]), gfx[1]);
 		break;
 
@@ -869,11 +869,11 @@ vga::mem_write8(uint32_t addr, const uint8_t data)
 		break;
 
 	case 2:
-		data32 = expand32(data);
+		data32 = expand32(value);
 		break;
 
 	case 3:
-		and_value = b8to32(alu_rotate(data));
+		and_value = b8to32(alu_rotate(value));
 		data32 = expand32(gfx[0]);
 		break;
 	}
@@ -936,10 +936,10 @@ vga::mem_write8(uint32_t addr, const uint8_t data)
 }
 
 void
-vga::mem_write16(uint32_t addr, const uint16_t data)
+vga::mem_write16(uint32_t addr, const uint16_t value)
 {
-	mem_write8(addr, data & 0xFF);
-	mem_write8(addr + 1, (data >> 8) & 0xFF);
+	mem_write8(addr, value & 0xFF);
+	mem_write8(addr + 1, (value >> 8) & 0xFF);
 }
 
 uint8_t

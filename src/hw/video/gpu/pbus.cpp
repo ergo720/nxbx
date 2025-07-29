@@ -76,13 +76,13 @@ static constexpr uint32_t default_pci_configuration[] = {
 };
 
 static int
-nv2a_pci_write(uint8_t *ptr, uint8_t addr, uint8_t data, void *opaque)
+nv2a_pci_write(uint8_t *ptr, uint8_t addr, uint8_t value, void *opaque)
 {
 	return 0; // pass-through the write
 }
 
 template<bool log>
-void pbus::write32(uint32_t addr, const uint32_t data)
+void pbus::write32(uint32_t addr, const uint32_t value)
 {
 	if constexpr (log) {
 		nv2a_log_write();
@@ -91,11 +91,11 @@ void pbus::write32(uint32_t addr, const uint32_t data)
 	switch (addr)
 	{
 	case NV_PBUS_FBIO_RAM:
-		fbio_ram = data;
+		fbio_ram = value;
 		break;
 
 	default:
-		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
+		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, value);
 	}
 }
 
@@ -122,14 +122,14 @@ uint32_t pbus::read32(uint32_t addr)
 }
 
 template<bool log>
-void pbus::pci_write32(uint32_t addr, const uint32_t data)
+void pbus::pci_write32(uint32_t addr, const uint32_t value)
 {
 	if constexpr (log) {
-		pci_log_write(addr, data);
+		pci_log_write(addr, value);
 	}
 
 	uint32_t *pci_conf = (uint32_t *)m_pci_conf;
-	pci_conf[(addr - NV_PBUS_PCI_BASE) / 4] = data;
+	pci_conf[(addr - NV_PBUS_PCI_BASE) / 4] = value;
 }
 
 template<bool log>
@@ -152,9 +152,9 @@ pbus::pci_log_read(uint32_t addr, uint32_t value)
 }
 
 void
-pbus::pci_log_write(uint32_t addr, uint32_t data)
+pbus::pci_log_write(uint32_t addr, uint32_t value)
 {
-	logger<log_lv::debug, log_module::pbus, false>("Write at NV_PBUS_PCI_NV_0 + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PBUS_PCI_BASE, addr, data);
+	logger<log_lv::debug, log_module::pbus, false>("Write at NV_PBUS_PCI_NV_0 + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PBUS_PCI_BASE, addr, value);
 }
 
 void

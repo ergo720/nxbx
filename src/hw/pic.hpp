@@ -19,11 +19,11 @@ public:
 	template<bool log = false>
 	uint8_t read8(uint32_t addr);
 	template<bool log = false>
-	void write8(uint32_t addr, const uint8_t data);
+	void write8(uint32_t addr, const uint8_t value);
 	template<bool log = false>
 	uint8_t read8_elcr(uint32_t addr);
 	template<bool log = false>
-	void write8_elcr(uint32_t addr, const uint8_t data);
+	void write8_elcr(uint32_t addr, const uint8_t value);
 
 private:
 	friend class machine;

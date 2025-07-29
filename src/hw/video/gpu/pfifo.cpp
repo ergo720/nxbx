@@ -9,45 +9,45 @@
 
 
 template<bool log, bool enabled>
-void pfifo::write32(uint32_t addr, const uint32_t data)
+void pfifo::write32(uint32_t addr, const uint32_t value)
 {
 	if constexpr (!enabled) {
 		return;
 	}
 	if constexpr (log) {
-		log_write(addr, data);
+		log_write(addr, value);
 	}
 
 	uint32_t addr_off = REGS_PFIFO_idx(addr);
 	switch (addr)
 	{
 	case NV_PFIFO_INTR_0:
-		m_regs[addr_off] &= ~data;
+		m_regs[addr_off] &= ~value;
 		m_machine->get<pmc>().update_irq();
 		break;
 
 	case NV_PFIFO_INTR_EN_0:
-		m_regs[addr_off] = data;
+		m_regs[addr_off] = value;
 		m_machine->get<pmc>().update_irq();
 		break;
 
 	case NV_PFIFO_CACHE1_DMA_PUSH:
 		// Mask out read-only bits
-		m_regs[addr_off] = (data & ~(NV_PFIFO_CACHE1_DMA_PUSH_STATE_MASK | NV_PFIFO_CACHE1_DMA_PUSH_BUFFER_MASK));
+		m_regs[addr_off] = (value & ~(NV_PFIFO_CACHE1_DMA_PUSH_STATE_MASK | NV_PFIFO_CACHE1_DMA_PUSH_BUFFER_MASK));
 		break;
 
 	case NV_PFIFO_CACHE1_DMA_PUT:
-		m_regs[addr_off] = data;
+		m_regs[addr_off] = value;
 		pusher();
 		break;
 
 	case NV_PFIFO_CACHE1_DMA_GET:
-		m_regs[addr_off] = data;
+		m_regs[addr_off] = value;
 		pusher();
 		break;
 
 	default:
-		m_regs[addr_off] = data;
+		m_regs[addr_off] = value;
 	}
 }
 
@@ -225,20 +225,20 @@ pfifo::log_read(uint32_t addr, uint32_t value)
 }
 
 void
-pfifo::log_write(uint32_t addr, uint32_t data)
+pfifo::log_write(uint32_t addr, uint32_t value)
 {
 	const auto it = m_regs_info.find(addr & ~3);
 	if (it != m_regs_info.end()) {
-		logger<log_lv::debug, log_module::pfifo, false>("Write at %s (0x%08X) of value 0x%08X", it->second.c_str(), addr, data);
+		logger<log_lv::debug, log_module::pfifo, false>("Write at %s (0x%08X) of value 0x%08X", it->second.c_str(), addr, value);
 	}
 	else {
 		if (util::in_range(addr, NV_PFIFO_CACHE1_METHOD(0), NV_PFIFO_CACHE1_DATA(127) + 3)) {
 			bool is_data = addr & 7;
 			logger<log_lv::debug, log_module::pfifo, false>("Write at %s %u (0x%08X) of value 0x%08X", is_data ? "NV_PFIFO_CACHE1_DATA" : "NV_PFIFO_CACHE1_METHOD",
-				is_data ? (addr - NV_PFIFO_CACHE1_DATA(0)) >> 3 : (addr - NV_PFIFO_CACHE1_METHOD(0)) >> 3, addr, data);
+				is_data ? (addr - NV_PFIFO_CACHE1_DATA(0)) >> 3 : (addr - NV_PFIFO_CACHE1_METHOD(0)) >> 3, addr, value);
 		}
 		else {
-			logger<log_lv::debug, log_module::pfifo, false>("Write at UNKNOWN + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PFIFO_BASE, addr, data);
+			logger<log_lv::debug, log_module::pfifo, false>("Write at UNKNOWN + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PFIFO_BASE, addr, value);
 		}
 	}
 }

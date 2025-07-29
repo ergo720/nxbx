@@ -75,35 +75,35 @@ smc::read_byte(uint8_t command)
 }
 
 std::optional<uint16_t>
-smc::write_byte(uint8_t command, uint8_t data)
+smc::write_byte(uint8_t command, uint8_t value)
 {
 	switch (command)
 	{
 	case SMC_VERSION_STR:
-		m_version_idx = (data == 0) ? 0 : m_version_idx;
+		m_version_idx = (value == 0) ? 0 : m_version_idx;
 		break;
 
 	case SMC_FAN_MODE:
-		m_regs[command] = data & 1;
+		m_regs[command] = value & 1;
 		break;
 
 	case SMC_FAN_SPEED:
-		m_regs[command] = (data > 50) ? m_regs[command] : data;
+		m_regs[command] = (value > 50) ? m_regs[command] : value;
 		break;
 
 	case SMC_LED_OVERRIDE: // TODO: display on the gui somehow
-		m_regs[command] = data & 1;
+		m_regs[command] = value & 1;
 		if (m_regs[command] == 0) {
 			m_regs[SMC_LED_STATES] = 0x0F; // solid green
 		}
 		break;
 
 	case SMC_LED_STATES:
-		m_regs[command] = data;
+		m_regs[command] = value;
 		break;
 
 	default:
-		nxbx_fatal("Unhandled write with command 0x%" PRIX8 " and value 0x%" PRIX8, command, data);
+		nxbx_fatal("Unhandled write with command 0x%" PRIX8 " and value 0x%" PRIX8, command, value);
 	}
 
 	return 0;

@@ -24,7 +24,7 @@ public:
 	void deinit() override {}
 	void reset();
 	std::optional<uint16_t> read_byte(uint8_t command) override;
-	std::optional<uint16_t> write_byte(uint8_t command, uint8_t data) override;
+	std::optional<uint16_t> write_byte(uint8_t command, uint8_t value) override;
 	void update_tray_state(tray_state state, bool do_int);
 
 private:

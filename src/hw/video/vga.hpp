@@ -16,12 +16,12 @@ public:
 	bool init();
 	void reset();
 	uint8_t io_read8(uint32_t addr);
-	void io_write8(uint32_t addr, const uint8_t data);
-	void io_write16(uint32_t addr, const uint16_t data);
+	void io_write8(uint32_t addr, const uint8_t value);
+	void io_write16(uint32_t addr, const uint16_t value);
 	uint8_t mem_read8(uint32_t addr);
 	uint16_t mem_read16(uint32_t addr);
-	void mem_write8(uint32_t addr, const uint8_t data);
-	void mem_write16(uint32_t addr, const uint16_t data);
+	void mem_write8(uint32_t addr, const uint8_t value);
+	void mem_write16(uint32_t addr, const uint16_t value);
 	void update();
 
 private:

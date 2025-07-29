@@ -20,14 +20,14 @@ public:
 	template<bool log = false>
 	uint8_t read8(uint32_t addr);
 	template<bool log = false>
-	void write8(uint32_t addr, const uint8_t data);
+	void write8(uint32_t addr, const uint8_t value);
 	uint64_t get_next_update_time(uint64_t now);
 
 private:
 	bool update_io(bool is_update);
 	void update_time(uint64_t elapsed_us);
-	uint8_t to_bcd(uint8_t data);
-	uint8_t from_bcd(uint8_t data);
+	uint8_t to_bcd(uint8_t value);
+	uint8_t from_bcd(uint8_t value);
 
 	machine *const m_machine;
 	uint8_t ram[128]; // byte at index 0x7F is the century register on the xbox

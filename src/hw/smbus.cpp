@@ -71,7 +71,7 @@ uint16_t smbus::read16(uint32_t addr)
 }
 
 template<bool log>
-void smbus::write8(uint32_t addr, const uint8_t data)
+void smbus::write8(uint32_t addr, const uint8_t value)
 {
 	if constexpr (log) {
 		log_io_write();
@@ -81,23 +81,23 @@ void smbus::write8(uint32_t addr, const uint8_t data)
 	switch (addr)
 	{
 	case SMBUS_GS_addr:
-		if ((m_regs[SMBUS_REG_off(SMBUS_GE_addr)] & GE_HCYC_EN) && ((data & GS_CLEAR) & (m_regs[reg_off] & GS_CLEAR))) {
+		if ((m_regs[SMBUS_REG_off(SMBUS_GE_addr)] & GE_HCYC_EN) && ((value & GS_CLEAR) & (m_regs[reg_off] & GS_CLEAR))) {
 			m_machine->lower_irq(SMBUS_IRQ_NUM);
 		}
 
 		for (uint8_t i = 0; i < 8; ++i) {
-			if ((data & GS_CLEAR) & (1 << i)) {
+			if ((value & GS_CLEAR) & (1 << i)) {
 				m_regs[reg_off] &= ~(1 << i);
 			}
 		}
 		break;
 
 	case SMBUS_GE_addr:
-		m_regs[reg_off] = data & (GE_CYCTYPE | GE_HCYC_EN);
-		if (data & GE_ABORT) {
+		m_regs[reg_off] = value & (GE_CYCTYPE | GE_HCYC_EN);
+		if (value & GE_ABORT) {
 			m_regs[SMBUS_REG_off(SMBUS_GS_addr)] |= GS_ABRT_STS;
 		}
-		else if (data & GE_HOST_STC) {
+		else if (value & GE_HOST_STC) {
 			start_cycle();
 		}
 		if (m_regs[SMBUS_REG_off(SMBUS_GE_addr)] & GE_HCYC_EN) {
@@ -109,29 +109,29 @@ void smbus::write8(uint32_t addr, const uint8_t data)
 	case SMBUS_HD0_addr:
 	case SMBUS_HD1_addr:
 	case SMBUS_HC_addr:
-		m_regs[reg_off] = data;
+		m_regs[reg_off] = value;
 		break;
 
 	case SMBUS_HB_addr:
-		m_block_data[m_block_off] = data;
+		m_block_data[m_block_off] = value;
 		m_block_off++;
 		m_block_off &= 0x1F;
 		break;
 
 	default:
-		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
+		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, value);
 	}
 }
 
 template<bool log>
-void smbus::write16(uint32_t addr, const uint16_t data)
+void smbus::write16(uint32_t addr, const uint16_t value)
 {
 	if constexpr (log) {
 		log_io_write();
 	}
 
-	write8(addr, data & 0xFF);
-	write8(addr + 1, data >> 8 & 0xFF);
+	write8(addr, value & 0xFF);
+	write8(addr + 1, value >> 8 & 0xFF);
 }
 
 void

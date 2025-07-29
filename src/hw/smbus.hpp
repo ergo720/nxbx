@@ -18,12 +18,12 @@ public:
 	virtual void deinit() = 0;
 	virtual std::optional<uint16_t> quick_command(bool command) { logger<log_lv::warn, true>(m_log_module, "Unhandled quick command"); return std::nullopt; }
 	virtual std::optional<uint16_t> receive_byte() { logger<log_lv::warn, true>(m_log_module, "Unhandled receive command"); return std::nullopt; }
-	virtual std::optional<uint16_t> send_byte(uint8_t data) { logger<log_lv::warn, true>(m_log_module, "Unhandled send command"); return std::nullopt; }
+	virtual std::optional<uint16_t> send_byte(uint8_t value) { logger<log_lv::warn, true>(m_log_module, "Unhandled send command"); return std::nullopt; }
 	virtual std::optional<uint16_t> read_byte(uint8_t command) { logger<log_lv::warn, true>(m_log_module, "Unhandled read byte command"); return std::nullopt; }
-	virtual std::optional<uint16_t> write_byte(uint8_t command, uint8_t data) { logger<log_lv::warn, true>(m_log_module, "Unhandled write byte command"); return std::nullopt; }
+	virtual std::optional<uint16_t> write_byte(uint8_t command, uint8_t value) { logger<log_lv::warn, true>(m_log_module, "Unhandled write byte command"); return std::nullopt; }
 	virtual std::optional<uint16_t> read_word(uint8_t command) { logger<log_lv::warn, true>(m_log_module, "Unhandled read word command"); return std::nullopt; }
-	virtual std::optional<uint16_t> write_word(uint8_t command, uint16_t data) { logger<log_lv::warn, true>(m_log_module, "Unhandled write word command"); return std::nullopt; }
-	virtual std::optional<uint16_t> process_call(uint8_t command, uint16_t data) { logger<log_lv::warn, true>(m_log_module, "Unhandled process call command"); return std::nullopt; }
+	virtual std::optional<uint16_t> write_word(uint8_t command, uint16_t value) { logger<log_lv::warn, true>(m_log_module, "Unhandled write word command"); return std::nullopt; }
+	virtual std::optional<uint16_t> process_call(uint8_t command, uint16_t value) { logger<log_lv::warn, true>(m_log_module, "Unhandled process call command"); return std::nullopt; }
 
 protected:
 	log_module m_log_module;
@@ -41,9 +41,9 @@ public:
 	template<bool log = false>
 	uint16_t read16(uint32_t addr);
 	template<bool log = false>
-	void write8(uint32_t addr, const uint8_t data);
+	void write8(uint32_t addr, const uint8_t value);
 	template<bool log = false>
-	void write16(uint32_t addr, const uint16_t data);
+	void write16(uint32_t addr, const uint16_t value);
 
 private:
 	bool update_io(bool is_update);

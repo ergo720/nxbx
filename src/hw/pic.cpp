@@ -228,7 +228,7 @@ pic::write_icw(unsigned idx, uint8_t value)
 }
 
 template<bool log>
-void pic::write8(uint32_t addr, const uint8_t data)
+void pic::write8(uint32_t addr, const uint8_t value)
 {
 	std::unique_lock lock(pic::m_mtx);
 	if constexpr (log) {
@@ -236,27 +236,27 @@ void pic::write8(uint32_t addr, const uint8_t data)
 	}
 
 	if ((addr & 1) == 0) {
-		switch (data >> 3 & 3)
+		switch (value >> 3 & 3)
 		{
 		case 0:
-			write_ocw(2, data);
+			write_ocw(2, value);
 			break;
 
 		case 1:
-			write_ocw(3, data);
+			write_ocw(3, value);
 			break;
 
 		default:
 			cpu_lower_hw_int_line(m_machine->get<cpu_t *>());
-			write_icw(1, data);
+			write_icw(1, value);
 		}
 	}
 	else {
 		if (in_init) {
-			write_icw(icw_idx, data);
+			write_icw(icw_idx, value);
 		}
 		else {
-			write_ocw(1, data);
+			write_ocw(1, value);
 		}
 	}
 }
@@ -282,14 +282,14 @@ uint8_t pic::read8(uint32_t addr)
 }
 
 template<bool log>
-void pic::write8_elcr(uint32_t addr, const uint8_t data)
+void pic::write8_elcr(uint32_t addr, const uint8_t value)
 {
 	std::unique_lock lock(pic::m_mtx);
 	if constexpr (log) {
 		log_io_write();
 	}
 
-	elcr = data;
+	elcr = value;
 }
 
 template<bool log>

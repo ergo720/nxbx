@@ -15,9 +15,9 @@ public:
 	bool init(std::filesystem::path eeprom_dir);
 	void deinit() override;
 	std::optional<uint16_t> read_byte(uint8_t command) override;
-	std::optional<uint16_t> write_byte(uint8_t command, uint8_t data) override;
+	std::optional<uint16_t> write_byte(uint8_t command, uint8_t value) override;
 	std::optional<uint16_t> read_word(uint8_t command) override;
-	std::optional<uint16_t> write_word(uint8_t command, uint16_t data) override;
+	std::optional<uint16_t> write_word(uint8_t command, uint16_t value) override;
 
 private:
 	std::fstream m_fs;

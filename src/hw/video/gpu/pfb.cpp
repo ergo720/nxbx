@@ -8,7 +8,7 @@
 
 
 template<bool log, bool enabled>
-void pfb::write32(uint32_t addr, const uint32_t data)
+void pfb::write32(uint32_t addr, const uint32_t value)
 {
 	if constexpr (!enabled) {
 		return;
@@ -20,11 +20,11 @@ void pfb::write32(uint32_t addr, const uint32_t data)
 	switch (addr)
 	{
 	case NV_PFB_CFG0:
-		cfg0 = data;
+		cfg0 = value;
 		break;
 
 	case NV_PFB_CFG1:
-		cfg1 = data;
+		cfg1 = value;
 		break;
 
 	case NV_PFB_CSTATUS:
@@ -32,11 +32,11 @@ void pfb::write32(uint32_t addr, const uint32_t data)
 		break;
 
 	case NV_PFB_NVM:
-		nvm = data;
+		nvm = value;
 		break;
 
 	default:
-		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, data);
+		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, value);
 	}
 }
 

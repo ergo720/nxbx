@@ -10,7 +10,7 @@
 
 
 // Callback for when a byte in PCI memory is modified. "addr" is the offset, and "ptr" points to the base of the 256-byte block
-using pci_conf_write_cb = int(*)(uint8_t *ptr, uint8_t addr, uint8_t data, void *opaque);
+using pci_conf_write_cb = int(*)(uint8_t *ptr, uint8_t addr, uint8_t value, void *opaque);
 
 class machine;
 
@@ -27,11 +27,11 @@ public:
 	template<bool log = false>
 	uint32_t read32(uint32_t addr);
 	template<bool log = false>
-	void write8(uint32_t addr, const uint8_t data);
+	void write8(uint32_t addr, const uint8_t value);
 	template<bool log = false>
-	void write16(uint32_t addr, const uint16_t data);
+	void write16(uint32_t addr, const uint16_t value);
 	template<bool log = false>
-	void write32(uint32_t addr, const uint32_t data);
+	void write32(uint32_t addr, const uint32_t value);
 	void *create_device(uint32_t bus, uint32_t device, uint32_t function, pci_conf_write_cb cb, void *opaque);
 	void copy_default_configuration(void *confptr, void *area, int size);
 	void *get_configuration_ptr(uint32_t bus, uint32_t device, uint32_t function);

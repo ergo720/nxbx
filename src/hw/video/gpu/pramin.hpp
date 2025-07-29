@@ -22,11 +22,11 @@ public:
 	template<typename T, bool log = false>
 	T read(uint32_t addr);
 	template<typename T, bool log = false>
-	void write(uint32_t addr, const T data);
+	void write(uint32_t addr, const T value);
 
 private:
 	void log_read(uint32_t addr, uint32_t value);
-	void log_write(uint32_t addr, uint32_t data);
+	void log_write(uint32_t addr, uint32_t value);
 	bool update_io(bool is_update);
 	template<bool is_write, typename T>
 	auto get_io_func(bool log, bool is_be);

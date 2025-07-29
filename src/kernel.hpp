@@ -37,5 +37,5 @@ namespace kernel {
 	template<bool log = false>
 	uint32_t read32(addr_t addr, void *opaque);
 	template<bool log = false>
-	void write32(addr_t addr, const uint32_t data, void *opaque);
+	void write32(addr_t addr, const uint32_t value, void *opaque);
 }

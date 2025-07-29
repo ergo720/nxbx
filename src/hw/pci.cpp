@@ -11,7 +11,7 @@
 
 
 template<bool log>
-void pci::write8(uint32_t addr, const uint8_t data)
+void pci::write8(uint32_t addr, const uint8_t value)
 {
 	if constexpr (log) {
 		log_io_write();
@@ -24,7 +24,7 @@ void pci::write8(uint32_t addr, const uint8_t data)
 		offset *= 8;
 
 		configuration_address_register &= ~(0xFF << offset);
-		configuration_address_register |= data << offset;
+		configuration_address_register |= value << offset;
 
 		if (configuration_address_register & 0x7F000003) {
 			logger_en(info, "Setting reserved bits of configuration address register");
@@ -46,8 +46,8 @@ void pci::write8(uint32_t addr, const uint8_t data)
 				return;
 			}
 			uint8_t *arr = configuration_address_spaces.find(bdf)->second.get(); // can't fail if above succeeded
-			if (!it->second.first(arr, offset, data, it->second.second)) {
-				arr[offset] = data;
+			if (!it->second.first(arr, offset, value, it->second.second)) {
+				arr[offset] = value;
 			}
 		}
 		break;
@@ -131,27 +131,27 @@ uint32_t pci::read32(uint32_t addr)
 }
 
 template<bool log>
-void pci::write16(uint32_t addr, const uint16_t data)
+void pci::write16(uint32_t addr, const uint16_t value)
 {
 	if constexpr (log) {
 		log_io_write();
 	}
 
-	write8(addr, data & 0xFF);
-	write8(addr + 1, data >> 8 & 0xFF);
+	write8(addr, value & 0xFF);
+	write8(addr + 1, value >> 8 & 0xFF);
 }
 
 template<bool log>
-void pci::write32(uint32_t addr, const uint32_t data)
+void pci::write32(uint32_t addr, const uint32_t value)
 {
 	if constexpr (log) {
 		log_io_write();
 	}
 
-	write8(addr, data & 0xFF);
-	write8(addr + 1, data >> 8 & 0xFF);
-	write8(addr + 2, data >> 16 & 0xFF);
-	write8(addr + 3, data >> 24 & 0xFF);
+	write8(addr, value & 0xFF);
+	write8(addr + 1, value >> 8 & 0xFF);
+	write8(addr + 2, value >> 16 & 0xFF);
+	write8(addr + 3, value >> 24 & 0xFF);
 }
 
 void *

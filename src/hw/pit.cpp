@@ -50,7 +50,7 @@ pit::start_timer(uint8_t channel)
 }
 
 template<bool log>
-void pit::write8(uint32_t addr, const uint8_t data)
+void pit::write8(uint32_t addr, const uint8_t value)
 {
 	if constexpr (log) {
 		log_io_write();
@@ -61,8 +61,8 @@ void pit::write8(uint32_t addr, const uint8_t data)
 	switch (channel)
 	{
 	case 3: {
-		channel = data >> 6;
-		uint8_t opmode = data >> 1 & 7, bcd = data & 1, access = data >> 4 & 3;
+		channel = value >> 6;
+		uint8_t opmode = value >> 1 & 7, bcd = value & 1, access = value >> 4 & 3;
 
 		switch (channel)
 		{
@@ -110,12 +110,12 @@ void pit::write8(uint32_t addr, const uint8_t data)
 
 		case 3:
 			if (chan->lsb_read) {
-				chan->counter = (static_cast<uint16_t>(data) << 8) | chan->counter;
+				chan->counter = (static_cast<uint16_t>(value) << 8) | chan->counter;
 				start_timer(channel);
 				chan->lsb_read = 0;
 			}
 			else {
-				chan->counter = data;
+				chan->counter = value;
 				chan->lsb_read = 1;
 			}
 			break;

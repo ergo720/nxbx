@@ -28,15 +28,15 @@ public:
 	template<bool log = false>
 	uint32_t read32(uint32_t addr);
 	template<bool log = false>
-	void write32(uint32_t addr, const uint32_t data);
+	void write32(uint32_t addr, const uint32_t value);
 	template<bool log = false>
 	uint32_t pci_read32(uint32_t addr);
 	template<bool log = false>
-	void pci_write32(uint32_t addr, const uint32_t data);
+	void pci_write32(uint32_t addr, const uint32_t value);
 
 private:
 	void pci_log_read(uint32_t addr, uint32_t value);
-	void pci_log_write(uint32_t addr, uint32_t data);
+	void pci_log_write(uint32_t addr, uint32_t value);
 	bool update_io(bool is_update);
 	template<bool is_write, bool is_pci>
 	auto get_io_func(bool log, bool is_be);

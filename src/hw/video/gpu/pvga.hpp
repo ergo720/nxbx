@@ -32,17 +32,17 @@ public:
 	template<bool log = false>
 	uint8_t io_read8(uint32_t addr);
 	template<bool log = false>
-	void io_write8(uint32_t addr, const uint8_t data);
+	void io_write8(uint32_t addr, const uint8_t value);
 	template<bool log = false>
-	void io_write16(uint32_t addr, const uint16_t data);
+	void io_write16(uint32_t addr, const uint16_t value);
 	template<bool log = false>
 	uint8_t mem_read8(uint32_t addr);
 	template<bool log = false>
 	uint16_t mem_read16(uint32_t addr);
 	template<bool log = false>
-	void mem_write8(uint32_t addr, const uint8_t data);
+	void mem_write8(uint32_t addr, const uint8_t value);
 	template<bool log = false>
-	void mem_write16(uint32_t addr, const uint16_t data);
+	void mem_write16(uint32_t addr, const uint16_t value);
 
 private:
 	void prmvga_log_read(uint32_t addr, uint32_t value);

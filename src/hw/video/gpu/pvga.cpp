@@ -20,22 +20,20 @@ uint8_t pvga::io_read8(uint32_t addr)
 }
 
 template<bool log>
-void pvga::io_write8(uint32_t addr, const uint8_t data)
+void pvga::io_write8(uint32_t addr, const uint8_t value)
 {
-	uint8_t value = data;
 	if constexpr (log) {
-		prmvga_log_write(addr, data);
+		prmvga_log_write(addr, value);
 	}
 
 	m_machine->get<vga>().io_write8(addr, value);
 }
 
 template<bool log>
-void pvga::io_write16(uint32_t addr, const uint16_t data)
+void pvga::io_write16(uint32_t addr, const uint16_t value)
 {
-	uint16_t value = data;
 	if constexpr (log) {
-		prmvga_log_write(addr, data);
+		prmvga_log_write(addr, value);
 	}
 
 	m_machine->get<vga>().io_write16(addr, value);
@@ -66,22 +64,20 @@ uint16_t pvga::mem_read16(uint32_t addr)
 }
 
 template<bool log>
-void pvga::mem_write8(uint32_t addr, const uint8_t data)
+void pvga::mem_write8(uint32_t addr, const uint8_t value)
 {
-	uint8_t value = data;
 	if constexpr (log) {
-		prmvga_log_write(addr, data);
+		prmvga_log_write(addr, value);
 	}
 
 	m_machine->get<vga>().mem_write8(addr, value);
 }
 
 template<bool log>
-void pvga::mem_write16(uint32_t addr, const uint16_t data)
+void pvga::mem_write16(uint32_t addr, const uint16_t value)
 {
-	uint16_t value = data;
 	if constexpr (log) {
-		prmvga_log_write(addr, data);
+		prmvga_log_write(addr, value);
 	}
 
 	m_machine->get<vga>().mem_write16(addr, value);
@@ -94,9 +90,9 @@ pvga::prmvga_log_read(uint32_t addr, uint32_t value)
 }
 
 void
-pvga::prmvga_log_write(uint32_t addr, uint32_t data)
+pvga::prmvga_log_write(uint32_t addr, uint32_t value)
 {
-	logger<log_lv::debug, log_module::pvga, false>("Write at 0x%08X of value 0x%08X", addr, data);
+	logger<log_lv::debug, log_module::pvga, false>("Write at 0x%08X of value 0x%08X", addr, value);
 }
 
 bool
