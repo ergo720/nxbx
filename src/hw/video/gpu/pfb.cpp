@@ -114,7 +114,7 @@ pfb::update_io(bool is_update)
 {
 	bool log = module_enabled();
 	bool enabled = m_machine->get<pmc>().engine_enabled & NV_PMC_ENABLE_PFB;
-	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK;
+	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG;
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PFB_BASE, NV_PFB_SIZE, false,
 		{
 			.fnr32 = get_io_func<false>(log, enabled, is_be),

@@ -80,6 +80,7 @@ void ptimer::write32(uint32_t addr, const uint32_t value)
 			// Testing on a Retail 1.0 xbox shows that, when this condition is hit, the console hangs. We don't actually want to freeze the emulator, so
 			// we will just terminate the emulation instead
 			nxbx_fatal("Invalid ratio multiplier -> multiplier > divider (the real hardware would hang here)");
+			break;
 		}
 		counter_active = multiplier ? COUNTER_ON : COUNTER_OFF; // A multiplier of zero stops the 56 bit counter
 		uint64_t now = timer::get_now();
@@ -222,7 +223,7 @@ ptimer::update_io(bool is_update)
 {
 	bool log = module_enabled();
 	bool enabled = m_machine->get<pmc>().engine_enabled & NV_PMC_ENABLE_PTIMER;
-	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK;
+	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG;
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PTIMER_BASE, NV_PTIMER_SIZE, false,
 		{
 			.fnr32 = get_io_func<false>(log, enabled, is_be),

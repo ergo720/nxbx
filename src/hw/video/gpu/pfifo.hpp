@@ -19,36 +19,36 @@
 #define NV_PFIFO_RAMFC (NV2A_REGISTER_BASE + 0x00002214) // Contains the base address and size of ramfc in ramin
 #define NV_PFIFO_RAMRO (NV2A_REGISTER_BASE + 0x00002218) // Contains the base address and size of ramro in ramin
 #define NV_PFIFO_MODE (NV2A_REGISTER_BASE + 0x00002504) // Indicates the submission mode, one bit for each channel
-#define NV_PFIFO_MODE_CHANNEL_MASK(id) (1 << (id)) // pio=0, dma=1
+#define NV_PFIFO_MODE_CHANNEL(id) (1 << (id)) // pio=0, dma=1
 #define NV_PFIFO_CACHE1_PUSH0 (NV2A_REGISTER_BASE + 0x00003200) // Enable/disable pusher access to cache1
-#define NV_PFIFO_CACHE1_PUSH0_ACCESS_MASK (1 << 0) // enabled=1
+#define NV_PFIFO_CACHE1_PUSH0_ACCESS (1 << 0) // enabled=1
 #define NV_PFIFO_CACHE1_PUSH1 (NV2A_REGISTER_BASE + 0x00003204) // The currently active channel id and the mode it uses (cache1)
-#define NV_PFIFO_CACHE1_PUSH1_CHID_MASK 0x1F
-#define NV_PFIFO_CACHE1_PUSH1_MODE_MASK (1 << 8) // 1=dma
+#define NV_PFIFO_CACHE1_PUSH1_CHID 0x1F
+#define NV_PFIFO_CACHE1_PUSH1_MODE (1 << 8) // 1=dma
 #define NV_PFIFO_CACHE1_PUT (NV2A_REGISTER_BASE + 0x00003210) // The front pointer of cache1
 #define NV_PFIFO_CACHE1_STATUS (NV2A_REGISTER_BASE + 0x00003214) // Empty/full flag of cache1
-#define NV_PFIFO_CACHE1_STATUS_LOW_MARK_MASK (1 << 4) // 1=empty
-#define NV_PFIFO_CACHE1_STATUS_HIGH_MARK_MASK (1 << 8) // 1=full
+#define NV_PFIFO_CACHE1_STATUS_LOW_MARK (1 << 4) // 1=empty
+#define NV_PFIFO_CACHE1_STATUS_HIGH_MARK (1 << 8) // 1=full
 #define NV_PFIFO_CACHE1_DMA_PUSH (NV2A_REGISTER_BASE + 0x00003220) // Status bits of the pusher
-#define NV_PFIFO_CACHE1_DMA_PUSH_ACCESS_MASK (1 << 0) // enabled=1
-#define NV_PFIFO_CACHE1_DMA_PUSH_STATE_MASK (1 << 4) // busy=1
-#define NV_PFIFO_CACHE1_DMA_PUSH_BUFFER_MASK (1 << 8)
-#define NV_PFIFO_CACHE1_DMA_PUSH_STATUS_MASK (1 << 12) // suspended=1
-#define NV_PFIFO_CACHE1_DMA_PUSH_ACQUIRE_MASK (1 << 16)
+#define NV_PFIFO_CACHE1_DMA_PUSH_ACCESS (1 << 0) // enabled=1
+#define NV_PFIFO_CACHE1_DMA_PUSH_STATE (1 << 4) // busy=1
+#define NV_PFIFO_CACHE1_DMA_PUSH_BUFFER (1 << 8)
+#define NV_PFIFO_CACHE1_DMA_PUSH_STATUS (1 << 12) // suspended=1
+#define NV_PFIFO_CACHE1_DMA_PUSH_ACQUIRE (1 << 16)
 #define NV_PFIFO_CACHE1_DMA_FETCH (NV2A_REGISTER_BASE + 0x00003224) // Dma fetch flags
-#define NV_PFIFO_CACHE1_DMA_FETCH_ENDIAN_MASK (1 << 31) // 1=big
+#define NV_PFIFO_CACHE1_DMA_FETCH_ENDIAN (1 << 31) // 1=big
 #define NV_PFIFO_CACHE1_DMA_STATE (NV2A_REGISTER_BASE + 0x00003228) // Current pb processing state of the pusher
-#define NV_PFIFO_CACHE1_DMA_STATE_METHOD_TYPE_MASK (1 << 0) // non-increasing=1
-#define NV_PFIFO_CACHE1_DMA_STATE_METHOD_MASK 0x00001FFC
-#define NV_PFIFO_CACHE1_DMA_STATE_SUBCHANNEL_MASK 0x0000E000
-#define NV_PFIFO_CACHE1_DMA_STATE_METHOD_COUNT_MASK 0x1FFC0000
-#define NV_PFIFO_CACHE1_DMA_STATE_ERROR_MASK 0xE0000000
+#define NV_PFIFO_CACHE1_DMA_STATE_METHOD_TYPE (1 << 0) // non-increasing=1
+#define NV_PFIFO_CACHE1_DMA_STATE_METHOD 0x00001FFC
+#define NV_PFIFO_CACHE1_DMA_STATE_SUBCHANNEL 0x0000E000
+#define NV_PFIFO_CACHE1_DMA_STATE_METHOD_COUNT 0x1FFC0000
+#define NV_PFIFO_CACHE1_DMA_STATE_ERROR 0xE0000000
 #define NV_PFIFO_CACHE1_DMA_STATE_ERROR_CALL 0x00000001
 #define NV_PFIFO_CACHE1_DMA_STATE_ERROR_RETURN 0x00000003
 #define NV_PFIFO_CACHE1_DMA_STATE_ERROR_RESERVED_CMD 0x00000004
 #define NV_PFIFO_CACHE1_DMA_STATE_ERROR_PROTECTION 0x00000006
 #define NV_PFIFO_CACHE1_DMA_INSTANCE (NV2A_REGISTER_BASE + 0x0000322C) // The addr of the dma pb object
-#define NV_PFIFO_CACHE1_DMA_INSTANCE_ADDRESS_MASK 0xFFFF
+#define NV_PFIFO_CACHE1_DMA_INSTANCE_ADDRESS 0xFFFF
 #define NV_PFIFO_CACHE1_DMA_PUT (NV2A_REGISTER_BASE + 0x00003240) // The front pointer of the active pb fifo
 #define NV_PFIFO_CACHE1_DMA_GET (NV2A_REGISTER_BASE + 0x00003244) // The back pointer of the active pb fifo
 #define NV_PFIFO_CACHE1_REF (NV2A_REGISTER_BASE + 0x00003248) // reference count of the active pb (set when the REF_CNT method is executed)

@@ -20,9 +20,9 @@ void pramdac::write32(uint32_t addr, const uint32_t value)
 	case NV_PRAMDAC_NVPLL_COEFF: {
 		// NOTE: if the m value is zero, then the final frequency is also zero
 		nvpll_coeff = value;
-		uint64_t m = value & NV_PRAMDAC_NVPLL_COEFF_MDIV_MASK;
-		uint64_t n = (value & NV_PRAMDAC_NVPLL_COEFF_NDIV_MASK) >> 8;
-		uint64_t p = (value & NV_PRAMDAC_NVPLL_COEFF_PDIV_MASK) >> 16;
+		uint64_t m = value & NV_PRAMDAC_NVPLL_COEFF_MDIV;
+		uint64_t n = (value & NV_PRAMDAC_NVPLL_COEFF_NDIV) >> 8;
+		uint64_t p = (value & NV_PRAMDAC_NVPLL_COEFF_PDIV) >> 16;
 		core_freq = m ? ((NV2A_CRYSTAL_FREQ * n) / (1ULL << p) / m) : 0;
 		if (m_machine->get<ptimer>().counter_active) {
 			m_machine->get<ptimer>().counter_period = m_machine->get<ptimer>().counter_to_us();
@@ -127,7 +127,7 @@ bool
 pramdac::update_io(bool is_update)
 {
 	bool log = module_enabled();
-	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK;
+	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG;
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PRAMDAC_BASE, NV_PRAMDAC_SIZE, false,
 		{
 			.fnr8 = get_io_func<false, uint8_t>(log, is_be),

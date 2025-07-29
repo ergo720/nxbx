@@ -22,9 +22,9 @@ void pmc::write32(uint32_t addr, const uint32_t value)
 
 	case NV_PMC_BOOT_1: {
 		uint32_t old_state = endianness;
-		uint32_t new_endianness = (value ^ NV_PMC_BOOT_1_ENDIAN24_BIG_MASK) & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK;
+		uint32_t new_endianness = (value ^ NV_PMC_BOOT_1_ENDIAN24_BIG) & NV_PMC_BOOT_1_ENDIAN24_BIG;
 		endianness = (new_endianness | (new_endianness >> 24));
-		if ((old_state ^ endianness) & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK) {
+		if ((old_state ^ endianness) & NV_PMC_BOOT_1_ENDIAN24_BIG) {
 			update_io();
 			m_machine->get<pbus>().update_io();
 			m_machine->get<pramdac>().update_io();
@@ -41,7 +41,7 @@ void pmc::write32(uint32_t addr, const uint32_t value)
 
 	case NV_PMC_INTR_0:
 		// Only NV_PMC_INTR_0_SOFTWARE is writable, the other bits are read-only
-		int_status = (int_status & ~NV_PMC_INTR_0_SOFTWARE_MASK) | (value & NV_PMC_INTR_0_SOFTWARE_MASK);
+		int_status = (int_status & ~(1 << NV_PMC_INTR_0_SOFTWARE)) | (value & (1 << NV_PMC_INTR_0_SOFTWARE));
 		update_irq();
 		break;
 
@@ -71,7 +71,7 @@ void pmc::write32(uint32_t addr, const uint32_t value)
 		if ((value & NV_PMC_ENABLE_PVIDEO) == 0) {
 			m_machine->get<pvideo>().reset();
 		}
-		if ((old_state ^ engine_enabled) & NV_PMC_ENABLE_MASK) {
+		if ((old_state ^ engine_enabled) & NV_PMC_ENABLE_ALL) {
 			m_machine->get<pfifo>().update_io();
 			m_machine->get<ptimer>().update_io();
 			m_machine->get<pfb>().update_io();
@@ -165,7 +165,7 @@ pmc::update_irq()
 		break;
 
 	case NV_PMC_INTR_EN_0_INTA_HARDWARE:
-		if (int_status & NV_PMC_INTR_0_HARDWARE_MASK) {
+		if (int_status & ~(1 << NV_PMC_INTR_0_SOFTWARE)) {
 			m_machine->raise_irq(NV2A_IRQ_NUM);
 		}
 		else {
@@ -174,7 +174,7 @@ pmc::update_irq()
 		break;
 
 	case NV_PMC_INTR_EN_0_INTA_SOFTWARE:
-		if (int_status & NV_PMC_INTR_0_SOFTWARE_MASK) {
+		if (int_status & (1 << NV_PMC_INTR_0_SOFTWARE)) {
 			m_machine->raise_irq(NV2A_IRQ_NUM);
 		}
 		else {
@@ -209,7 +209,7 @@ bool
 pmc::update_io(bool is_update)
 {
 	bool log = module_enabled();
-	bool is_be = endianness & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK;
+	bool is_be = endianness & NV_PMC_BOOT_1_ENDIAN24_BIG;
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PMC_BASE, NV_PMC_SIZE, false,
 		{
 			.fnr32 = get_io_func<false>(log, is_be),
@@ -227,7 +227,7 @@ void
 pmc::reset()
 {
 	// Values dumped from a Retail 1.0 xbox
-	endianness = NV_PMC_BOOT_1_ENDIAN0_LITTLE_MASK | NV_PMC_BOOT_1_ENDIAN24_LITTLE_MASK;
+	endianness = NV_PMC_BOOT_1_ENDIAN0_LITTLE | NV_PMC_BOOT_1_ENDIAN24_LITTLE;
 	int_status = NV_PMC_INTR_0_NOT_PENDING;
 	int_enabled = NV_PMC_INTR_EN_0_INTA_DISABLED;
 	engine_enabled = NV_PMC_ENABLE_PTIMER | NV_PMC_ENABLE_PFB | NV_PMC_ENABLE_PCRTC;

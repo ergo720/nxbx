@@ -33,7 +33,7 @@ void pfifo::write32(uint32_t addr, const uint32_t value)
 
 	case NV_PFIFO_CACHE1_DMA_PUSH:
 		// Mask out read-only bits
-		m_regs[addr_off] = (value & ~(NV_PFIFO_CACHE1_DMA_PUSH_STATE_MASK | NV_PFIFO_CACHE1_DMA_PUSH_BUFFER_MASK));
+		m_regs[addr_off] = (value & ~(NV_PFIFO_CACHE1_DMA_PUSH_STATE | NV_PFIFO_CACHE1_DMA_PUSH_BUFFER));
 		break;
 
 	case NV_PFIFO_CACHE1_DMA_PUT:
@@ -72,27 +72,27 @@ void
 pfifo::pusher()
 {
 	if ((
-		((m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_PUSH0)] & NV_PFIFO_CACHE1_PUSH0_ACCESS_MASK) << 1) |
-		(m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_PUSH)] & (NV_PFIFO_CACHE1_DMA_PUSH_ACCESS_MASK | NV_PFIFO_CACHE1_DMA_PUSH_STATUS_MASK))
+		((m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_PUSH0)] & NV_PFIFO_CACHE1_PUSH0_ACCESS) << 1) |
+		(m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_PUSH)] & (NV_PFIFO_CACHE1_DMA_PUSH_ACCESS | NV_PFIFO_CACHE1_DMA_PUSH_STATUS))
 		) ^
-		(NV_PFIFO_CACHE1_DMA_PUSH_ACCESS_MASK | (NV_PFIFO_CACHE1_PUSH0_ACCESS_MASK << 1))) {
+		(NV_PFIFO_CACHE1_DMA_PUSH_ACCESS | (NV_PFIFO_CACHE1_PUSH0_ACCESS << 1))) {
 		// Pusher is either disabled or suspended, so don't do anything
 		return;
 	}
 
 	const auto &err_handler = [this](const char *msg) {
-		m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_PUSH)] |= NV_PFIFO_CACHE1_DMA_PUSH_STATUS_MASK; // suspend pusher
+		m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_PUSH)] |= NV_PFIFO_CACHE1_DMA_PUSH_STATUS; // suspend pusher
 		m_regs[REGS_PFIFO_idx(NV_PFIFO_INTR_0)] |= NV_PFIFO_INTR_0_DMA_PUSHER; // raise pusher interrupt
 		m_machine->get<pmc>().update_irq();
 		};
 
 	// We are running, so set the busy flag
-	m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_PUSH)] |= NV_PFIFO_CACHE1_DMA_PUSH_STATE_MASK;
+	m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_PUSH)] |= NV_PFIFO_CACHE1_DMA_PUSH_STATE;
 
 	uint32_t curr_pb_get = m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_GET)] & ~3;
 	uint32_t curr_pb_put = m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_PUT)] & ~3;
 	// Find the address of the new pb entries from the pb object
-	dma_obj pb_obj = m_machine->get<nv2a>().get_dma_obj((m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_INSTANCE)] & NV_PFIFO_CACHE1_DMA_INSTANCE_ADDRESS_MASK) << 4);
+	dma_obj pb_obj = m_machine->get<nv2a>().get_dma_obj((m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_INSTANCE)] & NV_PFIFO_CACHE1_DMA_INSTANCE_ADDRESS) << 4);
 
 	// Process all entries until the fifo is empty
 	while (curr_pb_get != curr_pb_put) {
@@ -105,7 +105,7 @@ pfifo::pusher()
 		uint32_t pb_entry = *(uint32_t *)pb_addr;
 		curr_pb_get += 4;
 
-		uint32_t mthd_cnt = m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_STATE)] & NV_PFIFO_CACHE1_DMA_STATE_METHOD_COUNT_MASK; // parameter count of method
+		uint32_t mthd_cnt = m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_STATE)] & NV_PFIFO_CACHE1_DMA_STATE_METHOD_COUNT; // parameter count of method
 		if (mthd_cnt) {
 			// A method is already being processed, so the following words must be its parameters
 
@@ -113,9 +113,9 @@ pfifo::pusher()
 
 			uint32_t cache1_put = m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_PUT)] & 0x1FC;
 			uint32_t dma_state = m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_STATE)];
-			uint32_t mthd_type = dma_state & NV_PFIFO_CACHE1_DMA_STATE_METHOD_TYPE_MASK; // method type
-			uint32_t mthd = dma_state & NV_PFIFO_CACHE1_DMA_STATE_METHOD_MASK; // the actual method specified
-			uint32_t mthd_subchan = dma_state & NV_PFIFO_CACHE1_DMA_STATE_SUBCHANNEL_MASK; // the bound subchannel
+			uint32_t mthd_type = dma_state & NV_PFIFO_CACHE1_DMA_STATE_METHOD_TYPE; // method type
+			uint32_t mthd = dma_state & NV_PFIFO_CACHE1_DMA_STATE_METHOD; // the actual method specified
+			uint32_t mthd_subchan = dma_state & NV_PFIFO_CACHE1_DMA_STATE_SUBCHANNEL; // the bound subchannel
 
 			// Add the method and its parameter to cache1
 			uint32_t method_entry = mthd_type | mthd | mthd_subchan;
@@ -124,11 +124,11 @@ pfifo::pusher()
 
 			// Update dma state
 			if (mthd_type == 0) {
-				dma_state &= ~NV_PFIFO_CACHE1_DMA_STATE_METHOD_MASK;
+				dma_state &= ~NV_PFIFO_CACHE1_DMA_STATE_METHOD;
 				dma_state |= ((mthd + 4) >> 2);
 			}
 			mthd_cnt--;
-			dma_state &= ~NV_PFIFO_CACHE1_DMA_STATE_METHOD_COUNT_MASK;
+			dma_state &= ~NV_PFIFO_CACHE1_DMA_STATE_METHOD_COUNT;
 			dma_state |= (mthd_cnt << 18);
 			m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_STATE)] = dma_state;
 			m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_DCOUNT)]++;
@@ -180,8 +180,8 @@ pfifo::pusher()
 				// Specify an new method
 				// 00/10CCCCCCCCCCC00SSSMMMMMMMMMMM00 -> C: method count, S: subchannel, M: method
 				uint32_t mthd_state = value == 0 ? 0 : 1;
-				mthd_state |= ((pb_entry & NV_PFIFO_CACHE1_DMA_STATE_METHOD_MASK) | (pb_entry & NV_PFIFO_CACHE1_DMA_STATE_SUBCHANNEL_MASK)
-					| (pb_entry & NV_PFIFO_CACHE1_DMA_STATE_METHOD_COUNT_MASK));
+				mthd_state |= ((pb_entry & NV_PFIFO_CACHE1_DMA_STATE_METHOD) | (pb_entry & NV_PFIFO_CACHE1_DMA_STATE_SUBCHANNEL)
+					| (pb_entry & NV_PFIFO_CACHE1_DMA_STATE_METHOD_COUNT));
 				m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_STATE)] = mthd_state;
 				m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_DCOUNT)] = 0;
 			}
@@ -196,7 +196,7 @@ pfifo::pusher()
 	m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_GET)] = curr_pb_get;
 
 	// We are done with processing, so clear the busy flag
-	m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_PUSH)] &= ~NV_PFIFO_CACHE1_DMA_PUSH_STATE_MASK;
+	m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_PUSH)] &= ~NV_PFIFO_CACHE1_DMA_PUSH_STATE;
 }
 
 void
@@ -279,7 +279,7 @@ pfifo::update_io(bool is_update)
 {
 	bool log = module_enabled();
 	bool enabled = m_machine->get<pmc>().engine_enabled & NV_PMC_ENABLE_PFIFO;
-	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK;
+	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG;
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PFIFO_BASE, NV_PFIFO_SIZE, false,
 		{
 			.fnr32 = get_io_func<false>(log, enabled, is_be),
@@ -297,7 +297,7 @@ void
 pfifo::reset()
 {
 	std::fill(std::begin(m_regs), std::end(m_regs), 0);
-	m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_STATUS)] = NV_PFIFO_CACHE1_STATUS_LOW_MARK_MASK;
+	m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_STATUS)] = NV_PFIFO_CACHE1_STATUS_LOW_MARK;
 	// Values dumped from a Retail 1.0 xbox
 	m_regs[REGS_PFIFO_idx(NV_PFIFO_RAMHT)] = 0x00000100;
 	m_regs[REGS_PFIFO_idx(NV_PFIFO_RAMFC)] = 0x008A0110;

@@ -16,11 +16,11 @@ void puser::write32(uint32_t addr, const uint32_t value)
 
 	uint32_t chan_id = ((addr - NV_PUSER_BASE) >> 16) & (NV2A_MAX_NUM_CHANNELS - 1); // addr increases of 0x10000 for each channel
 	uint32_t curr_chan_info = m_machine->get<pfifo>().m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_PUSH1)];
-	uint32_t curr_chan_id = curr_chan_info & NV_PFIFO_CACHE1_PUSH1_CHID_MASK;
-	uint32_t curr_chan_mode = curr_chan_info & NV_PFIFO_CACHE1_PUSH1_MODE_MASK;
+	uint32_t curr_chan_id = curr_chan_info & NV_PFIFO_CACHE1_PUSH1_CHID;
+	uint32_t curr_chan_mode = curr_chan_info & NV_PFIFO_CACHE1_PUSH1_MODE;
 
 	if (curr_chan_id == chan_id) {
-		if (curr_chan_mode == (NV_PFIFO_CACHE1_PUSH1_MODE_MASK)) {
+		if (curr_chan_mode == (NV_PFIFO_CACHE1_PUSH1_MODE)) {
 
 			// NV_USER is a window to the corresponding pfifo registers
 			switch (addr)
@@ -59,11 +59,11 @@ uint32_t puser::read32(uint32_t addr)
 	uint32_t value = 0;
 	uint32_t chan_id = ((addr - NV_PUSER_BASE) >> 16) & (NV2A_MAX_NUM_CHANNELS - 1); // addr increases of 0x10000 for each channel
 	uint32_t curr_chan_info = m_machine->get<pfifo>().m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_PUSH1)];
-	uint32_t curr_chan_id = curr_chan_info & NV_PFIFO_CACHE1_PUSH1_CHID_MASK;
-	uint32_t curr_chan_mode = curr_chan_info & NV_PFIFO_CACHE1_PUSH1_MODE_MASK;
+	uint32_t curr_chan_id = curr_chan_info & NV_PFIFO_CACHE1_PUSH1_CHID;
+	uint32_t curr_chan_mode = curr_chan_info & NV_PFIFO_CACHE1_PUSH1_MODE;
 
 	if (curr_chan_id == chan_id) {
-		if (curr_chan_mode == (NV_PFIFO_CACHE1_PUSH1_MODE_MASK)) {
+		if (curr_chan_mode == (NV_PFIFO_CACHE1_PUSH1_MODE)) {
 
 			// NV_USER is a window to the corresponding pfifo registers
 			switch (addr)
@@ -125,7 +125,7 @@ bool
 puser::update_io(bool is_update)
 {
 	bool log = module_enabled();
-	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK;
+	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG;
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PUSER_BASE, NV_PUSER_SIZE, false,
 		{
 			.fnr32 = get_io_func<false>(log, is_be),

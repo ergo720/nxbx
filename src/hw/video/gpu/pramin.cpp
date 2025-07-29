@@ -77,7 +77,7 @@ bool
 pramin::update_io(bool is_update)
 {
 	bool log = module_enabled();
-	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG_MASK;
+	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG;
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PRAMIN_BASE, NV_PRAMIN_SIZE, false,
 		{
 			.fnr8 = get_io_func<false, uint8_t>(log, is_be),
