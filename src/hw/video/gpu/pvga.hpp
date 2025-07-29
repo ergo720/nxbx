@@ -45,8 +45,6 @@ public:
 	void mem_write16(uint32_t addr, const uint16_t data);
 
 private:
-	void prmxio_log_read(uint32_t addr, uint32_t value);
-	void prmxio_log_write(uint32_t addr, uint32_t value);
 	void prmvga_log_read(uint32_t addr, uint32_t value);
 	void prmvga_log_write(uint32_t addr, uint32_t value);
 	bool update_io(bool is_update);

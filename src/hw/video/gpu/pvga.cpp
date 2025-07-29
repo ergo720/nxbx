@@ -13,7 +13,7 @@ uint8_t pvga::io_read8(uint32_t addr)
 	uint8_t value = m_machine->get<vga>().io_read8(addr);
 
 	if constexpr (log) {
-		prmxio_log_read(addr, value);
+		prmvga_log_read(addr, value);
 	}
 
 	return value;
@@ -24,7 +24,7 @@ void pvga::io_write8(uint32_t addr, const uint8_t data)
 {
 	uint8_t value = data;
 	if constexpr (log) {
-		prmxio_log_write(addr, data);
+		prmvga_log_write(addr, data);
 	}
 
 	m_machine->get<vga>().io_write8(addr, value);
@@ -35,7 +35,7 @@ void pvga::io_write16(uint32_t addr, const uint16_t data)
 {
 	uint16_t value = data;
 	if constexpr (log) {
-		prmxio_log_write(addr, data);
+		prmvga_log_write(addr, data);
 	}
 
 	m_machine->get<vga>().io_write16(addr, value);
@@ -88,43 +88,15 @@ void pvga::mem_write16(uint32_t addr, const uint16_t data)
 }
 
 void
-pvga::prmxio_log_read(uint32_t addr, uint32_t value)
-{
-	if (addr < (NV_PRMVIO_BASE + NV_PRMVIO_SIZE)) {
-		logger<log_lv::debug, log_module::pvga, false>("Read at %s + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PRMVIO_BASE, addr, value);
-	}
-	else if (addr < (NV_PRMCIO_BASE + NV_PRMCIO_SIZE)) {
-		logger<log_lv::debug, log_module::pvga, false>("Read at %s + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PRMCIO_BASE, addr, value);
-	}
-	else {
-		logger<log_lv::debug, log_module::pvga, false>("Read at %s + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PRMDIO_BASE, addr, value);
-	}
-}
-
-void
-pvga::prmxio_log_write(uint32_t addr, uint32_t data)
-{
-	if (addr < (NV_PRMVIO_BASE + NV_PRMVIO_SIZE)) {
-		logger<log_lv::debug, log_module::pvga, false>("Write at %s + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PRMVIO_BASE, addr, data);
-	}
-	else if (addr < (NV_PRMCIO_BASE + NV_PRMCIO_SIZE)) {
-		logger<log_lv::debug, log_module::pvga, false>("Write at %s + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PRMCIO_BASE, addr, data);
-	}
-	else {
-		logger<log_lv::debug, log_module::pvga, false>("Write at %s + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PRMDIO_BASE, addr, data);
-	}
-}
-
-void
 pvga::prmvga_log_read(uint32_t addr, uint32_t value)
 {
-	logger<log_lv::debug, log_module::pvga, false>("Read at %s + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PRMVGA_BASE, addr, value);
+	logger<log_lv::debug, log_module::pvga, false>("Read at 0x%08X of value 0x%08X", addr, value);
 }
 
 void
 pvga::prmvga_log_write(uint32_t addr, uint32_t data)
 {
-	logger<log_lv::debug, log_module::pvga, false>("Write at %s + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PRMVGA_BASE, addr, data);
+	logger<log_lv::debug, log_module::pvga, false>("Write at 0x%08X of value 0x%08X", addr, data);
 }
 
 bool
