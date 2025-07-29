@@ -10,6 +10,7 @@
 #define NV_PFB 0x00100000
 #define NV_PFB_BASE (NV2A_REGISTER_BASE + NV_PFB)
 #define NV_PFB_SIZE 0x1000
+#define REGS_PFB_idx(x) ((x - NV_PFB_BASE) >> 2)
 
 #define NV_PFB_CFG0 (NV2A_REGISTER_BASE + 0x00100200) // Appear to contain info about the ram modules
 #define NV_PFB_CFG1 (NV2A_REGISTER_BASE + 0x00100204) // Appear to contain info about the ram modules
@@ -39,9 +40,7 @@ private:
 	friend class pramin;
 	machine *const m_machine;
 	// registers
-	uint32_t cfg0, cfg1;
-	uint32_t nvm;
-	uint32_t cstatus;
+	uint32_t m_regs[NV_PFB_SIZE / 4];
 	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
 		{ NV_PFB_CFG0, "NV_PFB_CFG0" },
 		{ NV_PFB_CFG1, "NV_PFB_CFG1" },

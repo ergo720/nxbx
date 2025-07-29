@@ -37,7 +37,7 @@ uint32_t
 pramin::ramin_to_ram_addr(uint32_t ramin_addr)
 {
 	ramin_addr -= NV_PRAMIN_BASE;
-	return m_machine->get<pfb>().cstatus - (ramin_addr - (ramin_addr % RAMIN_UNIT_SIZE)) - RAMIN_UNIT_SIZE + (ramin_addr % RAMIN_UNIT_SIZE);
+	return m_machine->get<pfb>().m_regs[REGS_PFB_idx(NV_PFB_CSTATUS)] - (ramin_addr - (ramin_addr % RAMIN_UNIT_SIZE)) - RAMIN_UNIT_SIZE + (ramin_addr % RAMIN_UNIT_SIZE);
 }
 
 void

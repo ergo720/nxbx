@@ -19,24 +19,12 @@ void pfb::write32(uint32_t addr, const uint32_t value)
 
 	switch (addr)
 	{
-	case NV_PFB_CFG0:
-		cfg0 = value;
-		break;
-
-	case NV_PFB_CFG1:
-		cfg1 = value;
-		break;
-
 	case NV_PFB_CSTATUS:
 		// This register is read-only
 		break;
 
-	case NV_PFB_NVM:
-		nvm = value;
-		break;
-
 	default:
-		nxbx_fatal("Unhandled write at address 0x%" PRIX32 " with value 0x%" PRIX32, addr, value);
+		m_regs[REGS_PFB_idx(addr)] = value;
 	}
 }
 
@@ -47,29 +35,7 @@ uint32_t pfb::read32(uint32_t addr)
 		return 0;
 	}
 
-	uint32_t value = 0;
-
-	switch (addr)
-	{
-	case NV_PFB_CFG0:
-		value = cfg0;
-		break;
-
-	case NV_PFB_CFG1:
-		value = cfg1;
-		break;
-
-	case NV_PFB_CSTATUS:
-		value = cstatus;
-		break;
-
-	case NV_PFB_NVM:
-		value = nvm;
-		break;
-
-	default:
-		nxbx_fatal("Unhandled read at address 0x%" PRIX32, addr);
-	}
+	uint32_t value = m_regs[REGS_PFB_idx(addr)];
 
 	if constexpr (log) {
 		nv2a_log_read();
@@ -132,10 +98,10 @@ void
 pfb::reset()
 {
 	// Values dumped from a Retail 1.0 xbox
-	cfg0 = 0x03070003;
-	cfg1 = 0x11448000;
-	nvm = 0; // unknown initial value
-	cstatus = m_machine->get<cpu>().get_ramsize();
+	std::fill(std::begin(m_regs), std::end(m_regs), 0);
+	m_regs[REGS_PFB_idx(NV_PFB_CFG0)] = 0x03070003;
+	m_regs[REGS_PFB_idx(NV_PFB_CFG1)] = 0x11448000;
+	m_regs[REGS_PFB_idx(NV_PFB_CSTATUS)] = m_machine->get<cpu>().get_ramsize();
 }
 
 bool
