@@ -23,6 +23,11 @@ void pfb::write32(uint32_t addr, const uint32_t value)
 		// This register is read-only
 		break;
 
+	case NV_PFB_WBC:
+		// Mask out the flush pending bit, to always report it as not pending
+		m_regs[REGS_PFB_idx(NV_PFB_WBC)] = value & ~NV_PFB_WBC_FLUSH;
+		break;
+
 	default:
 		m_regs[REGS_PFB_idx(addr)] = value;
 	}
