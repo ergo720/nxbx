@@ -11,6 +11,7 @@
 #define NV_PFIFO_BASE (NV2A_REGISTER_BASE + NV_PFIFO)
 #define NV_PFIFO_SIZE 0x2000
 #define REGS_PFIFO_idx(x) ((x - NV_PFIFO_BASE) >> 2)
+#define REG_PFIFO(r) (m_regs[REGS_PFIFO_idx(r)])
 
 #define NV_PFIFO_INTR_0 (NV2A_REGISTER_BASE + 0x00002100) // Pending pfifo interrupts. Writing a 0 has no effect, and writing a 1 clears the interrupt
 #define NV_PFIFO_INTR_0_DMA_PUSHER (1 << 12)
