@@ -45,6 +45,11 @@ void pfifo::write32(uint32_t addr, const uint32_t value)
 		pusher();
 		break;
 
+	case NV_PFIFO_CACHE1_STATUS:
+	case NV_PFIFO_RUNOUT_STATUS:
+		// read-only
+		break;
+
 	default:
 		REG_PFIFO(addr) = value;
 	}
@@ -61,6 +66,25 @@ uint32_t pfifo::read32(uint32_t addr)
 
 	if constexpr (log) {
 		log_read(addr, value);
+	}
+
+	return value;
+}
+
+template<bool log, bool enabled>
+uint8_t pfifo::read8(uint32_t addr)
+{
+	if constexpr (!enabled) {
+		return 0;
+	}
+
+	uint32_t addr_base = addr & ~3;
+	uint32_t addr_offset = (addr & 3) << 3;
+	uint32_t value32 = read32<false>(addr_base);
+	uint8_t value = uint8_t((value32 & (0xFF << addr_offset)) >> addr_offset);
+
+	if constexpr (log) {
+		log_read(addr_base, value);
 	}
 
 	return value;
@@ -239,7 +263,7 @@ pfifo::log_write(uint32_t addr, uint32_t value)
 	}
 }
 
-template<bool is_write>
+template<bool is_write, typename T>
 auto pfifo::get_io_func(bool log, bool enabled, bool is_be)
 {
 	if constexpr (is_write) {
@@ -256,16 +280,31 @@ auto pfifo::get_io_func(bool log, bool enabled, bool is_be)
 		}
 	}
 	else {
-		if (enabled) {
-			if (log) {
-				return is_be ? nv2a_read<pfifo, uint32_t, &pfifo::read32<true, true>, true> : nv2a_read<pfifo, uint32_t, &pfifo::read32<true>>;
+		if constexpr (sizeof(T) == 1) {
+			if (enabled) {
+				if (log) {
+					return is_be ? nv2a_read<pfifo, uint8_t, &pfifo::read8<true, true>, true> : nv2a_read<pfifo, uint8_t, &pfifo::read8<true>, false>;
+				}
+				else {
+					return is_be ? nv2a_read<pfifo, uint8_t, &pfifo::read8<false, true>, true> : nv2a_read<pfifo, uint8_t, &pfifo::read8<false>, false>;
+				}
 			}
 			else {
-				return is_be ? nv2a_read<pfifo, uint32_t, &pfifo::read32<false, true>, true> : nv2a_read<pfifo, uint32_t, &pfifo::read32<false>>;
+				return nv2a_read<pfifo, uint8_t, &pfifo::read8<false, false>>;
 			}
 		}
 		else {
-			return nv2a_read<pfifo, uint32_t, &pfifo::read32<false, false>>;
+			if (enabled) {
+				if (log) {
+					return is_be ? nv2a_read<pfifo, uint32_t, &pfifo::read32<true, true>, true> : nv2a_read<pfifo, uint32_t, &pfifo::read32<true>>;
+				}
+				else {
+					return is_be ? nv2a_read<pfifo, uint32_t, &pfifo::read32<false, true>, true> : nv2a_read<pfifo, uint32_t, &pfifo::read32<false>>;
+				}
+			}
+			else {
+				return nv2a_read<pfifo, uint32_t, &pfifo::read32<false, false>>;
+			}
 		}
 	}
 }
@@ -278,8 +317,9 @@ pfifo::update_io(bool is_update)
 	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG;
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PFIFO_BASE, NV_PFIFO_SIZE, false,
 		{
-			.fnr32 = get_io_func<false>(log, enabled, is_be),
-			.fnw32 = get_io_func<true>(log, enabled, is_be)
+			.fnr8 = get_io_func<false, uint8_t>(log, enabled, is_be),
+			.fnr32 = get_io_func<false, uint32_t>(log, enabled, is_be),
+			.fnw32 = get_io_func<true, uint32_t>(log, enabled, is_be)
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update mmio region");
@@ -294,6 +334,7 @@ pfifo::reset()
 {
 	std::fill(std::begin(m_regs), std::end(m_regs), 0);
 	REG_PFIFO(NV_PFIFO_CACHE1_STATUS) = NV_PFIFO_CACHE1_STATUS_LOW_MARK;
+	REG_PFIFO(NV_PFIFO_RUNOUT_STATUS) = NV_PFIFO_RUNOUT_STATUS_LOW_MARK;
 	// Values dumped from a Retail 1.0 xbox
 	REG_PFIFO(NV_PFIFO_RAMHT) = 0x00000100;
 	REG_PFIFO(NV_PFIFO_RAMFC) = 0x008A0110;

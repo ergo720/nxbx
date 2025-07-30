@@ -19,6 +19,8 @@
 #define NV_PFIFO_RAMHT (NV2A_REGISTER_BASE + 0x00002210) // Contains the base address and size of ramht in ramin
 #define NV_PFIFO_RAMFC (NV2A_REGISTER_BASE + 0x00002214) // Contains the base address and size of ramfc in ramin
 #define NV_PFIFO_RAMRO (NV2A_REGISTER_BASE + 0x00002218) // Contains the base address and size of ramro in ramin
+#define NV_PFIFO_RUNOUT_STATUS (NV2A_REGISTER_BASE + 0x00002400) // Status of ramro in ramin
+#define NV_PFIFO_RUNOUT_STATUS_LOW_MARK (1 << 4) // empty=1
 #define NV_PFIFO_MODE (NV2A_REGISTER_BASE + 0x00002504) // Indicates the submission mode, one bit for each channel
 #define NV_PFIFO_MODE_CHANNEL(id) (1 << (id)) // pio=0, dma=1
 #define NV_PFIFO_CACHE1_PUSH0 (NV2A_REGISTER_BASE + 0x00003200) // Enable/disable pusher access to cache1
@@ -77,13 +79,15 @@ public:
 	template<bool log = false, bool enabled = true>
 	uint32_t read32(uint32_t addr);
 	template<bool log = false, bool enabled = true>
+	uint8_t read8(uint32_t addr);
+	template<bool log = false, bool enabled = true>
 	void write32(uint32_t addr, const uint32_t value);
 
 private:
 	void log_read(uint32_t addr, uint32_t value);
 	void log_write(uint32_t addr, uint32_t value);
 	bool update_io(bool is_update);
-	template<bool is_write>
+	template<bool is_write, typename T>
 	auto get_io_func(bool log, bool enabled, bool is_be);
 	void pusher();
 	void puller();
@@ -101,6 +105,7 @@ private:
 		{ NV_PFIFO_RAMHT, "NV_PFIFO_RAMHT" },
 		{ NV_PFIFO_RAMFC, "NV_PFIFO_RAMFC" },
 		{ NV_PFIFO_RAMRO, "NV_PFIFO_RAMRO" },
+		{ NV_PFIFO_RUNOUT_STATUS, "NV_PFIFO_RUNOUT_STATUS" },
 		{ NV_PFIFO_MODE, "NV_PFIFO_MODE" },
 		{ NV_PFIFO_CACHE1_PUSH0, "NV_PFIFO_CACHE1_PUSH0" },
 		{ NV_PFIFO_CACHE1_PUSH1, "NV_PFIFO_CACHE1_PUSH1" },
