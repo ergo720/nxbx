@@ -80,7 +80,9 @@ pfifo::pusher()
 		return;
 	}
 
-	const auto &err_handler = [this](const char *msg) {
+	const auto &err_handler = [this](const char *msg, uint32_t code) {
+		logger_en(warn, msg);
+		m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_STATE)] |= (code << 29); // set error code
 		m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_PUSH)] |= NV_PFIFO_CACHE1_DMA_PUSH_STATUS; // suspend pusher
 		m_regs[REGS_PFIFO_idx(NV_PFIFO_INTR_0)] |= NV_PFIFO_INTR_0_DMA_PUSHER; // raise pusher interrupt
 		m_machine->get<pmc>().update_irq();
@@ -97,8 +99,7 @@ pfifo::pusher()
 	// Process all entries until the fifo is empty
 	while (curr_pb_get != curr_pb_put) {
 		if (curr_pb_get >= pb_obj.limit) {
-			m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_STATE)] |= (NV_PFIFO_CACHE1_DMA_STATE_ERROR_PROTECTION << 29); // set mem fault error
-			err_handler("Pusher error: curr_pb_get >= pb_obj.limit");
+			err_handler("Pusher error: curr_pb_get >= pb_obj.limit", NV_PFIFO_CACHE1_DMA_STATE_ERROR_PROTECTION); // set mem fault error
 			break;
 		}
 		uint8_t *pb_addr = m_ram + pb_obj.target_addr + curr_pb_get; // ram host base addr + pb base addr + pb offset
@@ -157,8 +158,7 @@ pfifo::pusher()
 				// call (nv1a+) -> save current pb get addr and calls the routine at the specified addr
 				// JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ10 -> J: call addr
 				if (m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_SUBROUTINE)] & 1) {
-					m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_STATE)] |= (NV_PFIFO_CACHE1_DMA_STATE_ERROR_CALL << 29); // set call error
-					err_handler("Pusher error: call command while another subroutine is already active");
+					err_handler("Pusher error: call command while another subroutine is already active", NV_PFIFO_CACHE1_DMA_STATE_ERROR_CALL); // set call error
 					break;
 				}
 				m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_SUBROUTINE)] = curr_pb_get | 1;
@@ -168,8 +168,7 @@ pfifo::pusher()
 				// return (nv1a+) -> restore pb get addr from subroutine return addr saved with a previous call
 				// 00000000000000100000000000000000
 				if ((m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_SUBROUTINE)] & 1) == 0) {
-					m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_STATE)] |= (NV_PFIFO_CACHE1_DMA_STATE_ERROR_RETURN << 29); // set return error
-					err_handler("Pusher error: return command while subroutine is not active");
+					err_handler("Pusher error: return command while subroutine is not active", NV_PFIFO_CACHE1_DMA_STATE_ERROR_RETURN); // set return error
 					break;
 				}
 				curr_pb_get = m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_SUBROUTINE)] & ~3;
@@ -186,8 +185,7 @@ pfifo::pusher()
 				m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_DCOUNT)] = 0;
 			}
 			else {
-				m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_STATE)] |= (NV_PFIFO_CACHE1_DMA_STATE_ERROR_RESERVED_CMD << 29); // set invalid command error
-				err_handler("Pusher error: encountered unrecognized command");
+				err_handler("Pusher error: encountered unrecognized command", NV_PFIFO_CACHE1_DMA_STATE_ERROR_RESERVED_CMD); // set invalid command error
 				break;
 			}
 		}
