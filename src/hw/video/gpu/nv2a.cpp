@@ -69,7 +69,7 @@ nv2a::get_dma_obj(uint32_t addr)
 	return dma_obj{
 		.class_type = flags & NV_DMA_CLASS,
 		.mem_type = (flags & NV_DMA_TARGET) >> 16,
-		.target_addr = ((flags & NV_DMA_ADJUST) | (addr_info | NV_DMA_ADDRESS)) & (RAM_SIZE128 - 1),
+		.target_addr = (((flags & NV_DMA_ADJUST) >> 20) | (addr_info & NV_DMA_ADDRESS)) & (RAM_SIZE128 - 1),
 		.limit = limit,
 	};
 }
