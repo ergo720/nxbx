@@ -29,6 +29,7 @@
 class machine;
 class pmc;
 class pramdac;
+enum engine_enabled : int;
 
 class ptimer {
 public:
@@ -37,9 +38,9 @@ public:
 	void reset();
 	void update_io() { update_io(true); }
 	uint64_t get_next_alarm_time(uint64_t now);
-	template<bool log = false, bool enabled = true>
+	template<bool log, engine_enabled enabled>
 	uint32_t read32(uint32_t addr);
-	template<bool log = false, bool enabled = true>
+	template<bool log, engine_enabled enabled>
 	void write32(uint32_t addr, const uint32_t value);
 
 private:

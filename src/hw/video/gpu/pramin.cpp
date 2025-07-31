@@ -57,18 +57,18 @@ auto pramin::get_io_func(bool log, bool is_be)
 {
 	if constexpr (is_write) {
 		if (log) {
-			return is_be ? nv2a_write<pramin, T, &pramin::write<T, true>, true> : nv2a_write<pramin, T, &pramin::write<T, true>>;
+			return is_be ? nv2a_write<pramin, T, &pramin::write<T, true>, big> : nv2a_write<pramin, T, &pramin::write<T, true>, le>;
 		}
 		else {
-			return is_be ? nv2a_write<pramin, T, &pramin::write<T, false>, true> : nv2a_write<pramin, T, &pramin::write<T, false>>;
+			return is_be ? nv2a_write<pramin, T, &pramin::write<T, false>, big> : nv2a_write<pramin, T, &pramin::write<T, false>, le>;
 		}
 	}
 	else {
 		if (log) {
-			return is_be ? nv2a_read<pramin, T, &pramin::read<T, true>, true> : nv2a_read<pramin, T, &pramin::read<T, true>>;
+			return is_be ? nv2a_read<pramin, T, &pramin::read<T, true>, big> : nv2a_read<pramin, T, &pramin::read<T, true>, le>;
 		}
 		else {
-			return is_be ? nv2a_read<pramin, T, &pramin::read<T, false>, true> : nv2a_read<pramin, T, &pramin::read<T, false>>;
+			return is_be ? nv2a_read<pramin, T, &pramin::read<T, false>, big> : nv2a_read<pramin, T, &pramin::read<T, false>, le>;
 		}
 	}
 }

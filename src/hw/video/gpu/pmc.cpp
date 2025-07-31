@@ -189,18 +189,18 @@ auto pmc::get_io_func(bool log, bool is_be)
 {
 	if constexpr (is_write) {
 		if (log) {
-			return is_be ? nv2a_write<pmc, uint32_t, &pmc::write32<true>, true> : nv2a_write<pmc, uint32_t, &pmc::write32<true>>;
+			return is_be ? nv2a_write<pmc, uint32_t, &pmc::write32<true>, big> : nv2a_write<pmc, uint32_t, &pmc::write32<true>, le>;
 		}
 		else {
-			return is_be ? nv2a_write<pmc, uint32_t, &pmc::write32<false>, true> : nv2a_write<pmc, uint32_t, &pmc::write32<false>>;
+			return is_be ? nv2a_write<pmc, uint32_t, &pmc::write32<false>, big> : nv2a_write<pmc, uint32_t, &pmc::write32<false>, le>;
 		}
 	}
 	else {
 		if (log) {
-			return is_be ? nv2a_read<pmc, uint32_t, &pmc::read32<true>, true> : nv2a_read<pmc, uint32_t, &pmc::read32<true>>;
+			return is_be ? nv2a_read<pmc, uint32_t, &pmc::read32<true>, big> : nv2a_read<pmc, uint32_t, &pmc::read32<true>, le>;
 		}
 		else {
-			return is_be ? nv2a_read<pmc, uint32_t, &pmc::read32<false>, true> : nv2a_read<pmc, uint32_t, &pmc::read32<false>>;
+			return is_be ? nv2a_read<pmc, uint32_t, &pmc::read32<false>, big> : nv2a_read<pmc, uint32_t, &pmc::read32<false>, le>;
 		}
 	}
 }

@@ -172,36 +172,36 @@ auto pbus::get_io_func(bool log, bool is_be)
 	if constexpr (is_pci) {
 		if constexpr (is_write) {
 			if (log) {
-				return is_be ? nv2a_write<pbus, uint32_t, &pbus::pci_write32<true>, true> : nv2a_write<pbus, uint32_t, &pbus::pci_write32<true>>;
+				return is_be ? nv2a_write<pbus, uint32_t, &pbus::pci_write32<true>, big> : nv2a_write<pbus, uint32_t, &pbus::pci_write32<true>, le>;
 			}
 			else {
-				return is_be ? nv2a_write<pbus, uint32_t, &pbus::pci_write32<false>, true> : nv2a_write<pbus, uint32_t, &pbus::pci_write32<false>>;
+				return is_be ? nv2a_write<pbus, uint32_t, &pbus::pci_write32<false>, big> : nv2a_write<pbus, uint32_t, &pbus::pci_write32<false>, le>;
 			}
 		}
 		else {
 			if (log) {
-				return is_be ? nv2a_read<pbus, uint32_t, &pbus::pci_read32<true>, true> : nv2a_read<pbus, uint32_t, &pbus::pci_read32<true>>;
+				return is_be ? nv2a_read<pbus, uint32_t, &pbus::pci_read32<true>, big> : nv2a_read<pbus, uint32_t, &pbus::pci_read32<true>, le>;
 			}
 			else {
-				return is_be ? nv2a_read<pbus, uint32_t, &pbus::pci_read32<false>, true> : nv2a_read<pbus, uint32_t, &pbus::pci_read32<false>>;
+				return is_be ? nv2a_read<pbus, uint32_t, &pbus::pci_read32<false>, big> : nv2a_read<pbus, uint32_t, &pbus::pci_read32<false>, le>;
 			}
 		}
 	}
 	else {
 		if constexpr (is_write) {
 			if (log) {
-				return is_be ? nv2a_write<pbus, uint32_t, &pbus::write32<true>, true> : nv2a_write<pbus, uint32_t, &pbus::write32<true>>;
+				return is_be ? nv2a_write<pbus, uint32_t, &pbus::write32<true>, big> : nv2a_write<pbus, uint32_t, &pbus::write32<true>, le>;
 			}
 			else {
-				return is_be ? nv2a_write<pbus, uint32_t, &pbus::write32<false>, true> : nv2a_write<pbus, uint32_t, &pbus::write32<false>>;
+				return is_be ? nv2a_write<pbus, uint32_t, &pbus::write32<false>, big> : nv2a_write<pbus, uint32_t, &pbus::write32<false>, le>;
 			}
 		}
 		else {
 			if (log) {
-				return is_be ? nv2a_read<pbus, uint32_t, &pbus::read32<true>, true> : nv2a_read<pbus, uint32_t, &pbus::read32<true>>;
+				return is_be ? nv2a_read<pbus, uint32_t, &pbus::read32<true>, big> : nv2a_read<pbus, uint32_t, &pbus::read32<true>, le>;
 			}
 			else {
-				return is_be ? nv2a_read<pbus, uint32_t, &pbus::read32<false>, true> : nv2a_read<pbus, uint32_t, &pbus::read32<false>>;
+				return is_be ? nv2a_read<pbus, uint32_t, &pbus::read32<false>, big> : nv2a_read<pbus, uint32_t, &pbus::read32<false>, le>;
 			}
 		}
 	}

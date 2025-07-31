@@ -8,7 +8,7 @@
 #define MODULE_NAME pfifo
 
 
-template<bool log, bool enabled>
+template<bool log, engine_enabled enabled>
 void pfifo::write32(uint32_t addr, const uint32_t value)
 {
 	if constexpr (!enabled) {
@@ -55,7 +55,7 @@ void pfifo::write32(uint32_t addr, const uint32_t value)
 	}
 }
 
-template<bool log, bool enabled>
+template<bool log, engine_enabled enabled>
 uint32_t pfifo::read32(uint32_t addr)
 {
 	if constexpr (!enabled) {
@@ -71,7 +71,7 @@ uint32_t pfifo::read32(uint32_t addr)
 	return value;
 }
 
-template<bool log, bool enabled>
+template<bool log, engine_enabled enabled>
 uint8_t pfifo::read8(uint32_t addr)
 {
 	if constexpr (!enabled) {
@@ -80,7 +80,7 @@ uint8_t pfifo::read8(uint32_t addr)
 
 	uint32_t addr_base = addr & ~3;
 	uint32_t addr_offset = (addr & 3) << 3;
-	uint32_t value32 = read32<false>(addr_base);
+	uint32_t value32 = read32<false, on>(addr_base);
 	uint8_t value = uint8_t((value32 & (0xFF << addr_offset)) >> addr_offset);
 
 	if constexpr (log) {
@@ -269,41 +269,41 @@ auto pfifo::get_io_func(bool log, bool enabled, bool is_be)
 	if constexpr (is_write) {
 		if (enabled) {
 			if (log) {
-				return is_be ? nv2a_write<pfifo, uint32_t, &pfifo::write32<true, true>, true> : nv2a_write<pfifo, uint32_t, &pfifo::write32<true>>;
+				return is_be ? nv2a_write<pfifo, uint32_t, &pfifo::write32<true, on>, big> : nv2a_write<pfifo, uint32_t, &pfifo::write32<true, on>, le>;
 			}
 			else {
-				return is_be ? nv2a_write<pfifo, uint32_t, &pfifo::write32<false, true>, true> : nv2a_write<pfifo, uint32_t, &pfifo::write32<false>>;
+				return is_be ? nv2a_write<pfifo, uint32_t, &pfifo::write32<false, on>, big> : nv2a_write<pfifo, uint32_t, &pfifo::write32<false, on>, le>;
 			}
 		}
 		else {
-			return nv2a_write<pfifo, uint32_t, &pfifo::write32<false, false>>;
+			return nv2a_write<pfifo, uint32_t, &pfifo::write32<false, off>, big>;
 		}
 	}
 	else {
 		if constexpr (sizeof(T) == 1) {
 			if (enabled) {
 				if (log) {
-					return is_be ? nv2a_read<pfifo, uint8_t, &pfifo::read8<true, true>, true> : nv2a_read<pfifo, uint8_t, &pfifo::read8<true>, false>;
+					return is_be ? nv2a_read<pfifo, uint8_t, &pfifo::read8<true, on>, big> : nv2a_read<pfifo, uint8_t, &pfifo::read8<true, on>, le>;
 				}
 				else {
-					return is_be ? nv2a_read<pfifo, uint8_t, &pfifo::read8<false, true>, true> : nv2a_read<pfifo, uint8_t, &pfifo::read8<false>, false>;
+					return is_be ? nv2a_read<pfifo, uint8_t, &pfifo::read8<false, on>, big> : nv2a_read<pfifo, uint8_t, &pfifo::read8<false, on>, le>;
 				}
 			}
 			else {
-				return nv2a_read<pfifo, uint8_t, &pfifo::read8<false, false>>;
+				return nv2a_read<pfifo, uint8_t, &pfifo::read8<false, off>, big>;
 			}
 		}
 		else {
 			if (enabled) {
 				if (log) {
-					return is_be ? nv2a_read<pfifo, uint32_t, &pfifo::read32<true, true>, true> : nv2a_read<pfifo, uint32_t, &pfifo::read32<true>>;
+					return is_be ? nv2a_read<pfifo, uint32_t, &pfifo::read32<true, on>, big> : nv2a_read<pfifo, uint32_t, &pfifo::read32<true, on>, le>;
 				}
 				else {
-					return is_be ? nv2a_read<pfifo, uint32_t, &pfifo::read32<false, true>, true> : nv2a_read<pfifo, uint32_t, &pfifo::read32<false>>;
+					return is_be ? nv2a_read<pfifo, uint32_t, &pfifo::read32<false, on>, big> : nv2a_read<pfifo, uint32_t, &pfifo::read32<false, on>, le>;
 				}
 			}
 			else {
-				return nv2a_read<pfifo, uint32_t, &pfifo::read32<false, false>>;
+				return nv2a_read<pfifo, uint32_t, &pfifo::read32<false, off>, big>;
 			}
 		}
 	}

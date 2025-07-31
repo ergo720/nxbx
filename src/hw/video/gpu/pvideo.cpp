@@ -7,7 +7,7 @@
 #define MODULE_NAME pvideo
 
 
-template<bool log, bool enabled>
+template<bool log, engine_enabled enabled>
 void pvideo::write32(uint32_t addr, const uint32_t value)
 {
 	if constexpr (!enabled) {
@@ -53,7 +53,7 @@ void pvideo::write32(uint32_t addr, const uint32_t value)
 	}
 }
 
-template<bool log, bool enabled>
+template<bool log, engine_enabled enabled>
 uint32_t pvideo::read32(uint32_t addr)
 {
 	if constexpr (!enabled) {
@@ -110,27 +110,27 @@ auto pvideo::get_io_func(bool log, bool enabled, bool is_be)
 	if constexpr (is_write) {
 		if (enabled) {
 			if (log) {
-				return is_be ? nv2a_write<pvideo, uint32_t, &pvideo::write32<true, true>, true> : nv2a_write<pvideo, uint32_t, &pvideo::write32<true>>;
+				return is_be ? nv2a_write<pvideo, uint32_t, &pvideo::write32<true, on>, big> : nv2a_write<pvideo, uint32_t, &pvideo::write32<true, on>, le>;
 			}
 			else {
-				return is_be ? nv2a_write<pvideo, uint32_t, &pvideo::write32<false, true>, true> : nv2a_write<pvideo, uint32_t, &pvideo::write32<false>>;
+				return is_be ? nv2a_write<pvideo, uint32_t, &pvideo::write32<false, on>, big> : nv2a_write<pvideo, uint32_t, &pvideo::write32<false, on>, le>;
 			}
 		}
 		else {
-			return nv2a_write<pvideo, uint32_t, &pvideo::write32<false, false>>;
+			return nv2a_write<pvideo, uint32_t, &pvideo::write32<false, off>, big>;
 		}
 	}
 	else {
 		if (enabled) {
 			if (log) {
-				return is_be ? nv2a_read<pvideo, uint32_t, &pvideo::read32<true, true>, true> : nv2a_read<pvideo, uint32_t, &pvideo::read32<true>>;
+				return is_be ? nv2a_read<pvideo, uint32_t, &pvideo::read32<true, on>, big> : nv2a_read<pvideo, uint32_t, &pvideo::read32<true, on>, le>;
 			}
 			else {
-				return is_be ? nv2a_read<pvideo, uint32_t, &pvideo::read32<false, true>, true> : nv2a_read<pvideo, uint32_t, &pvideo::read32<false>>;
+				return is_be ? nv2a_read<pvideo, uint32_t, &pvideo::read32<false, on>, big> : nv2a_read<pvideo, uint32_t, &pvideo::read32<false, on>, le>;
 			}
 		}
 		else {
-			return nv2a_read<pvideo, uint32_t, &pvideo::read32<false, false>>;
+			return nv2a_read<pvideo, uint32_t, &pvideo::read32<false, off>, big>;
 		}
 	}
 }

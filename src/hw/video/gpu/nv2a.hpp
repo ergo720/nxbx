@@ -28,6 +28,15 @@ struct dma_obj {
 	uint32_t limit;
 };
 
+enum engine_enabled : int {
+	off = 0,
+	on = 1
+};
+enum engine_endian : int {
+	le = 0,
+	big = 1
+};
+
 class nv2a {
 public:
 	nv2a(machine *machine) : m_pmc(machine), m_pcrtc(machine), m_pramdac(machine), m_ptimer(machine),
@@ -52,7 +61,6 @@ public:
 		const auto it = regs_info.find(addr & ~3);
 		logger<log_lv::debug, name, false>("Write at %s (0x%08X) of value 0x%08X", it != regs_info.end() ? it->second.c_str() : "UNKNOWN", addr, value);
 	}
-
 	template<log_module name>
 	void log_read(const std::unordered_map<uint32_t, const std::string> &regs_info, uint32_t addr, uint32_t value)
 	{
@@ -80,7 +88,7 @@ private:
 #define nv2a_log_read() m_machine->get<nv2a>().log_read<log_module::MODULE_NAME>(m_regs_info, addr, value);
 #define nv2a_log_write() m_machine->get<nv2a>().log_write<log_module::MODULE_NAME>(m_regs_info, addr, value);
 
-template<typename D, typename T, auto f, bool is_be = false, uint32_t base = 0>
+template<typename D, typename T, auto f, engine_endian is_be, uint32_t base = 0>
 T nv2a_read(uint32_t addr, void *opaque)
 {
 	T value = cpu_read<D, T, f, base>(addr, opaque);
@@ -90,7 +98,7 @@ T nv2a_read(uint32_t addr, void *opaque)
 	return value;
 }
 
-template<typename D, typename T, auto f, bool is_be = false, uint32_t base = 0>
+template<typename D, typename T, auto f, engine_endian is_be, uint32_t base = 0>
 void nv2a_write(uint32_t addr, T value, void *opaque)
 {
 	if constexpr (is_be) {

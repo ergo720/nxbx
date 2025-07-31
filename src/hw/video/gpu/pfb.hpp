@@ -22,6 +22,7 @@
 
 class machine;
 class pramin;
+enum engine_enabled : int;
 
 class pfb {
 public:
@@ -29,9 +30,9 @@ public:
 	bool init();
 	void reset();
 	void update_io() { update_io(true); }
-	template<bool log = false, bool enabled = true>
+	template<bool log, engine_enabled enabled>
 	uint32_t read32(uint32_t addr);
-	template<bool log = false, bool enabled = true>
+	template<bool log, engine_enabled enabled>
 	void write32(uint32_t addr, const uint32_t value);
 
 private:
