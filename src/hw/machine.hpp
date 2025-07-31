@@ -149,6 +149,9 @@ public:
 		else if constexpr (std::is_same_v<T, pvideo>) {
 			return m_nv2a.get_pvideo();
 		}
+		else if constexpr (std::is_same_v<T, pgraph>) {
+			return m_nv2a.get_pgraph();
+		}
 		else {
 			throw std::logic_error("Attempt to access unknown device");
 		}

@@ -34,6 +34,7 @@ void pmc::write32(uint32_t addr, const uint32_t value)
 			m_machine->get<pfb>().update_io();
 			m_machine->get<pcrtc>().update_io();
 			m_machine->get<pvideo>().update_io();
+			m_machine->get<pgraph>().update_io();
 			mem_init_region_io(m_machine->get<cpu_t *>(), 0, 0, true, {}, m_machine->get<cpu_t *>(), true, 3); // trigger the update in lib86cpu too
 		}
 	}
@@ -56,6 +57,11 @@ void pmc::write32(uint32_t addr, const uint32_t value)
 		engine_enabled = value;
 		if ((value & NV_PMC_ENABLE_PFIFO) == 0) {
 			m_machine->get<pfifo>().reset();
+			has_int_state_changed = true;
+		}
+		if ((value & NV_PMC_ENABLE_PGRAPH) == 0) {
+			m_machine->get<pgraph>().reset();
+			has_int_state_changed = true;
 		}
 		if ((value & NV_PMC_ENABLE_PTIMER) == 0) {
 			m_machine->get<ptimer>().reset();
@@ -73,6 +79,7 @@ void pmc::write32(uint32_t addr, const uint32_t value)
 		}
 		if ((old_state ^ engine_enabled) & NV_PMC_ENABLE_ALL) {
 			m_machine->get<pfifo>().update_io();
+			m_machine->get<pgraph>().update_io();
 			m_machine->get<ptimer>().update_io();
 			m_machine->get<pfb>().update_io();
 			m_machine->get<pcrtc>().update_io();
@@ -155,6 +162,14 @@ pmc::update_irq()
 	}
 	else {
 		int_status &= ~(1 << NV_PMC_INTR_0_PFIFO);
+	}
+
+	// Check for pending PGRAPH interrupts
+	if (m_machine->get<pgraph>().m_regs[REGS_PGRAPH_idx(NV_PGRAPH_INTR)] & m_machine->get<pgraph>().m_regs[REGS_PGRAPH_idx(NV_PGRAPH_INTR_EN)]) {
+		int_status |= (1 << NV_PMC_INTR_0_PGRAPH);
+	}
+	else {
+		int_status &= ~(1 << NV_PMC_INTR_0_PGRAPH);
 	}
 
 	switch (int_enabled)

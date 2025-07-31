@@ -20,6 +20,7 @@
 #define NV_PMC_BOOT_1_ENDIAN24_BIG (0x00000001 << 24)
 #define NV_PMC_INTR_0 (NV2A_REGISTER_BASE + 0x00000100) // Pending interrupts of all engines
 #define NV_PMC_INTR_0_PFIFO 8
+#define NV_PMC_INTR_0_PGRAPH 12
 #define NV_PMC_INTR_0_PTIMER 20
 #define NV_PMC_INTR_0_PCRTC 24
 #define NV_PMC_INTR_0_SOFTWARE 31
@@ -30,11 +31,12 @@
 #define NV_PMC_INTR_EN_0_INTA_SOFTWARE 0x00000002
 #define NV_PMC_ENABLE (NV2A_REGISTER_BASE + 0x00000200) // Enable/disable gpu engines
 #define NV_PMC_ENABLE_PFIFO (1 << 8)
+#define NV_PMC_ENABLE_PGRAPH (1 << 12)
 #define NV_PMC_ENABLE_PTIMER (1 << 16)
 #define NV_PMC_ENABLE_PFB (1 << 20)
 #define NV_PMC_ENABLE_PCRTC (1 << 24)
 #define NV_PMC_ENABLE_PVIDEO (1 << 28)
-#define NV_PMC_ENABLE_ALL (NV_PMC_ENABLE_PFIFO | NV_PMC_ENABLE_PTIMER | NV_PMC_ENABLE_PFB | NV_PMC_ENABLE_PCRTC | NV_PMC_ENABLE_PVIDEO)
+#define NV_PMC_ENABLE_ALL (NV_PMC_ENABLE_PFIFO | NV_PMC_ENABLE_PGRAPH | NV_PMC_ENABLE_PTIMER | NV_PMC_ENABLE_PFB | NV_PMC_ENABLE_PCRTC | NV_PMC_ENABLE_PVIDEO)
 
 
 class machine;
@@ -47,6 +49,7 @@ class pbus;
 class pramdac;
 class pramin;
 class puser;
+class pgraph;
 
 class pmc {
 public:
@@ -74,6 +77,7 @@ private:
 	friend class pramdac;
 	friend class pramin;
 	friend class puser;
+	friend class pgraph;
 	machine *const m_machine;
 	// registers
 	uint32_t endianness;

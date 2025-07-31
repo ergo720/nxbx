@@ -15,6 +15,7 @@
 #include "pvga.hpp"
 #include "pvideo.hpp"
 #include "puser.hpp"
+#include "pgraph.hpp"
 #include "cpu.hpp"
 #include <bit>
 #include <unordered_map>
@@ -41,7 +42,7 @@ class nv2a {
 public:
 	nv2a(machine *machine) : m_pmc(machine), m_pcrtc(machine), m_pramdac(machine), m_ptimer(machine),
 		m_pfb(machine), m_pbus(machine), m_pramin(machine), m_pfifo(machine), m_pvga(machine), m_pvideo(machine),
-		m_puser(machine) {}
+		m_puser(machine), m_pgraph(machine) {}
 	bool init();
 	uint64_t get_next_update_time(uint64_t now);
 	pmc &get_pmc() { return m_pmc; }
@@ -54,6 +55,7 @@ public:
 	pfifo &get_pfifo() { return m_pfifo; }
 	pvga &get_pvga() { return m_pvga; }
 	pvideo &get_pvideo() { return m_pvideo; }
+	pgraph &get_pgraph() { return m_pgraph; }
 	void apply_log_settings();
 	template<log_module name>
 	void log_write(const std::unordered_map<uint32_t, const std::string> &regs_info, uint32_t addr, uint32_t value)
@@ -83,6 +85,7 @@ private:
 	pvga m_pvga;
 	pvideo m_pvideo;
 	puser m_puser;
+	pgraph m_pgraph;
 };
 
 #define nv2a_log_read() m_machine->get<nv2a>().log_read<log_module::MODULE_NAME>(m_regs_info, addr, value);

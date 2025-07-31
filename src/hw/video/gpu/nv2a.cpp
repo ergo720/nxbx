@@ -42,6 +42,9 @@ nv2a::init()
 	if (!m_puser.init()) {
 		return false;
 	}
+	if (!m_pgraph.init()) {
+		return false;
+	}
 	return true;
 }
 
