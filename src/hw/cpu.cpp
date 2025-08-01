@@ -221,7 +221,7 @@ cpu::init(const init_info_t &init_info)
 
 	regs->cr0 = 0x80000021; // protected, paging, ne
 	regs->cr3 = 0xF000; // pd addr
-	regs->cr4 = 0x210; // pse, osfxsr
+	regs->cr4 = 0x610; // pse, osfxsr, osxmmexcpt
 
 	regs->esp = 0x80400000;
 	regs->ebp = 0x80400000;
