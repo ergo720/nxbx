@@ -7,7 +7,7 @@
 #define MODULE_NAME adm1032
 
 
-std::optional<uint16_t>
+uint8_t
 adm1032::read_byte(uint8_t command)
 {
 	switch (command)

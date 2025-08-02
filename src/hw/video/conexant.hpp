@@ -13,13 +13,13 @@ public:
 	bool init();
 	void deinit() override {}
 	void reset();
-	std::optional<uint16_t> quick_command(bool command) override;
-	std::optional<uint16_t> receive_byte() override;
-	std::optional<uint16_t> send_byte(uint8_t value) override;
-	std::optional<uint16_t> read_byte(uint8_t command) override;
-	std::optional<uint16_t> write_byte(uint8_t command, uint8_t value) override;
-	std::optional<uint16_t> read_word(uint8_t command) override;
-	std::optional<uint16_t> write_word(uint8_t command, uint16_t value) override;
+	void quick_command(bool command) override;
+	uint8_t receive_byte() override;
+	void send_byte(uint8_t value) override;
+	uint8_t read_byte(uint8_t command) override;
+	void write_byte(uint8_t command, uint8_t value) override;
+	uint16_t read_word(uint8_t command) override;
+	void write_word(uint8_t command, uint16_t value) override;
 
 private:
 	uint8_t m_regs[256];

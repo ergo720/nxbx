@@ -49,31 +49,29 @@ static constexpr uint8_t g_default_eeprom[] = {
 static_assert(sizeof(g_default_eeprom) == 256);
 
 
-std::optional<uint16_t>
+uint8_t
 eeprom::read_byte(uint8_t command)
 {
 	return m_eeprom[command];
 }
 
-std::optional<uint16_t>
+void
 eeprom::write_byte(uint8_t command, uint8_t value)
 {
 	m_eeprom[command] = value;
-	return 0;
 }
 
-std::optional<uint16_t>
+uint16_t
 eeprom::read_word(uint8_t command)
 {
 	return m_eeprom[command] | (((uint16_t)m_eeprom[command + 1]) << 8);
 }
 
-std::optional<uint16_t>
+void
 eeprom::write_word(uint8_t command, uint16_t value)
 {
 	m_eeprom[command] = value & 0xFF;
 	m_eeprom[command + 1] = value >> 8;
-	return 0;
 }
 
 void

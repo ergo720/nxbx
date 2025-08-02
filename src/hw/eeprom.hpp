@@ -14,10 +14,10 @@ public:
 	eeprom(log_module module_name) : smbus_device(module_name) {}
 	bool init(std::filesystem::path eeprom_dir);
 	void deinit() override;
-	std::optional<uint16_t> read_byte(uint8_t command) override;
-	std::optional<uint16_t> write_byte(uint8_t command, uint8_t value) override;
-	std::optional<uint16_t> read_word(uint8_t command) override;
-	std::optional<uint16_t> write_word(uint8_t command, uint16_t value) override;
+	uint8_t read_byte(uint8_t command) override;
+	void write_byte(uint8_t command, uint8_t value) override;
+	uint16_t read_word(uint8_t command) override;
+	void write_word(uint8_t command, uint16_t value) override;
 
 private:
 	std::fstream m_fs;

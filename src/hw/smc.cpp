@@ -34,7 +34,7 @@
 #define SMC_VIDEO_MODE_NONE             0x07
 
 
-std::optional<uint16_t>
+uint8_t
 smc::read_byte(uint8_t command)
 {
 	uint8_t value;
@@ -56,7 +56,7 @@ smc::read_byte(uint8_t command)
 
 	case SMC_CPU_TEMPERATURE:
 	case SMC_MB_TEMPERATURE:
-		value = *m_machine->get<adm1032>().read_byte((command - SMC_CPU_TEMPERATURE) ^ 1);
+		value = m_machine->get<adm1032>().read_byte((command - SMC_CPU_TEMPERATURE) ^ 1);
 		break;
 
 	case SMC_READ_SCRATCH:
@@ -69,12 +69,13 @@ smc::read_byte(uint8_t command)
 
 	default:
 		nxbx_fatal("Unhandled read with command 0x%" PRIX8, command);
+		value = 0;
 	}
 
 	return value;
 }
 
-std::optional<uint16_t>
+void
 smc::write_byte(uint8_t command, uint8_t value)
 {
 	switch (command)
@@ -105,8 +106,6 @@ smc::write_byte(uint8_t command, uint8_t value)
 	default:
 		nxbx_fatal("Unhandled write with command 0x%" PRIX8 " and value 0x%" PRIX8, command, value);
 	}
-
-	return 0;
 }
 
 void
@@ -115,7 +114,7 @@ smc::update_tray_state(::tray_state state, bool do_int)
 	m_tray_state = (uint8_t)state;
 	if (do_int) {
 		// TODO: trigger interrupt
-		nxbx_fatal("Interrupts not supported yet");
+		nxbx_fatal("Tray interrupts not supported yet");
 	}
 }
 

@@ -134,6 +134,41 @@ void smbus::write16(uint32_t addr, const uint16_t value)
 	write8(addr + 1, value >> 8 & 0xFF);
 }
 
+template<smbus::cycle_type cmd, bool is_read, typename T>
+void smbus::end_cycle(smbus_device *dev, T value)
+{
+	if (dev->has_cmd_succeeded()) {
+		m_regs[SMBUS_REG_off(SMBUS_GS_addr)] |= GS_HCYC_STS;
+		if constexpr (cmd == quick_command) {
+			return;
+		}
+		else if constexpr (cmd == byte_command) {
+			if constexpr (is_read) {
+				m_regs[SMBUS_REG_off(SMBUS_HD0_addr)] = value;
+			}
+		}
+		else if constexpr (cmd == word_command) {
+			if constexpr (is_read) {
+				m_regs[SMBUS_REG_off(SMBUS_HD0_addr)] = value & 0xFF;
+				m_regs[SMBUS_REG_off(SMBUS_HD1_addr)] = value >> 8;
+			}
+		}
+		else if constexpr (cmd == block_command) {
+			return;
+		}
+		else {
+			std::logic_error("Out of range cycle type");
+		}
+	}
+	else {
+		if constexpr (cmd == block_command) {
+			std::fill(std::begin(m_block_data), std::end(m_block_data), 0);
+		}
+		m_regs[SMBUS_REG_off(SMBUS_GS_addr)] |= GS_PRERR_STS;
+		dev->clear_cmd_status();
+	}
+}
+
 void
 smbus::start_cycle()
 {
@@ -143,114 +178,71 @@ smbus::start_cycle()
 	uint8_t data0 = m_regs[SMBUS_REG_off(SMBUS_HD0_addr)];
 	uint8_t data1 = m_regs[SMBUS_REG_off(SMBUS_HD1_addr)];
 
-	const auto &check_success = [this, is_read]<int cycle_type>(std::optional<uint16_t> ret)
-	{
-		if constexpr (cycle_type == 0) {
-			m_regs[SMBUS_REG_off(SMBUS_GS_addr)] |= (ret == std::nullopt ? GS_PRERR_STS : GS_HCYC_STS);
-		}
-		else if constexpr ((cycle_type == 1) || (cycle_type == 2)) {
-			if (ret == std::nullopt) {
-				m_regs[SMBUS_REG_off(SMBUS_GS_addr)] |= GS_PRERR_STS;
-			}
-			else {
-				if (is_read) {
-					m_regs[SMBUS_REG_off(SMBUS_HD0_addr)] = *ret;
-				}
-				m_regs[SMBUS_REG_off(SMBUS_GS_addr)] |= GS_HCYC_STS;
-			}
-		}
-		else if constexpr ((cycle_type == 3) || cycle_type == 4) {
-			if (ret == std::nullopt) {
-				m_regs[SMBUS_REG_off(SMBUS_GS_addr)] |= GS_PRERR_STS;
-			}
-			else {
-				if (is_read) {
-					m_regs[SMBUS_REG_off(SMBUS_HD0_addr)] = (*ret) & 0xFF;
-					m_regs[SMBUS_REG_off(SMBUS_HD1_addr)] = (*ret) >> 8;
-				}
-				m_regs[SMBUS_REG_off(SMBUS_GS_addr)] |= GS_HCYC_STS;
-			}
-		}
-		else {
-			nxbx_fatal("Out of range cycle type");
-		}
-	};
-
 	if (const auto it = m_devs.find(hw_addr); it != m_devs.end()) {
-		std::optional<uint16_t> ret;
-
 		switch (m_regs[SMBUS_REG_off(SMBUS_GE_addr)] & GE_CYCTYPE)
 		{
 		case 0:
-			ret = it->second->quick_command(is_read);
-			check_success.template operator()<0>(ret);
-			return;
+			it->second->quick_command(is_read);
+			end_cycle<quick_command, false>(it->second, is_read);
+			break;
 
 		case 1:
 			if (is_read) {
-				ret = it->second->receive_byte();
+				end_cycle<byte_command, true>(it->second, it->second->receive_byte());
 			}
 			else {
-				ret = it->second->send_byte(command);
+				it->second->send_byte(command);
+				end_cycle<byte_command, false>(it->second);
 			}
-			check_success.template operator()<1>(ret);
-			return;
+			break;
 
 		case 2:
 			if (is_read) {
-				ret = it->second->read_byte(command);
+				end_cycle<byte_command, true>(it->second, it->second->read_byte(command));
 			}
 			else {
-				ret = it->second->write_byte(command, data0);
+				it->second->write_byte(command, data0);
+				end_cycle<byte_command, false>(it->second);
 			}
-			check_success.template operator()<2>(ret);
-			return;
+			break;
 
 		case 3:
 			if (is_read) {
-				ret = it->second->read_word(command);
+				end_cycle<word_command, true>(it->second, it->second->read_word(command));
 			}
 			else {
-				ret = it->second->write_word(command, data0 | ((uint16_t)data1 << 8));
+				it->second->write_word(command, data0 | ((uint16_t)data1 << 8));
+				end_cycle<word_command, false>(it->second);
 			}
-			check_success.template operator()<3>(ret);
-			return;
+			break;
 
 		case 4:
-			ret = it->second->process_call(command, data0 | ((uint16_t)data1 << 8));
-			check_success.template operator()<4>(ret);
-			return;
+			end_cycle<word_command, true>(it->second, it->second->process_call(command, data0 | ((uint16_t)data1 << 8)));
+			break;
 
 		case 5:
 			if (is_read) {
 				uint8_t bytes_to_transfer = data0 > 32 ? 32 : data0;
 				uint8_t start_off = m_block_off;
 				for (uint8_t i = 0; i < bytes_to_transfer; ++i) {
-					if (const auto opt = it->second->read_byte(command + i); opt) {
-						m_block_data[(start_off + i) & 0x1F] = *opt;
-						continue;
-					}
-					std::memset(m_block_data, 0, 32);
-					m_regs[SMBUS_REG_off(SMBUS_GS_addr)] |= GS_PRERR_STS;
-					return;
+					m_block_data[(start_off + i) & 0x1F] = it->second->read_byte(command + i);
 				}
 			}
 			else {
 				uint8_t bytes_to_transfer = data0 > 32 ? 32 : data0;
 				uint8_t start_off = (m_block_off - bytes_to_transfer) & 0x1F;
 				for (uint8_t i = 0; i < bytes_to_transfer; ++i) {
-					if (!it->second->write_byte(command + i, m_block_data[(start_off + i) & 0x1F])) {
-						std::memset(m_block_data, 0, 32);
-						m_regs[SMBUS_REG_off(SMBUS_GS_addr)] |= GS_PRERR_STS;
-						return;
-					}
+					it->second->write_byte(command + i, m_block_data[(start_off + i) & 0x1F]);
 				}
 			}
-			m_regs[SMBUS_REG_off(SMBUS_GS_addr)] |= GS_HCYC_STS;
-			return;
+			end_cycle<block_command, false>(it->second); // NOTE: is_read doesn't matter for block_command
+			break;
 		}
+
+		return;
 	}
 
+	// We reach here when an address specifies a non-existant device
 	m_regs[SMBUS_REG_off(SMBUS_GS_addr)] |= GS_PRERR_STS;
 }
 
@@ -276,8 +268,8 @@ smbus::update_io(bool is_update)
 void
 smbus::reset()
 {
-	std::fill(&m_regs[0], &m_regs[4], 0);
-	std::fill(&m_block_data[0], &m_block_data[4], 0);
+	std::fill(std::begin(m_regs), std::end(m_regs), 0);
+	std::fill(std::begin(m_block_data), std::end(m_block_data), 0);
 	m_block_off = 0;
 }
 
