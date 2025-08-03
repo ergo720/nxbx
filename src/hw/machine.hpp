@@ -14,6 +14,7 @@
 #include "eeprom.hpp"
 #include "smc.hpp"
 #include "adm1032.hpp"
+#include "usb/ohci.hpp"
 #include "video/conexant.hpp"
 #include "video/vga.hpp"
 #include "video/gpu/nv2a.hpp"
@@ -25,7 +26,8 @@ concept is_cpu_t = std::is_same_v<T, cpu_t *>;
 class machine {
 public:
 	machine() : m_cpu(this), m_pit(this), m_pic{ {this, 0, "MASTER PIC"}, {this, 1, "SLAVE PIC"} }, m_pci(this), m_cmos(this), m_nv2a(this),
-	m_vga(this), m_smbus(this), m_eeprom(log_module::eeprom), m_smc(this, log_module::smc), m_adm1032(log_module::adm1032), m_conexant(log_module::conexant) {}
+	m_vga(this), m_smbus(this), m_eeprom(log_module::eeprom), m_smc(this, log_module::smc), m_adm1032(log_module::adm1032), m_conexant(log_module::conexant),
+	m_usb0(this) {}
 	bool init(const init_info_t &init_info)
 	{
 		if (!m_cpu.init(init_info)) {
@@ -62,6 +64,9 @@ public:
 			return false;
 		}
 		if (!m_conexant.init()) {
+			return false;
+		}
+		if (!m_usb0.init()) {
 			return false;
 		}
 		return true;
@@ -115,6 +120,9 @@ public:
 		}
 		else if constexpr (std::is_same_v<T, conexant>) {
 			return m_conexant;
+		}
+		else if constexpr (std::is_same_v<T, usb0>) {
+			return m_usb0;
 		}
 		else if constexpr (std::is_same_v<T, nv2a>) {
 			return m_nv2a;
@@ -187,7 +195,20 @@ public:
 		m_cmos.update_io_logging();
 		m_nv2a.apply_log_settings();
 		m_smbus.update_io_logging();
+		m_usb0.update_io_logging();
 		mem_init_region_io(m_cpu.get_lc86cpu(), 0, 0, true, {}, m_cpu.get_lc86cpu(), true, 3); // trigger the update in lib86cpu too
+	}
+	template<log_module name, bool check_if>
+	void log_write(const std::unordered_map<uint32_t, const std::string> &regs_info, uint32_t addr, uint32_t value)
+	{
+		const auto it = regs_info.find(addr & ~3);
+		logger<log_lv::debug, name, check_if>("Write at %s (0x%08X) of value 0x%08X", it != regs_info.end() ? it->second.c_str() : "UNKNOWN", addr, value);
+	}
+	template<log_module name, bool check_if>
+	void log_read(const std::unordered_map<uint32_t, const std::string> &regs_info, uint32_t addr, uint32_t value)
+	{
+		const auto it = regs_info.find(addr & ~3);
+		logger<log_lv::debug, name, check_if>("Read at %s (0x%08X) of value 0x%08X", it != regs_info.end() ? it->second.c_str() : "UNKNOWN", addr, value);
 	}
 
 private:
@@ -203,4 +224,5 @@ private:
 	smc m_smc;
 	adm1032 m_adm1032;
 	conexant m_conexant;
+	usb0 m_usb0;
 };

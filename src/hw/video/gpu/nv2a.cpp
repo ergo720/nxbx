@@ -91,4 +91,5 @@ nv2a::apply_log_settings()
 	m_pvga.update_io();
 	m_pvideo.update_io();
 	m_puser.update_io();
+	m_pgraph.update_io();
 }

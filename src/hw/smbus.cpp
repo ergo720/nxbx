@@ -157,7 +157,7 @@ void smbus::end_cycle(smbus_device *dev, T value)
 			return;
 		}
 		else {
-			std::logic_error("Out of range cycle type");
+			throw std::logic_error("Out of range cycle type");
 		}
 	}
 	else {
