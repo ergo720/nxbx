@@ -20,7 +20,7 @@ void pci::write8(uint32_t addr, const uint8_t value)
 	int offset = addr & 3;
 	switch (addr & ~3)
 	{
-	case 0xCF8: // PCI Configuration Address Register
+	case PCI_CONFIG_ADDRESS: // PCI Configuration Address Register
 		offset *= 8;
 
 		configuration_address_register &= ~(0xFF << offset);
@@ -33,7 +33,7 @@ void pci::write8(uint32_t addr, const uint8_t value)
 		configuration_cycle = configuration_address_register >> 31;
 		break;
 
-	case 0xCFC: // PCI Configuration Data Register
+	case PCI_CONFIG_DATA: // PCI Configuration Data Register
 		if (configuration_cycle) {
 			int bus = (configuration_address_register >> 16) & 0xFF;
 			int device = (configuration_address_register >> 11) & 0x1F;
@@ -64,11 +64,11 @@ uint8_t pci::read8(uint32_t addr)
 	uint32_t value = -1;
 	switch (addr & ~3)
 	{
-	case 0xCF8: // PCI Status Register
+	case PCI_CONFIG_ADDRESS: // PCI Status Register
 		value = configuration_address_register >> (offset * 8) & 0xFF;
 		break;
 
-	case 0xCFC: { // TODO: Type 0 / Type 1 configuration cycles
+	case PCI_CONFIG_DATA: { // TODO: Type 0 / Type 1 configuration cycles
 		if (configuration_cycle) {
 			int bus = configuration_address_register >> 16 & 0xFF;
 			int device = (configuration_address_register >> 11) & 0x1F;

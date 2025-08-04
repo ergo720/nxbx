@@ -7,6 +7,12 @@
 #include <stdint.h>
 #include <mutex>
 
+#define PIC_MASTER_CMD          0x20
+#define PIC_MASTER_DATA         0x21
+#define PIC_MASTER_ELCR         0x4D0
+#define PIC_SLAVE_CMD           0xA0
+#define PIC_SLAVE_DATA          0xA1
+#define PIC_SLAVE_ELCR          0x4D1
 
 class machine;
 
@@ -49,6 +55,14 @@ private:
 	unsigned icw_idx;
 	unsigned idx; // 0: master, 1: slave
 	static inline std::mutex m_mtx;
+	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+		{ PIC_MASTER_CMD, "MASTER_COMMAND" },
+		{ PIC_MASTER_DATA, "MASTER_DATA" },
+		{ PIC_MASTER_ELCR, "MASTER_ELCR" },
+		{ PIC_SLAVE_CMD, "SLAVE_COMMAND" },
+		{ PIC_SLAVE_DATA, "SLAVE_DATA" },
+		{ PIC_SLAVE_ELCR, "SLAVE_ELCR" },
+	};
 };
 
 uint16_t get_interrupt_for_cpu(void *opaque);

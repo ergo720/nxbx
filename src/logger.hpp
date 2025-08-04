@@ -11,11 +11,12 @@
 #include <array>
 #include <algorithm>
 #include <utility>
+#include <unordered_map>
 
 #define logger_en(lv, msg, ...) do { logger<log_lv::lv, log_module::MODULE_NAME, true>(msg __VA_OPT__(,) __VA_ARGS__); } while(0)
 #define logger_mod_en(lv, mod, msg, ...) do { logger<log_lv::lv, log_module::mod, true>(msg __VA_OPT__(,) __VA_ARGS__); } while(0)
-#define log_io_read() do { logger<log_lv::debug, log_module::MODULE_NAME, false>("Read at address 0x%08X of value 0x%08X", addr, value); } while(0)
-#define log_io_write() do { logger<log_lv::debug,log_module::MODULE_NAME, false>("Write at address 0x%08X of value 0x%08X", addr, value); } while(0)
+#define log_io_read() log_read<log_module::MODULE_NAME, false, 0>(m_regs_info, addr, value)
+#define log_io_write() log_write<log_module::MODULE_NAME, false, 0>(m_regs_info, addr, value)
 #define module_enabled() check_if_enabled<log_module::MODULE_NAME>()
 
 #define NUM_OF_LOG_MODULES32 std::to_underlying(log_module::max) / 32 + 1
@@ -261,4 +262,17 @@ inline void logger(log_module name, const char *msg, ...)
 	va_start(args, msg);
 	logger<lv, check_if>(name, msg, args);
 	va_end(args);
+}
+
+template<log_module name, bool check_if, uint32_t align_mask>
+void log_write(const std::unordered_map<uint32_t, const std::string> &regs_info, uint32_t addr, uint32_t value)
+{
+	const auto it = regs_info.find(addr & ~align_mask);
+	logger<log_lv::debug, name, check_if>("Write at %s (0x%08X) of value 0x%08X", it != regs_info.end() ? it->second.c_str() : "UNKNOWN", addr, value);
+}
+template<log_module name, bool check_if, uint32_t align_mask>
+void log_read(const std::unordered_map<uint32_t, const std::string> &regs_info, uint32_t addr, uint32_t value)
+{
+	const auto it = regs_info.find(addr & ~align_mask);
+	logger<log_lv::debug, name, check_if>("Read at %s (0x%08X) of value 0x%08X", it != regs_info.end() ? it->second.c_str() : "UNKNOWN", addr, value);
 }

@@ -7,9 +7,6 @@
 
 #define MODULE_NAME usb0
 
-#define usb0_log_read() m_machine->log_read<log_module::MODULE_NAME, false>(m_regs_info, addr, value);
-#define usb0_log_write() m_machine->log_write<log_module::MODULE_NAME, false>(m_regs_info, addr, value);
-
 #define CTRL_HCFS (3 << 6) // HostControllerFunctionalState
 #define CMD_ST_HCR (1 << 0) // SchedulingOverrunCount
 #define CMD_ST_SOC (3 << 16) // SchedulingOverrunCount
@@ -39,7 +36,7 @@ template<bool log>
 void usb0::write(uint32_t addr, const uint32_t value)
 {
 	if constexpr (log) {
-		usb0_log_write();
+		log_io_write();
 	}
 
 	switch (addr)
@@ -109,7 +106,7 @@ uint32_t usb0::read(uint32_t addr)
 	uint32_t value = REG_USB0(addr);
 
 	if constexpr (log) {
-		usb0_log_read();
+		log_io_read();
 	}
 
 	return value;

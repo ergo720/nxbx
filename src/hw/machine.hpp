@@ -198,18 +198,6 @@ public:
 		m_usb0.update_io_logging();
 		mem_init_region_io(m_cpu.get_lc86cpu(), 0, 0, true, {}, m_cpu.get_lc86cpu(), true, 3); // trigger the update in lib86cpu too
 	}
-	template<log_module name, bool check_if>
-	void log_write(const std::unordered_map<uint32_t, const std::string> &regs_info, uint32_t addr, uint32_t value)
-	{
-		const auto it = regs_info.find(addr & ~3);
-		logger<log_lv::debug, name, check_if>("Write at %s (0x%08X) of value 0x%08X", it != regs_info.end() ? it->second.c_str() : "UNKNOWN", addr, value);
-	}
-	template<log_module name, bool check_if>
-	void log_read(const std::unordered_map<uint32_t, const std::string> &regs_info, uint32_t addr, uint32_t value)
-	{
-		const auto it = regs_info.find(addr & ~3);
-		logger<log_lv::debug, name, check_if>("Read at %s (0x%08X) of value 0x%08X", it != regs_info.end() ? it->second.c_str() : "UNKNOWN", addr, value);
-	}
 
 private:
 	cpu m_cpu;

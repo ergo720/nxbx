@@ -8,6 +8,8 @@
 #include <unordered_map>
 #include <memory>
 
+#define PCI_CONFIG_ADDRESS 0xCF8
+#define PCI_CONFIG_DATA 0xCFC
 
 // Callback for when a byte in PCI memory is modified. "addr" is the offset, and "ptr" points to the base of the 256-byte block
 using pci_conf_write_cb = int(*)(uint8_t *ptr, uint8_t addr, uint8_t value, void *opaque);
@@ -47,4 +49,8 @@ private:
 	// Device configuration address space and write callbacks
 	std::unordered_map<uint32_t, std::unique_ptr<uint8_t[]>> configuration_address_spaces;
 	std::unordered_map<uint32_t, std::pair<pci_conf_write_cb, void *>> configuration_modification;
+	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+		{ PCI_CONFIG_ADDRESS, "CONFIGURATION_ADDRESS" },
+		{ PCI_CONFIG_DATA, "CONFIGURATION_DATA" },
+	};
 };

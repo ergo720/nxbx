@@ -16,6 +16,22 @@
 
 namespace kernel {
 	static uint64_t lost_clock_increment, last_us, curr_us;
+	static const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+		{ DBG_STR, "DBG_STR" },
+		{ SYS_TYPE, "SYS_TYPE" },
+		{ ABORT, "ABORT" },
+		{ CLOCK_INCREMENT_LOW, "CLOCK_INCREMENT_LOW"},
+		{ CLOCK_INCREMENT_HIGH, "CLOCK_INCREMENT_HIGH"},
+		{ BOOT_TIME_MS, "BOOT_TIME_MS"},
+		{ IO_START, "IO_START" },
+		{ IO_RETRY, "IO_RETRY" },
+		{ IO_QUERY, "IO_QUERY" },
+		{ IO_CHECK_ENQUEUE, "IO_CHECK_ENQUEUE" },
+		{ XE_DVD_XBE_LENGTH, "XE_DVD_XBE_LENGTH" },
+		{ XE_DVD_XBE_ADDR, "XE_DVD_XBE_ADDR" },
+		{ ACPI_TIME_LOW, "ACPI_TIME_LOW" },
+		{ ACPI_TIME_HIGH, "ACPI_TIME_HIGH" },
+	};
 
 	static uint64_t
 	calculate_clock_increment()
@@ -76,9 +92,6 @@ namespace kernel {
 		case ACPI_TIME_HIGH:
 			value = acpi_time >> 32;
 			break;
-
-		default:
-			logger_en(warn, "%s: unexpected I/O read at port 0x%" PRIX16, __func__, addr);
 		}
 
 		if constexpr (log) {
@@ -95,8 +108,7 @@ namespace kernel {
 			log_io_write();
 		}
 
-		switch (addr)
-		{
+		switch (addr) {
 		case DBG_STR: {
 			// The debug strings from nboxkrnl are 512 byte long at most
 			// Also, they might not be contiguous in physical memory, so we use mem_read_block_virt to avoid issues with allocations spanning pages
@@ -104,7 +116,7 @@ namespace kernel {
 			mem_read_block_virt(static_cast<cpu_t *>(opaque), value, sizeof(buff), buff);
 			logger_en(info, "%s", buff);
 		}
-		break;
+					break;
 
 		case ABORT:
 			console::get().exit();
@@ -125,9 +137,6 @@ namespace kernel {
 		case XE_DVD_XBE_ADDR:
 			mem_write_block_virt(static_cast<cpu_t *>(opaque), value, (uint32_t)io::xbe_path.size(), io::xbe_path.c_str());
 			break;
-
-		default:
-			logger_en(warn, "unexpected io write at port 0x%" PRIX16, addr);
 		}
 	}
 

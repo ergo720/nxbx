@@ -8,14 +8,6 @@
 #define MODULE_NAME smbus
 
 #define SMBUS_IRQ_NUM 11
-#define SMBUS_GS_addr 0xC000
-#define SMBUS_GE_addr 0xC002
-#define SMBUS_HA_addr 0xC004
-#define SMBUS_HD0_addr 0xC006
-#define SMBUS_HD1_addr 0xC007
-#define SMBUS_HC_addr 0xC008
-#define SMBUS_HB_addr 0xC009
-#define SMBUS_REG_off(x) ((x) - SMBUS_GS_addr)
 					  
 #define GS_ABRT_STS   (1 << 0) // write one to clear
 #define GS_COL_STS    (1 << 1) // write one to clear

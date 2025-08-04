@@ -6,6 +6,8 @@
 
 #include <stdint.h>
 
+#define PIT_CHANNEL0_DATA  0x40
+#define PIT_PORT_CMD       0x43
 
 class machine;
 
@@ -36,4 +38,8 @@ private:
 	pit_channel m_chan[3];
 	// NOTE: on the xbox, the pit frequency is 6% lower than the default one, see https://xboxdevwiki.net/Porting_an_Operating_System_to_the_Xbox_HOWTO#Timer_Frequency
 	static constexpr uint64_t clock_freq = 1125000;
+	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+		{ PIT_CHANNEL0_DATA, "CHANNEL0_DATA" },
+		{ PIT_PORT_CMD, "COMMAND" },
+	};
 };

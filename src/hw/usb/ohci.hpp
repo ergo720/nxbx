@@ -58,15 +58,15 @@ private:
 	usb_port m_port[4];
 	uint32_t m_regs[USB0_SIZE / 4];
 	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
-		{ REVISION, "HcRevision" },
-		{ CTRL, "HcControl" },
-		{ CMD_ST, "HcCommandStatus" },
-		{ RH_DESCRIPTOR_A, "HcRhDescriptorA"},
-		{ RH_DESCRIPTOR_B, "HcRhDescriptorB"},
-		{ RH_ST, "HcRhStatus"},
-		{ RH_PORT_ST(0), "HcRhPortStatus0" },
-		{ RH_PORT_ST(1), "HcRhPortStatus1" },
-		{ RH_PORT_ST(2), "HcRhPortStatus2" },
-		{ RH_PORT_ST(3), "HcRhPortStatus3" },
+		{ REVISION, "REVISION" },
+		{ CTRL, "CONTROL" },
+		{ CMD_ST, "COMMAND_STATUS" },
+		{ RH_DESCRIPTOR_A, "RHDESCRIPTORA"},
+		{ RH_DESCRIPTOR_B, "RHDESCRIPTORB"},
+		{ RH_ST, "RHSTATUS"},
+		{ RH_PORT_ST(0), "RHPORTSTATUS0" },
+		{ RH_PORT_ST(1), "RHPORTSTATUS1" },
+		{ RH_PORT_ST(2), "RHPORTSTATUS2" },
+		{ RH_PORT_ST(3), "RHPORTSTATUS3" },
 	};
 };

@@ -8,6 +8,14 @@
 #include <unordered_map>
 #include "../logger.hpp"
 
+#define SMBUS_GS_addr 0xC000
+#define SMBUS_GE_addr 0xC002
+#define SMBUS_HA_addr 0xC004
+#define SMBUS_HD0_addr 0xC006
+#define SMBUS_HD1_addr 0xC007
+#define SMBUS_HC_addr 0xC008
+#define SMBUS_HB_addr 0xC009
+#define SMBUS_REG_off(x) ((x) - SMBUS_GS_addr)
 
 class machine;
 
@@ -67,4 +75,13 @@ private:
 	uint8_t m_block_data[32];
 	unsigned m_block_off;
 	std::unordered_map<uint8_t, smbus_device *> m_devs;
+	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+		{ SMBUS_GS_addr, "STATUS" },
+		{ SMBUS_GE_addr, "CONTROL" },
+		{ SMBUS_HA_addr, "ADDRESS" },
+		{ SMBUS_HD0_addr, "DATA0" },
+		{ SMBUS_HD1_addr, "DATA1" },
+		{ SMBUS_HC_addr, "COMMAND" },
+		{ SMBUS_HB_addr, "FIFO" },
+	};
 };

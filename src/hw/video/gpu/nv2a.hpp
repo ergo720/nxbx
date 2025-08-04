@@ -76,8 +76,8 @@ private:
 	pgraph m_pgraph;
 };
 
-#define nv2a_log_read() m_machine->log_read<log_module::MODULE_NAME, false>(m_regs_info, addr, value);
-#define nv2a_log_write() m_machine->log_write<log_module::MODULE_NAME, false>(m_regs_info, addr, value);
+#define nv2a_log_read() log_read<log_module::MODULE_NAME, false, 3>(m_regs_info, addr, value);
+#define nv2a_log_write() log_write<log_module::MODULE_NAME, false, 3>(m_regs_info, addr, value);
 
 template<typename D, typename T, auto f, engine_endian is_be, uint32_t base = 0>
 T nv2a_read(uint32_t addr, void *opaque)

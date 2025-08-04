@@ -7,6 +7,9 @@
 #include <cstdint>
 #include <chrono>
 
+#define CMOS_PORT_CMD 0x70
+#define CMOS_PORT_DATA 0x71
+
 
 class machine;
 
@@ -36,4 +39,8 @@ private:
 	uint64_t lost_us;
 	std::time_t sys_time;
 	int64_t sys_time_bias; // difference between guest and host clocks
+	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+		{ CMOS_PORT_CMD, "COMMAND" },
+		{ CMOS_PORT_DATA, "DATA" },
+	};
 };

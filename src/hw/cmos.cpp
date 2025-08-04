@@ -48,7 +48,7 @@ uint8_t cmos::read8(uint32_t addr)
 {
 	uint8_t value = 0;
 
-	if (addr == 0x71) {
+	if (addr == CMOS_PORT_DATA) {
 		if ((reg_idx < 0xA) || (reg_idx == 0x7F)) {
 			tm *local_time;
 			if (local_time = std::localtime(&sys_time); local_time == nullptr) {
@@ -142,11 +142,11 @@ void cmos::write8(uint32_t addr, const uint8_t value)
 
 	switch (addr)
 	{
-	case 0x70:
+	case CMOS_PORT_CMD:
 		reg_idx = value;
 		break;
 
-	case 0x71:
+	case CMOS_PORT_DATA:
 		if ((reg_idx < 0xA) || (reg_idx == 0x7F)) {
 			tm *local_time;
 			if (local_time = std::localtime(&sys_time); local_time == nullptr) {
