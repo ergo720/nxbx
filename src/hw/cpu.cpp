@@ -266,10 +266,11 @@ cpu::init(const init_info_t &init_info)
 uint64_t
 cpu::check_periodic_events(uint64_t now)
 {
-	std::array<uint64_t, 3> dev_timeout;
+	std::array<uint64_t, 4> dev_timeout;
 	dev_timeout[0] = m_machine->get<pit>().get_next_irq_time(now);
 	dev_timeout[1] = m_machine->get<cmos>().get_next_update_time(now);
 	dev_timeout[2] = m_machine->get<nv2a>().get_next_update_time(now);
+	dev_timeout[3] = m_machine->get<usb0>().get_next_update_time(now);
 
 	return *std::min_element(dev_timeout.begin(), dev_timeout.end());
 }

@@ -64,7 +64,7 @@ namespace timer {
 		LARGE_INTEGER now;
 		QueryPerformanceCounter(&now);
 		uint64_t elapsed_us = static_cast<uint64_t>(now.QuadPart) - last_time;
-		return util::muldiv128(elapsed_us, host_freq, dev_freq);
+		return util::muldiv128(elapsed_us, dev_freq, host_freq);
 #else
 		return util::muldiv128(get_now(), dev_freq, ticks_per_second);
 #endif

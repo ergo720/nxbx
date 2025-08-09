@@ -92,6 +92,7 @@ set(HEADERS
  "${NXBX_ROOT_DIR}/src/hw/smbus.hpp"
  "${NXBX_ROOT_DIR}/src/hw/smc.hpp"
  "${NXBX_ROOT_DIR}/src/hw/usb/ohci.hpp"
+ "${NXBX_ROOT_DIR}/src/hw/usb/ohci_reg_defs.hpp"
  "${NXBX_ROOT_DIR}/src/hw/video/conexant.hpp"
  "${NXBX_ROOT_DIR}/src/hw/video/vga.hpp"
  "${NXBX_ROOT_DIR}/src/hw/video/gpu/nv2a.hpp"
