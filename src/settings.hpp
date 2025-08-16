@@ -22,6 +22,7 @@ public:
 	void save();
 
 	core_s m_core;
+	dbg_s m_dbg;
 
 private:
 	settings() {}
@@ -41,6 +42,22 @@ private:
 		static constexpr const char *log_level = "log_level";
 		static constexpr const char *log_modules1 = "log_modules1";
 	} m_core_str;
+	struct dbg_str {
+		static constexpr const char *name = "debugger";
+		static constexpr const char *version = "version";
+		static constexpr const char *width = "width";
+		static constexpr const char *height = "height";
+		static constexpr const char *txt_r = "text_red";
+		static constexpr const char *txt_g = "text_green";
+		static constexpr const char *txt_b = "text_blue";
+		static constexpr const char *brk_r = "breakpoint_red";
+		static constexpr const char *brk_g = "breakpoint_green";
+		static constexpr const char *brk_b = "breakpoint_blue";
+		static constexpr const char *bkg_r = "background_red";
+		static constexpr const char *bkg_g = "background_green";
+		static constexpr const char *bkg_b = "background_blue";
+		static constexpr const char *bkr = "breakpoint_address";
+	} m_dbg_str;
 	std::string m_ini_path;
 	console_t m_console_type;
 	static constexpr uint32_t m_version = 1;

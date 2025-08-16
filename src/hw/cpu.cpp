@@ -114,14 +114,15 @@ cpu::init(const init_info_t &init_info)
 	}
 
 	// Init lib86cpu
-	if (!LC86_SUCCESS(cpu_new(m_ramsize, m_lc86cpu, { get_interrupt_for_cpu, &m_machine->get<pic>() }, "nboxkrnl"))) {
+	if (!LC86_SUCCESS(cpu_new(m_ramsize, m_lc86cpu, { get_interrupt_for_cpu, &m_machine->get<pic>() }))) {
 		logger_en(error, "Failed to create cpu instance");
 		return false;
 	}
 
 	register_log_func(cpu_logger);
 
-	cpu_set_flags(m_lc86cpu, static_cast<uint32_t>(init_info.m_syntax) | (init_info.m_use_dbg ? CPU_DBG_PRESENT : 0));
+	m_is_dbg_present = init_info.m_use_dbg;
+	cpu_set_flags(m_lc86cpu, static_cast<uint32_t>(init_info.m_syntax) | (m_is_dbg_present ? CPU_DBG_PRESENT : 0));
 
 	if (!LC86_SUCCESS(mem_init_region_ram(m_lc86cpu, 0, m_ramsize))) {
 		logger_en(error, "Failed to initialize ram memory");
@@ -260,6 +261,33 @@ cpu::init(const init_info_t &init_info)
 	open_keys();
 	mem_write_block_virt(m_lc86cpu, 0x80400000, 32, keys);
 
+	if (m_is_dbg_present) {
+		const auto &dbg = nxbx::get_settings<dbg_s>();
+		g_dbg_opt.lock.lock();
+		if (dbg.version == g_dbg_opt.id) { // only write the settings if we support the version used by lib86dbg
+			g_dbg_opt.width = dbg.width;
+			g_dbg_opt.height = dbg.height;
+			g_dbg_opt.txt_col[0] = dbg.txt_col[0];
+			g_dbg_opt.txt_col[1] = dbg.txt_col[1];
+			g_dbg_opt.txt_col[2] = dbg.txt_col[2];
+			g_dbg_opt.brk_col[0] = dbg.brk_col[0];
+			g_dbg_opt.brk_col[1] = dbg.brk_col[1];
+			g_dbg_opt.brk_col[2] = dbg.brk_col[2];
+			g_dbg_opt.bkg_col[0] = dbg.bkg_col[0];
+			g_dbg_opt.bkg_col[1] = dbg.bkg_col[1];
+			g_dbg_opt.bkg_col[2] = dbg.bkg_col[2];
+			g_dbg_opt.brk_map.clear();
+			std::for_each(dbg.brk_map.begin(), dbg.brk_map.end(), [](const decltype(dbg.brk_map)::value_type &elem)
+				{
+					g_dbg_opt.brk_map.emplace(elem.first, elem.second);
+				});
+		}
+		else {
+			logger_mod_en(info, nxbx, "Mismatch between the debugger settings version of nxbx and lib86dbg");
+		}
+		g_dbg_opt.lock.unlock();
+	}
+
 	return true;
 }
 
@@ -306,6 +334,32 @@ cpu::exit()
 void
 cpu::deinit()
 {
+	if (m_is_dbg_present) {
+		auto &dbg = nxbx::get_settings<dbg_s>();
+		g_dbg_opt.lock.lock();
+		if (dbg.version == g_dbg_opt.id) { // only copy the settings if we support the version used by lib86dbg
+			dbg.width = g_dbg_opt.width;
+			dbg.height = g_dbg_opt.height;
+			dbg.txt_col[0] = g_dbg_opt.txt_col[0];
+			dbg.txt_col[1] = g_dbg_opt.txt_col[1];
+			dbg.txt_col[2] = g_dbg_opt.txt_col[2];
+			dbg.brk_col[0] = g_dbg_opt.brk_col[0];
+			dbg.brk_col[1] = g_dbg_opt.brk_col[1];
+			dbg.brk_col[2] = g_dbg_opt.brk_col[2];
+			dbg.bkg_col[0] = g_dbg_opt.bkg_col[0];
+			dbg.bkg_col[1] = g_dbg_opt.bkg_col[1];
+			dbg.bkg_col[2] = g_dbg_opt.bkg_col[2];
+			dbg.brk_map.clear();
+			std:for_each(g_dbg_opt.brk_map.begin(), g_dbg_opt.brk_map.end(), [&dbg](const decltype(g_dbg_opt.brk_map)::value_type &elem) {
+				dbg.brk_map.emplace(elem.first, elem.second);
+				});
+		}
+		else {
+			dbg.version = g_dbg_opt.id; // adopt the version currently used by lib86dbg
+		}
+		g_dbg_opt.lock.unlock();
+	}
+
 	if (m_lc86cpu) {
 		cpu_free(m_lc86cpu);
 		m_lc86cpu = nullptr;

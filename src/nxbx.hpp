@@ -54,6 +54,16 @@ struct core_s {
 	uint32_t log_modules[NUM_OF_LOG_MODULES32];
 };
 
+struct dbg_s {
+	uint32_t version;
+	int width;
+	int height;
+	float txt_col[3];
+	float brk_col[3];
+	float bkg_col[3];
+	std::unordered_map<uint32_t, int> brk_map;
+};
+
 namespace nxbx {
 	bool init_console(const init_info_t &init_info);
 	bool validate_input_file(init_info_t &init_info, std::string_view arg_str);

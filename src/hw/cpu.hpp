@@ -35,6 +35,7 @@ private:
 	machine *const m_machine;
 	cpu_t *m_lc86cpu;
 	uint32_t m_ramsize;
+	bool m_is_dbg_present;
 };
 
 template<typename D, typename T, auto f, uint32_t base = 0>

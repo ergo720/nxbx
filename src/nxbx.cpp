@@ -63,6 +63,9 @@ namespace nxbx {
 		if constexpr (std::is_same_v<T, core_s>) {
 			return settings::get().m_core;
 		}
+		else if constexpr (std::is_same_v<T, dbg_s>) {
+			return settings::get().m_dbg;
+		}
 		else {
 			throw std::logic_error("Attempt to access unknown settings");
 		}
@@ -118,4 +121,5 @@ namespace nxbx {
 	}
 
 	template core_s &get_settings();
+	template dbg_s &get_settings();
 }

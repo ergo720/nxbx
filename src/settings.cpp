@@ -5,6 +5,7 @@
 #include "settings.hpp"
 #include "files.hpp"
 #include "logger.hpp"
+#include <charconv>
 
 
 bool
@@ -59,8 +60,46 @@ settings::load_config_values()
 	else {
 		// ...otherwise, use default log module settings
 		m_core.log_modules[0] = default_log_modules1;
-		logger("Mismatching logger version, using default log module settings");
+		logger("Mismatching log version, using default log module settings");
 	}
+
+	// debugger settings
+	m_dbg.version = m_ini.GetLongValue(m_dbg_str.name, m_dbg_str.version, -1);
+	// We use the same default values that lib86dbg uses
+	m_dbg.width = m_ini.GetLongValue(m_dbg_str.name, m_dbg_str.width, 1280);
+	m_dbg.height = m_ini.GetLongValue(m_dbg_str.name, m_dbg_str.height, 720);
+	m_dbg.txt_col[0] = static_cast<float>(m_ini.GetDoubleValue(m_dbg_str.name, m_dbg_str.txt_r, 1.0));
+	m_dbg.txt_col[1] = static_cast<float>(m_ini.GetDoubleValue(m_dbg_str.name, m_dbg_str.txt_g, 1.0));
+	m_dbg.txt_col[2] = static_cast<float>(m_ini.GetDoubleValue(m_dbg_str.name, m_dbg_str.txt_b, 1.0));
+	m_dbg.brk_col[0] = static_cast<float>(m_ini.GetDoubleValue(m_dbg_str.name, m_dbg_str.brk_r, 1.0));
+	m_dbg.brk_col[1] = static_cast<float>(m_ini.GetDoubleValue(m_dbg_str.name, m_dbg_str.brk_g, 0.0));
+	m_dbg.brk_col[2] = static_cast<float>(m_ini.GetDoubleValue(m_dbg_str.name, m_dbg_str.brk_b, 0.0));
+	m_dbg.bkg_col[0] = static_cast<float>(m_ini.GetDoubleValue(m_dbg_str.name, m_dbg_str.bkg_r, 0.0));
+	m_dbg.bkg_col[1] = static_cast<float>(m_ini.GetDoubleValue(m_dbg_str.name, m_dbg_str.bkg_g, 0.0));
+	m_dbg.bkg_col[2] = static_cast<float>(m_ini.GetDoubleValue(m_dbg_str.name, m_dbg_str.bkg_b, 0.0));
+	std::list<CSimpleIniA::Entry> si_list;
+	if (m_ini.GetAllValues(m_dbg_str.name, m_dbg_str.bkr, si_list)) {
+		for (const auto &elem : si_list) {
+			std::string_view value(elem.pItem);
+			auto pos = value.find_first_of(';');
+			if (pos == std::string_view::npos) {
+				continue; // missing separator between values
+			}
+			std::string_view addr_str = value.substr(0, pos);
+			std::string_view type_str = value.substr(pos + 1);
+			uint32_t addr, type;
+			auto ret = std::from_chars(addr_str.data(), addr_str.data() + addr_str.size(), addr, 16);
+			if ((ret.ec == std::errc::invalid_argument) || (ret.ec == std::errc::result_out_of_range)) {
+				continue; // garbage value
+			}
+			ret = std::from_chars(type_str.data(), type_str.data() + type_str.size(), type, 10);
+			if ((ret.ec == std::errc::invalid_argument) || (ret.ec == std::errc::result_out_of_range)) {
+				continue; // garbage value
+			}
+			m_dbg.brk_map.emplace(addr, type);
+		}
+	}
+
 	nxbx::update_logging();
 }
 
@@ -73,6 +112,36 @@ settings::save_config_values()
 	set_int64_value(m_core_str.name, m_core_str.sys_time_bias, m_core.sys_time_bias, false);
 	m_ini.SetLongValue(m_core_str.name, m_core_str.log_level, (int32_t)m_core.log_level, nullptr, false, true);
 	set_uint32_value(m_core_str.name, m_core_str.log_modules1, m_core.log_modules[0], true);
+
+	// debugger settings
+	m_ini.Delete(m_dbg_str.name, nullptr, true);
+	m_ini.SetLongValue(m_dbg_str.name, m_dbg_str.version, m_dbg.version);
+	m_ini.SetLongValue(m_dbg_str.name, m_dbg_str.width, m_dbg.width);
+	m_ini.SetLongValue(m_dbg_str.name, m_dbg_str.height, m_dbg.height);
+	m_ini.SetDoubleValue(m_dbg_str.name, m_dbg_str.txt_r, m_dbg.txt_col[0]);
+	m_ini.SetDoubleValue(m_dbg_str.name, m_dbg_str.txt_g, m_dbg.txt_col[1]);
+	m_ini.SetDoubleValue(m_dbg_str.name, m_dbg_str.txt_b, m_dbg.txt_col[2]);
+	m_ini.SetDoubleValue(m_dbg_str.name, m_dbg_str.brk_r, m_dbg.brk_col[0]);
+	m_ini.SetDoubleValue(m_dbg_str.name, m_dbg_str.brk_g, m_dbg.brk_col[1]);
+	m_ini.SetDoubleValue(m_dbg_str.name, m_dbg_str.brk_b, m_dbg.brk_col[2]);
+	m_ini.SetDoubleValue(m_dbg_str.name, m_dbg_str.bkg_r, m_dbg.bkg_col[0]);
+	m_ini.SetDoubleValue(m_dbg_str.name, m_dbg_str.bkg_g, m_dbg.bkg_col[1]);
+	m_ini.SetDoubleValue(m_dbg_str.name, m_dbg_str.bkg_b, m_dbg.bkg_col[2]);
+	for (const auto &elem : m_dbg.brk_map) {
+		std::array<char, 20> temp;
+		uint32_t addr = elem.first, type = elem.second;
+		auto ret = std::to_chars(temp.data(), temp.data() + temp.size(), addr, 16);
+		if (ret.ec == std::errc::value_too_large) {
+			continue;
+		}
+		*ret.ptr++ = ';';
+		ret = std::to_chars(ret.ptr, temp.data() + temp.size(), type, 10);
+		if (ret.ec == std::errc::value_too_large) {
+			continue;
+		}
+		*ret.ptr = '\0';
+		m_ini.SetValue(m_dbg_str.name, m_dbg_str.bkr, temp.data());
+	}
 
 	return m_ini.SaveFile(m_ini_path.c_str()) >= 0;
 }
