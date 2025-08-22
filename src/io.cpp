@@ -62,7 +62,7 @@ namespace io {
 
 	// Generic i/o request from the guest
 	struct packed_request_xx_t {
-		uint32_t handle; // file handle (it's the address of the kernel file info object that tracks the file)
+		uint32_t handle; // file handle
 	};
 
 	// Specialized version of packed_request_xx_t for read/write requests only
@@ -70,7 +70,7 @@ namespace io {
 		int64_t offset; // file offset from which to start the I/O
 		uint32_t size; // bytes to transfer
 		uint32_t address; // virtual address of the data to transfer
-		uint32_t handle; // file handle (it's the address of the kernel file info object that tracks the file)
+		uint32_t handle; // file handle
 		uint32_t timestamp; // fatx timestamp
 	};
 
@@ -78,7 +78,7 @@ namespace io {
 	struct packed_request_oc_t {
 		int64_t initial_size; // file initial size
 		uint32_t size; // size of file path
-		uint32_t handle; // file handle (it's the address of the kernel file info object that tracks the file)
+		uint32_t handle; // file handle
 		uint32_t path; // file path address
 		uint32_t attributes; // file attributes (only uses a single byte really)
 		uint32_t timestamp; // file timestamp
@@ -194,8 +194,8 @@ namespace io {
 	static std::jthread jthr;
 	static std::deque<std::unique_ptr<request_t>> curr_io_queue;
 	static std::vector<std::unique_ptr<request_t>> pending_io_vec;
-	static std::unordered_map<uint64_t, std::unique_ptr<request_t>> completed_io_info;
-	static std::array<std::map<uint64_t, std::unique_ptr<file_info_base_t>>, NUM_OF_DEVS> xbox_handle_map;
+	static std::unordered_map<uint32_t, std::unique_ptr<request_t>> completed_io_info;
+	static std::array<std::map<uint32_t, std::unique_ptr<file_info_base_t>>, NUM_OF_DEVS> xbox_handle_map;
 	static std::mutex queue_mtx;
 	static std::mutex completed_io_mtx;
 	static std::atomic_flag pending_io;
@@ -354,7 +354,7 @@ namespace io {
 							io_result.file_size = file_info.size;
 							io_result.xdvdfs_timestamp = file_info.timestamp;
 							xbox_handle_map[dev].emplace(curr_oc_request->handle, std::move(std::make_unique<file_info_xdvdfs_t>(std::move(*opt), relative_path, file_info.offset)));
-							logger_en(info, "Opened %s with handle %" PRIu64 " and path %s", file_info.is_directory ? "directory" : "file", curr_oc_request->handle, relative_path.c_str());
+							logger_en(info, "Opened %s with handle 0x%08" PRIX32 " and path %s", file_info.is_directory ? "directory" : "file", curr_oc_request->handle, relative_path.c_str());
 						}
 					}
 				}
@@ -362,7 +362,7 @@ namespace io {
 					const auto add_to_map = [curr_oc_request, dev, &relative_path](auto &&opt, info_block_oc_t *io_result, uint64_t dirent_offset, fatx::DIRENT &io_dirent) {
 							// NOTE: this insertion will fail when the guest creates a new handle to the same file. This, because it will pass the same host handle, and std::unordered_map
 							// doesn't allow duplicated keys. This is ok though, because we can reuse the same std::fstream for the same file and it will have the same path too
-							logger_en(info, "Opened %s with handle %" PRIu64 " and path %s", opt->is_open() ? "file" : "directory", curr_oc_request->handle, relative_path.c_str());
+							logger_en(info, "Opened %s with handle 0x%08" PRIX32 " and path %s", opt->is_open() ? "file" : "directory", curr_oc_request->handle, relative_path.c_str());
 							xbox_handle_map[dev].emplace(curr_oc_request->handle, std::move(std::make_unique<file_info_fatx_t>(std::move(*opt), relative_path, dirent_offset, io_dirent)));
 							io_result->header.status = success;
 							io_result->file_size = io_dirent.size;
@@ -520,7 +520,7 @@ namespace io {
 			std::fill_n((char *)&io_result, sizeof(io_result), 0);
 			auto it = xbox_handle_map[dev].find(host_io_request->handle);
 			if (it == xbox_handle_map[dev].end()) [[unlikely]] {
-				logger_en(warn, "Handle %" PRIu64 " not found", host_io_request->handle); // this should not happen...
+				logger_en(warn, "Handle 0x%08" PRIX32 " not found", host_io_request->handle); // this should not happen...
 				io_result.status = error;
 				completed_io_mtx.lock();
 				completed_io_info.emplace(host_io_request->id, std::move(host_io_request));
@@ -538,7 +538,7 @@ namespace io {
 						fatx::driver::get(dev).flush_dirent_for_file(file_info_fatx->dirent, file_info_fatx->dirent_offset);
 					}
 				}
-				logger_en(info, "Closed file handle %" PRIu64 " with path %s", it->first, it->second->path.c_str());
+				logger_en(info, "Closed file handle 0x%08" PRIX32 " with path %s", it->first, it->second->path.c_str());
 				xbox_handle_map[dev].erase(it);
 				break;
 
@@ -578,7 +578,7 @@ namespace io {
 					}
 					if (!fs->is_open()) [[unlikely]] {
 						// Read operation on a directory (this should not happen...)
-						logger_en(warn, "Read operation to directory handle %" PRIu64 " with path %s", it->first, it->second->path.c_str());
+						logger_en(warn, "Read operation to directory handle 0x%08" PRIX32 " with path %s", it->first, it->second->path.c_str());
 						break;
 					}
 					fs->seekg(curr_rw_request->offset + offset);
@@ -589,10 +589,10 @@ namespace io {
 						}
 						io_result.status = success;
 						io_result.info = static_cast<info_t>(fs->gcount());
-						logger_en(info, "Read operation to file handle %" PRIu64 ", offset=0x%08" PRIX32 ", size=0x%08" PRIX32 ", actual bytes transferred=0x%08" PRIX32 " -> %s",
+						logger_en(info, "Read operation to file handle 0x%08" PRIX32 ", offset=0x%016" PRIX64 ", size=0x%08" PRIX32 ", actual bytes transferred=0x%08" PRIX32 " -> %s",
 							it->first, curr_rw_request->offset, curr_rw_request->size, io_result.info, fs->good() ? "OK!" : "EOF!");
 					} else {
-						logger_en(info, "Read operation to file handle %" PRIu64 " with path %s, offset=0x%08" PRIX32 ", size=0x%08" PRIX32 " -> FAILED!",
+						logger_en(info, "Read operation to file handle 0x%08" PRIX32 " with path %s, offset=0x%016" PRIX64 ", size=0x%08" PRIX32 " -> FAILED!",
 							it->first, it->second->path.c_str(), curr_rw_request->offset, curr_rw_request->size);
 					}
 					fs->clear();
@@ -632,7 +632,7 @@ namespace io {
 					} else {
 						if (!fs->is_open()) [[unlikely]] {
 							// Write operation on a directory (this should not happen...)
-							logger_en(warn, "Write operation to directory handle %" PRIu64 " with path %s", it->first, it->second->path.c_str());
+							logger_en(warn, "Write operation to directory handle 0x%08" PRIX32 " with path %s", it->first, it->second->path.c_str());
 							break;
 						}
 						fs->seekg(curr_rw_request->offset);
@@ -640,7 +640,7 @@ namespace io {
 						fatx::DIRENT file_dirent = static_cast<file_info_fatx_t &&>(*it->second).dirent;
 						if (!fs->good() || (fatx::driver::get(dev).append_clusters_to_file(file_dirent, curr_rw_request->offset, curr_rw_request->size, it->second->path) != success)) {
 							fs->clear();
-							logger_en(info, "Write operation to file handle %" PRIu64 " with path %s, offset=0x%08" PRIX32 ", size=0x%08" PRIX32 " -> FAILED!",
+							logger_en(info, "Write operation to file handle 0x%08" PRIX32 " with path %s, offset=0x%016" PRIX64 ", size=0x%08" PRIX32 " -> FAILED!",
 								it->first, it->second->path.c_str(), curr_rw_request->offset, curr_rw_request->size);
 						} else {
 							static_cast<file_info_fatx_t &&>(*it->second).set_dirent(file_dirent);
@@ -648,7 +648,7 @@ namespace io {
 							static_cast<file_info_fatx_t &&>(*it->second).last_write_time(curr_rw_request->timestamp);
 							io_result.status = success;
 							io_result.info = static_cast<info_t>(curr_rw_request->size);
-							logger_en(info, "Write operation to file handle %" PRIu64 ", offset=0x%08" PRIX32 ", size=0x%08" PRIX32 " -> OK!",
+							logger_en(info, "Write operation to file handle 0x%08" PRIX32 ", offset=0x%016" PRIX64 ", size=0x%08" PRIX32 " -> OK!",
 								it->first, curr_rw_request->offset, curr_rw_request->size);
 						}
 					}
