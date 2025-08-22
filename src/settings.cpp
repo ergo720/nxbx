@@ -77,26 +77,54 @@ settings::load_config_values()
 	m_dbg.bkg_col[0] = static_cast<float>(m_ini.GetDoubleValue(m_dbg_str.name, m_dbg_str.bkg_r, 0.0));
 	m_dbg.bkg_col[1] = static_cast<float>(m_ini.GetDoubleValue(m_dbg_str.name, m_dbg_str.bkg_g, 0.0));
 	m_dbg.bkg_col[2] = static_cast<float>(m_ini.GetDoubleValue(m_dbg_str.name, m_dbg_str.bkg_b, 0.0));
+	m_dbg.reg_col[0] = static_cast<float>(m_ini.GetDoubleValue(m_dbg_str.name, m_dbg_str.reg_r, 1.0));
+	m_dbg.reg_col[1] = static_cast<float>(m_ini.GetDoubleValue(m_dbg_str.name, m_dbg_str.reg_g, 0.0));
+	m_dbg.reg_col[2] = static_cast<float>(m_ini.GetDoubleValue(m_dbg_str.name, m_dbg_str.reg_b, 0.0));
+	{
+		std::string str(m_dbg_str.mem_addr);
+		for (unsigned i = 0; i < 4; ++i) {
+			str.replace(str.size() - 1, 1, 1, '0' + i);
+			m_dbg.mem_addr[i] = get_uint32_value(m_dbg_str.name, str.c_str(), 0);
+		}
+	}
+	m_dbg.mem_active = m_ini.GetLongValue(m_dbg_str.name, m_dbg_str.mem_active, 0);
 	std::list<CSimpleIniA::Entry> si_list;
+	if (m_ini.GetAllValues(m_dbg_str.name, m_dbg_str.wp, si_list)) {
+		for (const auto &elem : si_list) {
+			uint32_t value[4]; // addr;idx;size;type
+			std::string_view elem_str(elem.pItem);
+			for (unsigned i = 0; i < 3; ++i) {
+				size_t pos = elem_str.find_first_of(';');
+				if (pos == std::string_view::npos) {
+					continue; // missing separator between values
+				}
+				std::string_view value_str = elem_str.substr(0, pos);
+				auto ret = std::from_chars(value_str.data(), value_str.data() + value_str.size(), value[i], i == 0 ? 16 : 10);
+				if ((ret.ec == std::errc::invalid_argument) || (ret.ec == std::errc::result_out_of_range)) {
+					continue; // garbage value
+				}
+				elem_str = elem_str.substr(pos + 1);
+			}
+			auto ret = std::from_chars(elem_str.data(), elem_str.data() + elem_str.size(), value[3], 10);
+			if ((ret.ec == std::errc::invalid_argument) || (ret.ec == std::errc::result_out_of_range)) {
+				continue; // garbage value
+			}
+
+			m_dbg.wp_arr[value[1]].addr = value[0];
+			m_dbg.wp_arr[value[1]].size = value[2] & 3;
+			m_dbg.wp_arr[value[1]].type = value[3] & 3;
+		}
+	}
+	si_list.clear();
 	if (m_ini.GetAllValues(m_dbg_str.name, m_dbg_str.bkr, si_list)) {
 		for (const auto &elem : si_list) {
-			std::string_view value(elem.pItem);
-			auto pos = value.find_first_of(';');
-			if (pos == std::string_view::npos) {
-				continue; // missing separator between values
-			}
-			std::string_view addr_str = value.substr(0, pos);
-			std::string_view type_str = value.substr(pos + 1);
-			uint32_t addr, type;
+			std::string_view addr_str(elem.pItem);
+			uint32_t addr;
 			auto ret = std::from_chars(addr_str.data(), addr_str.data() + addr_str.size(), addr, 16);
 			if ((ret.ec == std::errc::invalid_argument) || (ret.ec == std::errc::result_out_of_range)) {
 				continue; // garbage value
 			}
-			ret = std::from_chars(type_str.data(), type_str.data() + type_str.size(), type, 10);
-			if ((ret.ec == std::errc::invalid_argument) || (ret.ec == std::errc::result_out_of_range)) {
-				continue; // garbage value
-			}
-			m_dbg.brk_map.emplace(addr, type);
+			m_dbg.brk_vec.emplace_back(addr);
 		}
 	}
 
@@ -127,15 +155,48 @@ settings::save_config_values()
 	m_ini.SetDoubleValue(m_dbg_str.name, m_dbg_str.bkg_r, m_dbg.bkg_col[0]);
 	m_ini.SetDoubleValue(m_dbg_str.name, m_dbg_str.bkg_g, m_dbg.bkg_col[1]);
 	m_ini.SetDoubleValue(m_dbg_str.name, m_dbg_str.bkg_b, m_dbg.bkg_col[2]);
-	for (const auto &elem : m_dbg.brk_map) {
-		std::array<char, 20> temp;
-		uint32_t addr = elem.first, type = elem.second;
+	m_ini.SetDoubleValue(m_dbg_str.name, m_dbg_str.reg_r, m_dbg.reg_col[0]);
+	m_ini.SetDoubleValue(m_dbg_str.name, m_dbg_str.reg_g, m_dbg.reg_col[1]);
+	m_ini.SetDoubleValue(m_dbg_str.name, m_dbg_str.reg_b, m_dbg.reg_col[2]);
+	{
+		std::string str(m_dbg_str.mem_addr);
+		for (unsigned i = 0; i < 4; ++i) {
+			str.replace(str.size() - 1, 1, 1, '0' + i);
+			set_uint32_value(m_dbg_str.name, str.c_str(), m_dbg.mem_addr[i], true);
+		}
+	}
+	m_ini.SetLongValue(m_dbg_str.name, m_dbg_str.mem_active, m_dbg.mem_active);
+	for (unsigned i = 0; i < 4; ++i) {
+		std::array<char, 50> temp;
+		unsigned idx = i;
+		uint32_t addr = m_dbg.wp_arr[i].addr;
+		uint32_t size = m_dbg.wp_arr[i].size;
+		uint32_t type = m_dbg.wp_arr[i].type;
 		auto ret = std::to_chars(temp.data(), temp.data() + temp.size(), addr, 16);
 		if (ret.ec == std::errc::value_too_large) {
 			continue;
 		}
 		*ret.ptr++ = ';';
+		ret = std::to_chars(ret.ptr, temp.data() + temp.size(), idx, 10);
+		if (ret.ec == std::errc::value_too_large) {
+			continue;
+		}
+		*ret.ptr++ = ';';
+		ret = std::to_chars(ret.ptr, temp.data() + temp.size(), size, 10);
+		if (ret.ec == std::errc::value_too_large) {
+			continue;
+		}
+		*ret.ptr++ = ';';
 		ret = std::to_chars(ret.ptr, temp.data() + temp.size(), type, 10);
+		if (ret.ec == std::errc::value_too_large) {
+			continue;
+		}
+		*ret.ptr = '\0';
+		m_ini.SetValue(m_dbg_str.name, m_dbg_str.wp, temp.data());
+	}
+	for (const auto &addr : m_dbg.brk_vec) {
+		std::array<char, 20> temp;
+		auto ret = std::to_chars(temp.data(), temp.data() + temp.size(), addr, 16);
 		if (ret.ec == std::errc::value_too_large) {
 			continue;
 		}

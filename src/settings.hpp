@@ -56,7 +56,13 @@ private:
 		static constexpr const char *bkg_r = "background_red";
 		static constexpr const char *bkg_g = "background_green";
 		static constexpr const char *bkg_b = "background_blue";
-		static constexpr const char *bkr = "breakpoint_address";
+		static constexpr const char *reg_r = "register_red";
+		static constexpr const char *reg_g = "register_green";
+		static constexpr const char *reg_b = "register_blue";
+		static constexpr const char *bkr = "breakpoint";
+		static constexpr const char *wp = "watchpoint";
+		static constexpr const char *mem_addr = "memory_editor_address ";
+		static constexpr const char *mem_active = "active_memory_editor";
 	} m_dbg_str;
 	std::string m_ini_path;
 	console_t m_console_type;

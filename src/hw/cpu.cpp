@@ -276,11 +276,23 @@ cpu::init(const init_info_t &init_info)
 			g_dbg_opt.bkg_col[0] = dbg.bkg_col[0];
 			g_dbg_opt.bkg_col[1] = dbg.bkg_col[1];
 			g_dbg_opt.bkg_col[2] = dbg.bkg_col[2];
-			g_dbg_opt.brk_map.clear();
-			std::for_each(dbg.brk_map.begin(), dbg.brk_map.end(), [](const decltype(dbg.brk_map)::value_type &elem)
+			g_dbg_opt.reg_col[0] = dbg.reg_col[0];
+			g_dbg_opt.reg_col[1] = dbg.reg_col[1];
+			g_dbg_opt.reg_col[2] = dbg.reg_col[2];
+			for (unsigned i = 0; i < 4; ++i) {
+				g_dbg_opt.mem_editor_addr[i] = dbg.mem_addr[i];
+			}
+			g_dbg_opt.mem_active = dbg.mem_active;
+			g_dbg_opt.brk_vec.clear();
+			std::for_each(dbg.brk_vec.begin(), dbg.brk_vec.end(), [](const decltype(dbg.brk_vec)::value_type &elem)
 				{
-					g_dbg_opt.brk_map.emplace(elem.first, elem.second);
+					g_dbg_opt.brk_vec.emplace_back(elem);
 				});
+			for (unsigned i = 0; i < 4; ++i) {
+				g_dbg_opt.wp_arr[i].addr = dbg.wp_arr[i].addr;
+				g_dbg_opt.wp_arr[i].size = dbg.wp_arr[i].size;
+				g_dbg_opt.wp_arr[i].type = dbg.wp_arr[i].type;
+			}
 		}
 		else {
 			logger_mod_en(info, nxbx, "Mismatch between the debugger settings version of nxbx and lib86dbg");
@@ -349,10 +361,23 @@ cpu::deinit()
 			dbg.bkg_col[0] = g_dbg_opt.bkg_col[0];
 			dbg.bkg_col[1] = g_dbg_opt.bkg_col[1];
 			dbg.bkg_col[2] = g_dbg_opt.bkg_col[2];
-			dbg.brk_map.clear();
-			std:for_each(g_dbg_opt.brk_map.begin(), g_dbg_opt.brk_map.end(), [&dbg](const decltype(g_dbg_opt.brk_map)::value_type &elem) {
-				dbg.brk_map.emplace(elem.first, elem.second);
+			dbg.reg_col[0] = g_dbg_opt.reg_col[0];
+			dbg.reg_col[1] = g_dbg_opt.reg_col[1];
+			dbg.reg_col[2] = g_dbg_opt.reg_col[2];
+			for (unsigned i = 0; i < 4; ++i) {
+				dbg.mem_addr[i] = g_dbg_opt.mem_editor_addr[i];
+			}
+			dbg.mem_active = g_dbg_opt.mem_active;
+			dbg.brk_vec.clear();
+			std:for_each(g_dbg_opt.brk_vec.begin(), g_dbg_opt.brk_vec.end(), [&dbg](const decltype(g_dbg_opt.brk_vec)::value_type &elem)
+				{
+					dbg.brk_vec.emplace_back(elem);
 				});
+			for (unsigned i = 0; i < 4; ++i) {
+				dbg.wp_arr[i].addr = g_dbg_opt.wp_arr[i].addr;
+				dbg.wp_arr[i].size = g_dbg_opt.wp_arr[i].size;
+				dbg.wp_arr[i].type = g_dbg_opt.wp_arr[i].type;
+			}
 		}
 		else {
 			dbg.version = g_dbg_opt.id; // adopt the version currently used by lib86dbg

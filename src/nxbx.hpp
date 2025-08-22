@@ -10,6 +10,7 @@
 #include <cinttypes>
 #include <optional>
 #include <assert.h>
+#include <vector>
 #include "logger.hpp"
 
 #define nxbx_mod_fatal(mod, msg, ...) do { nxbx::fatal(log_module::mod, msg __VA_OPT__(,) __VA_ARGS__); } while(0)
@@ -54,6 +55,12 @@ struct core_s {
 	uint32_t log_modules[NUM_OF_LOG_MODULES32];
 };
 
+struct wp_info {
+	uint32_t addr;
+	uint32_t size;
+	uint32_t type;
+};
+
 struct dbg_s {
 	uint32_t version;
 	int width;
@@ -61,7 +68,11 @@ struct dbg_s {
 	float txt_col[3];
 	float brk_col[3];
 	float bkg_col[3];
-	std::unordered_map<uint32_t, int> brk_map;
+	float reg_col[3];
+	std::vector<uint32_t> brk_vec;
+	std::array<wp_info, 4> wp_arr;
+	uint32_t mem_addr[4];
+	uint32_t mem_active;
 };
 
 namespace nxbx {
