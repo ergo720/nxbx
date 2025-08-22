@@ -33,12 +33,12 @@ private:
 	uint8_t from_bcd(uint8_t value);
 
 	machine *const m_machine;
-	uint8_t ram[128]; // byte at index 0x7F is the century register on the xbox
-	uint8_t reg_idx;
-	uint64_t last_update_time;
-	uint64_t lost_us;
-	std::time_t sys_time;
-	int64_t sys_time_bias; // difference between guest and host clocks
+	uint8_t m_ram[128]; // byte at index 0x7F is the century register on the xbox
+	uint8_t m_reg_idx;
+	uint64_t m_last_update_time;
+	uint64_t m_lost_us;
+	std::time_t m_sys_time;
+	int64_t m_sys_time_bias; // difference between guest and host clocks
 	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
 		{ CMOS_PORT_CMD, "COMMAND" },
 		{ CMOS_PORT_DATA, "DATA" },

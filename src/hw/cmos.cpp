@@ -11,7 +11,7 @@
 uint8_t
 cmos::to_bcd(uint8_t value) // binary -> bcd
 {
-	if (!(ram[0x0B] & 4)) {
+	if (!(m_ram[0x0B] & 4)) {
 		// Binary format enabled, convert
 		uint8_t tens = value / 10;
 		uint8_t units = value % 10;
@@ -24,7 +24,7 @@ cmos::to_bcd(uint8_t value) // binary -> bcd
 uint8_t
 cmos::from_bcd(uint8_t value) // bcd -> binary
 {
-	if (ram[0x0B] & 4) {
+	if (m_ram[0x0B] & 4) {
 		// Binary format enabled, don't convert
 		return value;
 	}
@@ -37,10 +37,10 @@ cmos::from_bcd(uint8_t value) // bcd -> binary
 void
 cmos::update_time(uint64_t elapsed_us)
 {
-	lost_us += elapsed_us;
-	uint64_t actual_elapsed_sec = lost_us / timer::ticks_per_second;
-	sys_time += actual_elapsed_sec;
-	lost_us -= (actual_elapsed_sec * timer::ticks_per_second);
+	m_lost_us += elapsed_us;
+	uint64_t actual_elapsed_sec = m_lost_us / timer::ticks_per_second;
+	m_sys_time += actual_elapsed_sec;
+	m_lost_us -= (actual_elapsed_sec * timer::ticks_per_second);
 }
 
 template<bool log>
@@ -49,19 +49,19 @@ uint8_t cmos::read8(uint32_t addr)
 	uint8_t value = 0;
 
 	if (addr == CMOS_PORT_DATA) {
-		if ((reg_idx < 0xA) || (reg_idx == 0x7F)) {
+		if ((m_reg_idx < 0xA) || (m_reg_idx == 0x7F)) {
 			tm *local_time;
-			if (local_time = std::localtime(&sys_time); local_time == nullptr) {
+			if (local_time = std::localtime(&m_sys_time); local_time == nullptr) {
 				nxbx_fatal("Failed to read CMOS time");
 				return 0;
 			}
 
-			switch (reg_idx)
+			switch (m_reg_idx)
 			{
 			case 1:
 			case 3:
 			case 5:
-				value = ram[reg_idx];
+				value = m_ram[m_reg_idx];
 				break;
 
 			case 0:
@@ -73,7 +73,7 @@ uint8_t cmos::read8(uint32_t addr)
 				break;
 
 			case 4:
-				if (!(ram[0xB] & 2)) {
+				if (!(m_ram[0xB] & 2)) {
 					// 12 hour format enabled
 					if (local_time->tm_hour == 0) {
 						value = to_bcd(12);
@@ -114,14 +114,14 @@ uint8_t cmos::read8(uint32_t addr)
 				break;
 			}
 		}
-		else if (reg_idx == 0xC) {
-			ram[0x0C] = 0x00; // clears all interrupt flags
+		else if (m_reg_idx == 0xC) {
+			m_ram[0x0C] = 0x00; // clears all interrupt flags
 		}
-		else if (reg_idx == 0xD) {
-			ram[0xD] = 0x80; // set VRT
+		else if (m_reg_idx == 0xD) {
+			m_ram[0xD] = 0x80; // set VRT
 		}
 
-		value = ram[reg_idx];
+		value = m_ram[m_reg_idx];
 	}
 
 	if constexpr (log) {
@@ -143,23 +143,23 @@ void cmos::write8(uint32_t addr, const uint8_t value)
 	switch (addr)
 	{
 	case CMOS_PORT_CMD:
-		reg_idx = value;
+		m_reg_idx = value;
 		break;
 
 	case CMOS_PORT_DATA:
-		if ((reg_idx < 0xA) || (reg_idx == 0x7F)) {
+		if ((m_reg_idx < 0xA) || (m_reg_idx == 0x7F)) {
 			tm *local_time;
-			if (local_time = std::localtime(&sys_time); local_time == nullptr) {
+			if (local_time = std::localtime(&m_sys_time); local_time == nullptr) {
 				nxbx_fatal("Failed to read CMOS time");
 				return;
 			}
 
-			switch (reg_idx)
+			switch (m_reg_idx)
 			{
 			case 1:
 			case 3:
 			case 5:
-				ram[reg_idx] = value1;
+				m_ram[m_reg_idx] = value1;
 				break;
 
 			case 0:
@@ -173,7 +173,7 @@ void cmos::write8(uint32_t addr, const uint8_t value)
 			case 4: {
 				uint8_t masked_data = value1 & 0x7F;
 				local_time->tm_hour = from_bcd(masked_data);
-				if (!(ram[0xB] & 2)) {
+				if (!(m_ram[0xB] & 2)) {
 					// 12 hour format enabled
 					if (value & 0x80) {
 						// time is pm
@@ -202,11 +202,11 @@ void cmos::write8(uint32_t addr, const uint8_t value)
 				break;
 
 			case 9:
-				local_time->tm_year = (ram[0x7F] * 100 - 1900) + from_bcd(value1);
+				local_time->tm_year = (m_ram[0x7F] * 100 - 1900) + from_bcd(value1);
 				break;
 
 			case 0x7F:
-				ram[0x7F] = from_bcd(value1);
+				m_ram[0x7F] = from_bcd(value1);
 				break;
 			}
 
@@ -215,12 +215,12 @@ void cmos::write8(uint32_t addr, const uint8_t value)
 				return;
 			}
 			else {
-				sys_time = time;
-				sys_time_bias = time - std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+				m_sys_time = time;
+				m_sys_time_bias = time - std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 			}
 		}
 		else {
-			switch (reg_idx)
+			switch (m_reg_idx)
 			{
 			case 0xA:
 				value1 &= ~0x80; // UIP is read-only
@@ -231,7 +231,7 @@ void cmos::write8(uint32_t addr, const uint8_t value)
 					nxbx_fatal("CMOS interrupts and square wave outputs are not supported");
 				}
 				else if (value1 & 0x80) {
-					ram[0xA] &= ~0x80; // clears UIP
+					m_ram[0xA] &= ~0x80; // clears UIP
 				}
 				break;
 
@@ -241,13 +241,13 @@ void cmos::write8(uint32_t addr, const uint8_t value)
 				return;
 
 			default:
-				if (reg_idx >= sizeof(ram)) {
-					logger_en(warn, "CMOS write: unknown register %u", reg_idx);
+				if (m_reg_idx >= sizeof(m_ram)) {
+					logger_en(warn, "CMOS write: unknown register %u", m_reg_idx);
 					return;
 				}
 			}
 
-			ram[reg_idx] = value1;
+			m_ram[m_reg_idx] = value1;
 		}
 		break;
 	}
@@ -257,17 +257,17 @@ uint64_t
 cmos::get_next_update_time(uint64_t now)
 {
 	uint64_t next_time;
-	if (ram[0xB] & 0x80) { // "SET" bit disables clock updates
+	if (m_ram[0xB] & 0x80) { // "SET" bit disables clock updates
 		return std::numeric_limits<uint64_t>::max();
 	}
 	else {
-		if (now - last_update_time >= timer::ticks_per_second) {
-			update_time(now - last_update_time);
-			last_update_time = now;
+		if (now - m_last_update_time >= timer::ticks_per_second) {
+			update_time(now - m_last_update_time);
+			m_last_update_time = now;
 			next_time = timer::ticks_per_second;
 		}
 		else {
-			next_time = last_update_time + timer::ticks_per_second - now;
+			next_time = m_last_update_time + timer::ticks_per_second - now;
 		}
 
 		return next_time;
@@ -294,8 +294,8 @@ cmos::update_io(bool is_update)
 void
 cmos::reset()
 {
-	ram[0x0B] &= ~0x78; // clears interrupt enable and square wave output flags
-	ram[0x0C] = 0x00; // clears all interrupt flags
+	m_ram[0x0B] &= ~0x78; // clears interrupt enable and square wave output flags
+	m_ram[0x0C] = 0x00; // clears all interrupt flags
 }
 
 bool
@@ -305,18 +305,18 @@ cmos::init()
 		return false;
 	}
 
-	ram[0x0A] = 0x26;
-	ram[0x0B] = 0x02;
-	ram[0x0C] = 0x00;
-	ram[0x0D] = 0x80;
-	lost_us = 0;
-	last_update_time = timer::get_now();
-	sys_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) + nxbx::get_settings<core_s>().sys_time_bias;
+	m_ram[0x0A] = 0x26;
+	m_ram[0x0B] = 0x02;
+	m_ram[0x0C] = 0x00;
+	m_ram[0x0D] = 0x80;
+	m_lost_us = 0;
+	m_last_update_time = timer::get_now();
+	m_sys_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) + nxbx::get_settings<core_s>().sys_time_bias;
 	return true;
 }
 
 void
 cmos::deinit()
 {
-	nxbx::get_settings<core_s>().sys_time_bias = sys_time_bias;
+	nxbx::get_settings<core_s>().sys_time_bias = m_sys_time_bias;
 }
