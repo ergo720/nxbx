@@ -28,16 +28,27 @@ public:
 
 private:
 	bool update_io(bool is_update);
-	void update_time(uint64_t elapsed_us);
+	void update_clock(uint64_t elapsed_us);
+	uint64_t update_periodic_ticks(uint64_t elapsed_us);
+	void update_timer();
+	void raise_irq(uint8_t why);
 	uint8_t to_bcd(uint8_t value);
 	uint8_t from_bcd(uint8_t value);
+	uint8_t read(uint8_t idx);
 
 	machine *const m_machine;
-	uint8_t m_ram[128]; // byte at index 0x7F is the century register on the xbox
+	uint8_t m_ram[128 * 2]; // byte at index 0x7F is the century register on the xbox
 	uint8_t m_reg_idx;
-	uint64_t m_last_update_time;
+	uint8_t m_int_running;
+	uint8_t m_clock_running;
+	uint64_t m_period_int; // expressed in us
+	uint64_t m_periodic_ticks;
+	uint64_t m_periodic_ticks_max;
+	uint64_t m_last_int; // The last time the timer handler was called
+	uint64_t m_last_clock; // The last time the seconds counter rolled over
+	uint64_t m_lost_ticks; // expressed in us
 	uint64_t m_lost_us;
-	std::time_t m_sys_time;
+	std::time_t m_sys_time; // actual real time wall clock of the host
 	int64_t m_sys_time_bias; // difference between guest and host clocks
 	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
 		{ CMOS_PORT_CMD, "COMMAND" },

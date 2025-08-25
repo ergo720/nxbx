@@ -27,8 +27,6 @@ namespace kernel {
 		{ IO_RETRY, "IO_RETRY" },
 		{ IO_QUERY, "IO_QUERY" },
 		{ IO_CHECK_ENQUEUE, "IO_CHECK_ENQUEUE" },
-		{ BOOT_TIME_US_LOW, "BOOT_TIME_US_LOW"},
-		{ BOOT_TIME_US_HIGH, "BOOT_TIME_US_HIGH"},
 		{ XE_DVD_XBE_LENGTH, "XE_DVD_XBE_LENGTH" },
 		{ XE_DVD_XBE_ADDR, "XE_DVD_XBE_ADDR" },
 		{ ACPI_TIME_LOW, "ACPI_TIME_LOW" },
@@ -53,7 +51,7 @@ namespace kernel {
 	template<bool log>
 	uint32_t read32(addr_t addr, void *opaque)
 	{
-		static uint64_t acpi_time, curr_clock_increment, boot_time_us;
+		static uint64_t acpi_time, curr_clock_increment;
 		uint32_t value = 0;
 
 		switch (addr)
@@ -93,16 +91,6 @@ namespace kernel {
 
 		case ACPI_TIME_HIGH:
 			value = acpi_time >> 32;
-			break;
-
-		case BOOT_TIME_US_LOW:
-			// These two are read in succession from KeStallExecutionProcessor with interrupts disabled, so we can read the boot time only once instead of two times
-			boot_time_us = timer::get_now();
-			value = static_cast<uint32_t>(boot_time_us);
-			break;
-
-		case BOOT_TIME_US_HIGH:
-			value = boot_time_us >> 32;
 			break;
 		}
 
