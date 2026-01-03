@@ -132,7 +132,11 @@ namespace xdvdfs {
 		util::xbox_string_view curr_name = path_to_parse.substr(curr_pos, pos - curr_pos);
 
 		while (true) {
-			if (read_dirent(file_entry, curr_sector, offset)) {
+			if (read_dirent(file_entry, curr_sector, offset) == false) {
+				logger_mod_en(error, io, "Failed to read xiso dirent at sector 0x%08" PRIX32 " and offset0x%016" PRIX64, curr_sector, offset);
+				break;
+			}
+			else {
 				int ret = curr_name.compare(file_entry.file_name);
 				if (ret < 0) {
 					uint64_t new_offset = (uint64_t)file_entry.left_idx << 2;
@@ -153,7 +157,7 @@ namespace xdvdfs {
 				else {
 					curr_pos = pos + 1;
 					pos = std::min(path_to_parse.find_first_of(std::filesystem::path::preferred_separator, curr_pos), path_to_parse.length());
-					if (pos == path_to_parse.length()) {
+					if (curr_pos > path_to_parse.length()) {
 						return file_info_t // processed all path -> we found the requested file/directory
 						{
 							.exists = true,
@@ -166,14 +170,13 @@ namespace xdvdfs {
 					// Some path still remains -> we can only proceed if the current file is a directory
 					if (file_entry.attributes & FILE_DIRECTORY) {
 						offset = 0;
-						curr_sector = file_entry.file_sector * SECTOR_SIZE + g_xiso_offset;
+						curr_sector = file_entry.file_sector;
 						curr_name = path_to_parse.substr(curr_pos, pos - curr_pos);
 						continue;
 					}
 					break;
 				}
 			}
-			break;
 		}
 
 		return file_info_t{ .exists = false };
