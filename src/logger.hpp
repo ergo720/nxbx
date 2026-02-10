@@ -106,11 +106,11 @@ inline constexpr std::array lv_to_str = {
 };
 static_assert(lv_to_str.size() == (uint32_t)(log_lv::max));
 
-inline constexpr log_lv default_log_lv = log_lv::info;
-inline constexpr uint32_t default_log_modules1 = 0;
-inline std::atomic<log_lv> g_log_lv = default_log_lv;
+inline constexpr log_lv g_default_log_lv = log_lv::info;
+inline constexpr uint32_t g_default_log_modules0 = 0;
+inline std::atomic<log_lv> g_log_lv = g_default_log_lv;
 inline std::atomic_uint32_t g_log_modules[NUM_OF_LOG_MODULES32] = {
-	default_log_modules1
+	g_default_log_modules0
 };
 
 

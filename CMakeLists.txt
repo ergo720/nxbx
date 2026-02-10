@@ -71,6 +71,7 @@ set(HEADERS
  "${NXBX_ROOT_DIR}/src/console.hpp"
  "${NXBX_ROOT_DIR}/src/files.hpp"
  "${NXBX_ROOT_DIR}/src/io.hpp"
+ "${NXBX_ROOT_DIR}/src/isettings.hpp"
  "${NXBX_ROOT_DIR}/src/kernel.hpp"
  "${NXBX_ROOT_DIR}/src/kernel_head_ref.hpp"
  "${NXBX_ROOT_DIR}/src/logger.hpp"

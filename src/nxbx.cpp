@@ -48,34 +48,25 @@ namespace nxbx {
 	bool
 	init_settings(const init_info_t &init_info)
 	{
-		return settings::get().init(init_info);
+		return get_settings()->init(init_info.m_nxbx_path);
 	}
 
 	void
 	save_settings()
 	{
-		settings::get().save();
+		get_settings()->save();
 	}
 
-	template<typename T>
-	T &get_settings()
+	isettings *get_settings()
 	{
-		if constexpr (std::is_same_v<T, core_s>) {
-			return settings::get().m_core;
-		}
-		else if constexpr (std::is_same_v<T, dbg_s>) {
-			return settings::get().m_dbg;
-		}
-		else {
-			throw std::logic_error("Attempt to access unknown settings");
-		}
+		return &settings::get();
 	}
 
 	void
 	update_logging()
 	{
-		g_log_lv = settings::get().m_core.log_level;
-		g_log_modules[0] = settings::get().m_core.log_modules[0];
+		g_log_lv = static_cast<log_lv>(get_settings()->get_long_value("core", "log_level", std::to_underlying(g_default_log_lv)));
+		g_log_modules[0] = get_settings()->get_uint32_value("core", "log_modules0", g_default_log_modules0);
 		console::get().apply_log_settings();
 	}
 
@@ -119,7 +110,4 @@ namespace nxbx {
 		va_end(args);
 		console::get().exit();
 	}
-
-	template core_s &get_settings();
-	template dbg_s &get_settings();
 }

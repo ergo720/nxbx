@@ -12,6 +12,7 @@
 #include <assert.h>
 #include <vector>
 #include "logger.hpp"
+#include "isettings.hpp"
 
 #define nxbx_mod_fatal(mod, msg, ...) do { nxbx::fatal(log_module::mod, msg __VA_OPT__(,) __VA_ARGS__); } while(0)
 #define nxbx_fatal(msg, ...) nxbx_mod_fatal(MODULE_NAME, msg __VA_OPT__(,) __VA_ARGS__)
@@ -46,42 +47,12 @@ struct init_info_t {
 	int32_t m_sync_part;
 };
 
-// Settings struct declarations, used in the settings class
-struct core_s {
-	uint32_t version;
-	uint32_t log_version;
-	int64_t sys_time_bias;
-	log_lv log_level;
-	uint32_t log_modules[NUM_OF_LOG_MODULES32];
-};
-
-struct wp_info {
-	uint32_t addr;
-	uint32_t size;
-	uint32_t type;
-};
-
-struct dbg_s {
-	uint32_t version;
-	int width;
-	int height;
-	float txt_col[3];
-	float brk_col[3];
-	float bkg_col[3];
-	float reg_col[3];
-	std::vector<uint32_t> brk_vec;
-	std::array<wp_info, 4> wp_arr;
-	uint32_t mem_addr[4];
-	uint32_t mem_active;
-};
-
 namespace nxbx {
 	bool init_console(const init_info_t &init_info);
 	bool validate_input_file(init_info_t &init_info, std::string_view arg_str);
 	bool init_settings(const init_info_t &init_info);
 	void save_settings();
-	template<typename T>
-	T &get_settings();
+	isettings *get_settings();
 	void update_logging();
 	void start();
 	void exit();

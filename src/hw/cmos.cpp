@@ -488,12 +488,12 @@ cmos::init()
 	m_int_running = 0;
 	m_clock_running = 1;
 	m_last_int = m_last_clock = timer::get_now();
-	m_sys_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) + nxbx::get_settings<core_s>().sys_time_bias;
+	m_sys_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) + nxbx::get_settings()->get_int64_value("core", "sys_time_bias");
 	return true;
 }
 
 void
 cmos::deinit()
 {
-	nxbx::get_settings<core_s>().sys_time_bias = m_sys_time_bias;
+	nxbx::get_settings()->set_int64_value("core", "sys_time_bias", m_sys_time_bias);
 }

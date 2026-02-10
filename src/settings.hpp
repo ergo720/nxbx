@@ -5,11 +5,13 @@
 #pragma once
 
 #include "SimpleIni.h"
+#include "isettings.hpp"
 #include "nxbx.hpp"
+#include "lib86cpu.h"
 #include <string>
 
 
-class settings {
+class settings : public isettings {
 public:
 	static settings &get()
 	{
@@ -18,54 +20,26 @@ public:
 	}
 	settings(settings const &) = delete;
 	void operator=(settings const &) = delete;
-	bool init(const init_info_t &init_info);
-	void save();
+	bool init(std::string_view ini_path) override;
+	void save() override;
+	long get_long_value(const char *a_pSection, const char *a_pKey, uint32_t a_nDefault = 0) override;
+	uint32_t get_uint32_value(const char *a_pSection, const char *a_pKey, uint32_t a_nDefault = 0) override;
+	int64_t get_int64_value(const char *a_pSection, const char *a_pKey, int64_t a_nDefault = 0) override;
+	float get_float_value(const char *a_pSection, const char *a_pKey, float a_nDefault = 0) override;
+	std::vector<std::any> get_vector_values(const char *a_pSection, const char *a_pKey) override;
+	void set_long_value(const char *a_pSection, const char *a_pKey, long a_pValue = 0, bool a_bUseHex = false) override;
+	void set_uint32_value(const char *a_pSection, const char *a_pKey, uint32_t a_pValue, bool a_bUseHex = false) override;
+	void set_int64_value(const char *a_pSection, const char *a_pKey, int64_t a_pValue, bool a_bUseHex = false) override;
+	void set_float_value(const char *a_pSection, const char *a_pKey, float a_pValue) override;
+	void set_vector_values(const char *a_pSection, const char *a_pKey, std::vector<std::any> a_pValue) override;
 
-	core_s m_core;
-	dbg_s m_dbg;
 
 private:
 	settings() {}
-	void load_config_values();
-	bool save_config_values();
-	int64_t get_int64_value(const char *a_pSection, const char *a_pKey, int64_t a_nDefault = 0);
-	SI_Error set_int64_value(const char *a_pSection, const char *a_pKey, int64_t a_pValue, bool a_bUseHex);
-	uint32_t get_uint32_value(const char *a_pSection, const char *a_pKey, uint32_t a_nDefault = 0);
-	SI_Error set_uint32_value(const char *a_pSection, const char *a_pKey, uint32_t a_pValue, bool a_bUseHex);
+	void reset();
 
 	CSimpleIniA m_ini;
-	struct core_str {
-		static constexpr const char *name = "core";
-		static constexpr const char *version = "version";
-		static constexpr const char *log_version = "log_version";
-		static constexpr const char *sys_time_bias = "sys_time_bias";
-		static constexpr const char *log_level = "log_level";
-		static constexpr const char *log_modules1 = "log_modules1";
-	} m_core_str;
-	struct dbg_str {
-		static constexpr const char *name = "debugger";
-		static constexpr const char *version = "version";
-		static constexpr const char *width = "width";
-		static constexpr const char *height = "height";
-		static constexpr const char *txt_r = "text_red";
-		static constexpr const char *txt_g = "text_green";
-		static constexpr const char *txt_b = "text_blue";
-		static constexpr const char *brk_r = "breakpoint_red";
-		static constexpr const char *brk_g = "breakpoint_green";
-		static constexpr const char *brk_b = "breakpoint_blue";
-		static constexpr const char *bkg_r = "background_red";
-		static constexpr const char *bkg_g = "background_green";
-		static constexpr const char *bkg_b = "background_blue";
-		static constexpr const char *reg_r = "register_red";
-		static constexpr const char *reg_g = "register_green";
-		static constexpr const char *reg_b = "register_blue";
-		static constexpr const char *bkr = "breakpoint";
-		static constexpr const char *wp = "watchpoint";
-		static constexpr const char *mem_addr = "memory_editor_address ";
-		static constexpr const char *mem_active = "active_memory_editor";
-	} m_dbg_str;
-	std::string m_ini_path;
-	console_t m_console_type;
-	static constexpr uint32_t m_version = 1;
+	std::string m_path;
+	static constexpr uint32_t m_ini_version = 2;
 	static constexpr uint32_t m_log_version = 2; // add one to this every time the log modules change
 };

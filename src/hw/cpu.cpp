@@ -262,36 +262,43 @@ cpu::init(const init_info_t &init_info)
 	mem_write_block_virt(m_lc86cpu, 0x80400000, 32, keys);
 
 	if (m_is_dbg_present) {
-		const auto &dbg = nxbx::get_settings<dbg_s>();
+		const auto ini = nxbx::get_settings();
 		g_dbg_opt.lock.lock();
-		if (dbg.version == g_dbg_opt.id) { // only write the settings if we support the version used by lib86dbg
-			g_dbg_opt.width = dbg.width;
-			g_dbg_opt.height = dbg.height;
-			g_dbg_opt.txt_col[0] = dbg.txt_col[0];
-			g_dbg_opt.txt_col[1] = dbg.txt_col[1];
-			g_dbg_opt.txt_col[2] = dbg.txt_col[2];
-			g_dbg_opt.brk_col[0] = dbg.brk_col[0];
-			g_dbg_opt.brk_col[1] = dbg.brk_col[1];
-			g_dbg_opt.brk_col[2] = dbg.brk_col[2];
-			g_dbg_opt.bkg_col[0] = dbg.bkg_col[0];
-			g_dbg_opt.bkg_col[1] = dbg.bkg_col[1];
-			g_dbg_opt.bkg_col[2] = dbg.bkg_col[2];
-			g_dbg_opt.reg_col[0] = dbg.reg_col[0];
-			g_dbg_opt.reg_col[1] = dbg.reg_col[1];
-			g_dbg_opt.reg_col[2] = dbg.reg_col[2];
-			for (unsigned i = 0; i < 4; ++i) {
-				g_dbg_opt.mem_editor_addr[i] = dbg.mem_addr[i];
+		if (g_dbg_opt.id == ini->get_uint32_value("debugger", "version", -1)) { // only write the settings if we support the version used by lib86dbg
+			g_dbg_opt.width = ini->get_long_value("debugger", "width", g_dbg_opt.width);
+			g_dbg_opt.height = ini->get_long_value("debugger", "height", g_dbg_opt.height);
+			g_dbg_opt.txt_col[0] = ini->get_float_value("debugger", "text_red", g_dbg_opt.txt_col[0]);
+			g_dbg_opt.txt_col[1] = ini->get_float_value("debugger", "text_green", g_dbg_opt.txt_col[1]);
+			g_dbg_opt.txt_col[2] = ini->get_float_value("debugger", "text_blue", g_dbg_opt.txt_col[2]);
+			g_dbg_opt.brk_col[0] = ini->get_float_value("debugger", "breakpoint_red", g_dbg_opt.brk_col[0]);
+			g_dbg_opt.brk_col[1] = ini->get_float_value("debugger", "breakpoint_green", g_dbg_opt.brk_col[1]);
+			g_dbg_opt.brk_col[2] = ini->get_float_value("debugger", "breakpoint_blue", g_dbg_opt.brk_col[2]);
+			g_dbg_opt.bkg_col[0] = ini->get_float_value("debugger", "background_red", g_dbg_opt.bkg_col[0]);
+			g_dbg_opt.bkg_col[1] = ini->get_float_value("debugger", "background_green", g_dbg_opt.bkg_col[1]);
+			g_dbg_opt.bkg_col[2] = ini->get_float_value("debugger", "background_blue", g_dbg_opt.bkg_col[2]);
+			g_dbg_opt.reg_col[0] = ini->get_float_value("debugger", "register_red", g_dbg_opt.reg_col[0]);
+			g_dbg_opt.reg_col[1] = ini->get_float_value("debugger", "register_green", g_dbg_opt.reg_col[1]);
+			g_dbg_opt.reg_col[2] = ini->get_float_value("debugger", "register_blue", g_dbg_opt.reg_col[2]);
+			{
+				std::string str("memory_editor_address ");
+				for (unsigned i = 0; i < 4; ++i) {
+					str.replace(str.size() - 1, 1, 1, '0' + i);
+					g_dbg_opt.mem_editor_addr[i] = ini->get_uint32_value("debugger", str.c_str());
+				}
 			}
-			g_dbg_opt.mem_active = dbg.mem_active;
+			g_dbg_opt.mem_active = ini->get_uint32_value("debugger", "active_memory_editor");
 			g_dbg_opt.brk_vec.clear();
-			std::for_each(dbg.brk_vec.begin(), dbg.brk_vec.end(), [](const decltype(dbg.brk_vec)::value_type &elem)
+			std::vector<std::any> any_vec = ini->get_vector_values("debugger", "breakpoint");
+			std::for_each(any_vec.begin(), any_vec.end(), [](const decltype(any_vec)::value_type &elem)
 				{
-					g_dbg_opt.brk_vec.emplace_back(elem);
+					g_dbg_opt.brk_vec.emplace_back(std::any_cast<addr_t>(elem));
 				});
-			for (unsigned i = 0; i < 4; ++i) {
-				g_dbg_opt.wp_arr[i].addr = dbg.wp_arr[i].addr;
-				g_dbg_opt.wp_arr[i].size = dbg.wp_arr[i].size;
-				g_dbg_opt.wp_arr[i].type = dbg.wp_arr[i].type;
+			any_vec = ini->get_vector_values("debugger", "watchpoint");
+			for (unsigned i = 0; i < any_vec.size(); ++i) {
+				wp_data data = std::any_cast<wp_data>(any_vec[i]);
+				g_dbg_opt.wp_arr[i].addr = data.addr;
+				g_dbg_opt.wp_arr[i].size = data.size;
+				g_dbg_opt.wp_arr[i].type = data.type;
 			}
 		}
 		else {
@@ -347,40 +354,45 @@ void
 cpu::deinit()
 {
 	if (m_is_dbg_present) {
-		auto &dbg = nxbx::get_settings<dbg_s>();
+		auto ini = nxbx::get_settings();
 		g_dbg_opt.lock.lock();
-		if (dbg.version == g_dbg_opt.id) { // only copy the settings if we support the version used by lib86dbg
-			dbg.width = g_dbg_opt.width;
-			dbg.height = g_dbg_opt.height;
-			dbg.txt_col[0] = g_dbg_opt.txt_col[0];
-			dbg.txt_col[1] = g_dbg_opt.txt_col[1];
-			dbg.txt_col[2] = g_dbg_opt.txt_col[2];
-			dbg.brk_col[0] = g_dbg_opt.brk_col[0];
-			dbg.brk_col[1] = g_dbg_opt.brk_col[1];
-			dbg.brk_col[2] = g_dbg_opt.brk_col[2];
-			dbg.bkg_col[0] = g_dbg_opt.bkg_col[0];
-			dbg.bkg_col[1] = g_dbg_opt.bkg_col[1];
-			dbg.bkg_col[2] = g_dbg_opt.bkg_col[2];
-			dbg.reg_col[0] = g_dbg_opt.reg_col[0];
-			dbg.reg_col[1] = g_dbg_opt.reg_col[1];
-			dbg.reg_col[2] = g_dbg_opt.reg_col[2];
-			for (unsigned i = 0; i < 4; ++i) {
-				dbg.mem_addr[i] = g_dbg_opt.mem_editor_addr[i];
+		if (g_dbg_opt.id == ini->get_uint32_value("debugger", "version", -1)) { // only copy the settings if we support the version used by lib86dbg
+			ini->set_long_value("debugger", "width", g_dbg_opt.width);
+			ini->set_long_value("debugger", "height", g_dbg_opt.height);
+			ini->set_float_value("debugger", "text_red", g_dbg_opt.txt_col[0]);
+			ini->set_float_value("debugger", "text_green", g_dbg_opt.txt_col[1]);
+			ini->set_float_value("debugger", "text_blue", g_dbg_opt.txt_col[2]);
+			ini->set_float_value("debugger", "breakpoint_red", g_dbg_opt.brk_col[0]);
+			ini->set_float_value("debugger", "breakpoint_green", g_dbg_opt.brk_col[1]);
+			ini->set_float_value("debugger", "breakpoint_blue", g_dbg_opt.brk_col[2]);
+			ini->set_float_value("debugger", "background_red", g_dbg_opt.bkg_col[0]);
+			ini->set_float_value("debugger", "background_green", g_dbg_opt.bkg_col[1]);
+			ini->set_float_value("debugger", "background_blue", g_dbg_opt.bkg_col[2]);
+			ini->set_float_value("debugger", "register_red", g_dbg_opt.reg_col[0]);
+			ini->set_float_value("debugger", "register_green", g_dbg_opt.reg_col[1]);
+			ini->set_float_value("debugger", "register_blue", g_dbg_opt.reg_col[2]);
+			{
+				std::string str("memory_editor_address ");
+				for (unsigned i = 0; i < 4; ++i) {
+					str.replace(str.size() - 1, 1, 1, '0' + i);
+					ini->set_uint32_value("debugger", str.c_str(), g_dbg_opt.mem_editor_addr[i], true);
+				}
 			}
-			dbg.mem_active = g_dbg_opt.mem_active;
-			dbg.brk_vec.clear();
-			std:for_each(g_dbg_opt.brk_vec.begin(), g_dbg_opt.brk_vec.end(), [&dbg](const decltype(g_dbg_opt.brk_vec)::value_type &elem)
+			ini->set_uint32_value("debugger", "active_memory_editor", g_dbg_opt.mem_active);
+			std::vector<std::any> any_vec;
+			std::for_each(g_dbg_opt.brk_vec.begin(), g_dbg_opt.brk_vec.end(), [&any_vec](const decltype(g_dbg_opt.brk_vec)::value_type &elem)
 				{
-					dbg.brk_vec.emplace_back(elem);
+					any_vec.emplace_back(elem);
 				});
+			ini->set_vector_values("debugger", "breakpoint", any_vec);
+			any_vec.clear();
 			for (unsigned i = 0; i < 4; ++i) {
-				dbg.wp_arr[i].addr = g_dbg_opt.wp_arr[i].addr;
-				dbg.wp_arr[i].size = g_dbg_opt.wp_arr[i].size;
-				dbg.wp_arr[i].type = g_dbg_opt.wp_arr[i].type;
+				any_vec.emplace_back(g_dbg_opt.wp_arr[i]);
 			}
+			ini->set_vector_values("debugger", "watchpoint", any_vec);
 		}
 		else {
-			dbg.version = g_dbg_opt.id; // adopt the version currently used by lib86dbg
+			ini->set_uint32_value("debugger", "version", g_dbg_opt.id); // adopt the version currently used by lib86dbg
 		}
 		g_dbg_opt.lock.unlock();
 	}
