@@ -1,6 +1,8 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-only
 
 // SPDX-FileCopyrightText: 2023 ergo720
+// SPDX-FileCopyrightText: 2019 Halfix devs
+// This code is derived from https://github.com/nepx/halfix/blob/master/src/hardware/cmos.c
 
 #include "machine.hpp"
 #include "../clock.hpp"

@@ -1,8 +1,8 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-only
 
 // SPDX-FileCopyrightText: 2023 ergo720
-
-// This code is derived from https://github.com/ergo720/halfix/blob/master/src/hardware/pic.cpp
+// SPDX-FileCopyrightText: 2020 Halfix devs
+// This code is derived from https://github.com/nepx/halfix/blob/master/src/hardware/pic.c
 
 #include "machine.hpp"
 #include <bit>
