@@ -88,7 +88,6 @@ bool
 eeprom::init(std::filesystem::path eeprom_dir)
 {
 	uintmax_t size;
-	eeprom_dir = eeprom_dir.remove_filename();
 	eeprom_dir /= "eeprom.bin";
 	eeprom_dir.make_preferred();
 	if (auto opt = open_file(eeprom_dir, &size); !opt) {

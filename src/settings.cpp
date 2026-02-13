@@ -17,7 +17,6 @@ settings::init(const std::string_view ini_path)
 {
 	m_ini.SetMultiKey(false);
 	std::filesystem::path curr_dir = ini_path;
-	curr_dir = curr_dir.remove_filename();
 	curr_dir /= "nxbx.ini";
 	m_path = curr_dir.string();
 	

@@ -80,6 +80,9 @@ namespace xdvdfs {
 				return true;
 			}
 		}
+		else {
+			logger(("Failed to open file \"" + std::string(arg_str) + "\"").c_str());
+		}
 
 		g_xiso_name = "";
 

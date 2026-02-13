@@ -15,6 +15,15 @@ set(NXBX_ROOT_DIR ${CMAKE_CURRENT_LIST_DIR})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 23)
 
+find_package(Qt6 6.10.2 REQUIRED COMPONENTS Core Gui Widgets)
+qt_standard_project_setup()
+if(${GENERATOR_IS_VS})
+find_program(WINDEPLOYQT_EXECUTABLE windeployqt)
+if(${WINDEPLOYQT_EXECUTABLE} STREQUAL "")
+ message(FATAL_ERROR "windeployqt was not found")
+endif()
+endif()
+
 find_package(Git)
 if(Git_FOUND)
  execute_process(
@@ -26,7 +35,7 @@ if(Git_FOUND)
   "${NXBX_ROOT_DIR}/src/kernel_head_ref.hpp.in" "${NXBX_ROOT_DIR}/src/kernel_head_ref.hpp" @ONLY
   NEWLINE_STYLE LF
  )
-else ()
+else()
  message(FATAL_ERROR "Git was not found")
 endif()
 
@@ -34,21 +43,21 @@ option(LIB86CPU_BUILD_SHARED_LIB "Build shared libraries" OFF)
 option(LIB86CPU_XBOX_BUILD "Building Xbox version" ON)
 add_subdirectory("import/lib86cpu")
 
-if (CMAKE_GENERATOR MATCHES "Visual Studio")
+if(CMAKE_GENERATOR MATCHES "Visual Studio")
  set(GENERATOR_IS_VS TRUE)
-elseif (CMAKE_GENERATOR MATCHES "Unix Makefiles")
+elseif(CMAKE_GENERATOR MATCHES "Unix Makefiles")
  set(GENERATOR_IS_UMAKE TRUE)
 endif()
 
-if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
  set(COMPILER_IS_MSVC TRUE)
-elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
  set(COMPILER_IS_GNU TRUE)
-else ()
+else()
 message(FATAL_ERROR "Unsupported compiler")
 endif()
 
-if (${GENERATOR_IS_UMAKE})
+if(${GENERATOR_IS_UMAKE})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Debug")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Release")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG "${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG}")
@@ -154,14 +163,35 @@ set(SOURCES
 source_group(TREE ${NXBX_ROOT_DIR} PREFIX header FILES ${HEADERS})
 source_group(TREE ${NXBX_ROOT_DIR} PREFIX source FILES ${SOURCES})
 
-if (${COMPILER_IS_MSVC})
+if(${COMPILER_IS_MSVC})
 set(CMAKE_CXX_FLAGS "/EHsc /Zc:preprocessor")
 add_definitions(-D_CRT_SECURE_NO_WARNINGS -D_CRT_NONSTDC_NO_WARNINGS -D_SCL_SECURE_NO_WARNINGS)
 endif()
 
-add_executable(nxbx ${HEADERS} ${SOURCES})
-target_link_libraries(nxbx PUBLIC cpu)
+qt_add_executable(nxbx ${HEADERS} ${SOURCES})
+target_link_libraries(nxbx
+	PUBLIC cpu
+	PRIVATE Qt6::Core
+	PRIVATE Qt6::Gui
+	PRIVATE Qt6::Widgets
+)
 
-if (${COMPILER_IS_MSVC})
+if(${GENERATOR_IS_VS})
 set_property(DIRECTORY "${NXBX_ROOT_DIR}" PROPERTY VS_STARTUP_PROJECT nxbx)
+endif()
+
+if(${GENERATOR_IS_VS})
+add_custom_command(
+	TARGET nxbx POST_BUILD
+	COMMAND cd $<TARGET_FILE_DIR:nxbx> &&
+	"${WINDEPLOYQT_EXECUTABLE}" "$<TARGET_FILE:nxbx>" --dir . --libdir . --plugindir plugins --translationdir translations --force
+)
+elseif(${GENERATOR_IS_UMAKE})
+add_custom_command(
+	TARGET nxbx POST_BUILD
+	COMMAND wget -P ${CMAKE_CURRENT_LIST_DIR}/build "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
+	COMMAND wget -P ${CMAKE_CURRENT_LIST_DIR}/build "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage"
+	COMMAND chmod +x ${CMAKE_CURRENT_LIST_DIR}/build/linuxdeploy*.AppImage
+	COMMAND ${CMAKE_CURRENT_LIST_DIR}/build/linuxdeploy-x86_64.AppImage --appdir nxbx -e ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/nxbx -i ${CMAKE_CURRENT_LIST_DIR}/resources/images/nxbx.png -d ${CMAKE_CURRENT_LIST_DIR}/resources/nxbx.desktop --plugin qt --output appimage
+)
 endif()

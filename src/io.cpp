@@ -799,7 +799,7 @@ namespace io {
 	{
 		lc86cpu = cpu;
 		nxbx_path = init_info.m_nxbx_path;
-		std::filesystem::path hdd_dir = nxbx_path.remove_filename();
+		std::filesystem::path hdd_dir = nxbx_path;
 		hdd_dir /= "Harddisk/";
 		hdd_dir.make_preferred();
 		if (!::create_directory(hdd_dir)) {

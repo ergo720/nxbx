@@ -26,6 +26,9 @@ namespace xbe {
 				return true;
 			}
 		}
+		else {
+			logger(("Failed to open file \"" + std::string(arg_str) + "\"").c_str());
+		}
 
 		return false;
 	}

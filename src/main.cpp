@@ -7,6 +7,7 @@
 #include <cstring>
 #include <cstdio>
 #include <filesystem>
+#include <QApplication>
 
 
 static void
@@ -15,165 +16,137 @@ print_help()
 	static const char *help =
 		"usage: nxbx [options]\n\
 options:\n\
--i <path>       Path to the XBE (xbox executable) or XISO (xbox disk image) to run\n\
+-input <path>   Path to the XBE (xbox executable) or XISO (xbox disk image) to run\n\
 -keys <path>    Path of xbox keys.bin file\n\
--k <path>       Path to nboxkrnl (xbox kernel) to run\n\
--s <num>        Specify assembly syntax (default is Intel)\n\
--c <name>       Specify the console type to emulate (default is xbox)\n\
+-kernel <path>  Path to nboxkrnl (xbox kernel) to run\n\
+-disas <num>    Specify assembly syntax (default is Intel)\n\
+-machine <name> Specify the console type to emulate (default is xbox)\n\
 -sync_hdd <num> Synchronize hard disk partition metadata with partition folder\n\
--d              Start with debugger\n\
--h              Print this message";
+-debug          Start with debugger\n\
+-help           Print this message";
 
 	logger("%s", help);
 }
 
-int
-main(int argc, char **argv)
+static std::optional<int>
+parse_cmd_line_opt(const QStringList &args, init_info_t &init_info)
 {
-	init_info_t init_info;
-	init_info.m_keys_path = "";
-	init_info.m_syntax = disas_syntax::intel;
-	init_info.m_console_type = console_t::xbox;
-	init_info.m_use_dbg = 0;
-	init_info.m_sync_part = -1; // -1=don't sync, 0=sync all partitions, [1-7]=sync that partition
-	char option = ' ';
-
-	const auto print_unk_opt = [](std::string_view arg_str) {
-		logger("Unknown option %s", arg_str.data());
+	const auto print_unk_opt = [](QStringList::ConstIterator it) {
+		logger("Unknown option %s", qPrintable(*it));
 		print_help();
+		return 1;
+		};
+
+	const auto check_missing_arg = [&args](QStringList::ConstIterator &it) {
+		it = std::next(it);
+		if ((it == args.end()) || (*it->data() == '-')) {
+			logger("Missing argument for option \"%s\"", qPrintable(it == args.end() ? *std::prev(it) : *it));
+			return 1;
+		}
 		return 0;
 		};
 
-	const auto check_missing_arg = [argc, argv](int &idx, const char *opt) {
-		if (++idx == argc || argv[idx][0] == '-') {
-			logger("Missing argument for option \"%s\"", opt);
-			return true;
-		}
-		return false;
-		};
-
-	/* parameter parsing */
-	if (argc < 3) {
+	if (args.size() < 3) {
 		print_help();
 		return 0;
 	}
 
-	for (int idx = 1; idx < argc; idx++) {
+	for (auto it = std::next(args.begin()); it != args.end(); ++it) {
 		try {
-			option = ' ';
-			std::string arg_str(argv[idx]);
-			if (arg_str.front() == '-') {
-				if (arg_str.size() == 2) {
-
-					// Process single-letter options
-					switch (option = arg_str.at(1))
+			if (it->front() != '-') { // all options start with a dash
+				return print_unk_opt(it);
+			}
+			else {
+				if (*it == QStringLiteral("-input")) {
+					if (check_missing_arg(it)) {
+						return 1;
+					}
+					if (!nxbx::validate_input_file(init_info, qPrintable(*it))) {
+						return 1;
+					}
+					init_info.m_input_path = qPrintable(*it);
+				}
+				else if (*it == QStringLiteral("-kernel")) {
+					if (check_missing_arg(it)) {
+						return 1;
+					}
+					init_info.m_kernel_path = qPrintable(*it);
+				}
+				else if (*it == QStringLiteral("-disas")) {
+					if (check_missing_arg(it)) {
+						return 1;
+					}
+					switch (init_info.m_syntax = static_cast<disas_syntax>(std::stoul(std::string(qPrintable(*it)), nullptr, 0)))
 					{
-					case 'i':
-						if (check_missing_arg(idx, "i")) {
-							return 0;
-						}
-						if (!nxbx::validate_input_file(init_info, argv[idx])) {
-							return 1;
-						}
-						init_info.m_input_path = argv[idx];
+					case disas_syntax::att:
+					case disas_syntax::masm:
+					case disas_syntax::intel:
 						break;
 
-					case 'k':
-						if (check_missing_arg(idx, "k")) {
-							return 0;
-						}
-						init_info.m_kernel_path = argv[idx];
-						break;
-
-					case 's':
-						if (check_missing_arg(idx, "s")) {
-							return 0;
-						}
-						switch (init_info.m_syntax = static_cast<disas_syntax>(std::stoul(std::string(argv[idx]), nullptr, 0)))
+					default:
+						logger("Unknown syntax specified by option \"-disas\"");
+						return 1;
+					}
+				}
+				else if (*it == QStringLiteral("-machine")) {
+					if (check_missing_arg(it)) {
+						return 1;
+					}
+					std::string console = qPrintable(*it);
+					if (console == nxbx::console_to_string(console_t::xbox)) {
+						init_info.m_console_type = console_t::xbox;
+					}
+					else if (console == nxbx::console_to_string(console_t::chihiro)) {
+						init_info.m_console_type = console_t::chihiro;
+					}
+					else if (console == nxbx::console_to_string(console_t::devkit)) {
+						init_info.m_console_type = console_t::devkit;
+					}
+					else {
+						switch (init_info.m_console_type = static_cast<console_t>(std::stoul(console, nullptr, 0)))
 						{
-						case disas_syntax::att:
-						case disas_syntax::masm:
-						case disas_syntax::intel:
+						case console_t::xbox:
+						case console_t::chihiro:
+						case console_t::devkit:
 							break;
 
 						default:
-							logger("Unknown syntax specified by option \"%c\"", option);
-							return 0;
-						}
-						break;
-
-					case 'c': {
-						if (check_missing_arg(idx, "c")) {
-							return 0;
-						}
-						std::string console = argv[idx];
-						if (console == nxbx::console_to_string(console_t::xbox)) {
-							init_info.m_console_type = console_t::xbox;
-						}
-						else if (console == nxbx::console_to_string(console_t::chihiro)) {
-							init_info.m_console_type = console_t::chihiro;
-						}
-						else if (console == nxbx::console_to_string(console_t::devkit)) {
-							init_info.m_console_type = console_t::devkit;
-						}
-						else {
-							switch (init_info.m_console_type = static_cast<console_t>(std::stoul(console, nullptr, 0)))
-							{
-							case console_t::xbox:
-							case console_t::chihiro:
-							case console_t::devkit:
-								break;
-
-							default:
-								logger("Unknown console type specified by option \"%c\"", option);
-								return 0;
-							}
+							logger("Unknown console type specified by option \"-machine\"");
+							return 1;
 						}
 					}
-					break;
-
-					case 'd':
-						init_info.m_use_dbg = 1;
-						break;
-
-					case 'h':
-						print_help();
-						return 0;
-
-					default:
-						return print_unk_opt(arg_str);
+				}
+				else if (*it == QStringLiteral("-debug")) {
+					init_info.m_use_dbg = 1;
+				}
+				else if (*it == QStringLiteral("-help")) {
+					print_help();
+					return 0;
+				}
+				else if (*it == QStringLiteral("-keys")) {
+					if (check_missing_arg(it)) {
+						return 1;
+					}
+					init_info.m_keys_path = qPrintable(*it);
+				}
+				else if (*it == QStringLiteral("-sync_hdd")) {
+					if (check_missing_arg(it)) {
+						return 1;
+					}
+					init_info.m_sync_part = std::stoul(qPrintable(*it));
+					if (init_info.m_sync_part > 5) {
+						logger("Invalid partition number %u specified by option \"-sync_hdd\" (must be in the range [0-5])", init_info.m_sync_part);
+						return 1;
 					}
 				}
 				else {
-					// Process multi-letter options
-					if (arg_str.compare("-keys") == 0) {
-						if (check_missing_arg(idx, arg_str.c_str())) {
-							return 0;
-						}
-						init_info.m_keys_path = argv[idx];
-					}
-					else if (arg_str.compare("-sync_hdd") == 0) {
-						if (check_missing_arg(idx, arg_str.c_str())) {
-							return 0;
-						}
-						init_info.m_sync_part = std::stoul(argv[idx]);
-						if (init_info.m_sync_part > 5) {
-							logger("Invalid partition number %u specified by option -sync_hdd (must be in the range [0-5])", init_info.m_sync_part);
-							return 0;
-						}
-					}
-					else {
-						return print_unk_opt(arg_str);
-					}
+					return print_unk_opt(it);
 				}
-			}
-			else {
-				return print_unk_opt(arg_str);
 			}
 		}
 		/* handle possible exceptions thrown by std::stoul */
 		catch (const std::exception &e) {
-			logger("Failed to parse \"%c\" option. The error was: %s", option, e.what());
+			logger("Failed to parse \"%s\" option. The error was: %s", qPrintable(*std::prev(it)), e.what());
 			return 1;
 		}
 	}
@@ -189,7 +162,7 @@ main(int argc, char **argv)
 		return 1;
 	}
 
-	init_info.m_nxbx_path = nxbx::get_path();
+	init_info.m_nxbx_path = qPrintable(QCoreApplication::applicationDirPath());
 	if (init_info.m_kernel_path.empty()) {
 		// Attempt to find nboxkrnl in the current directory of nxbx
 		std::filesystem::path curr_dir = init_info.m_nxbx_path;
@@ -202,6 +175,30 @@ main(int argc, char **argv)
 			return 1;
 		}
 		init_info.m_kernel_path = curr_dir.string();
+	}
+
+	return std::nullopt;
+}
+
+int
+main(int argc, char **argv)
+{
+	std::locale::global(std::locale(""));
+
+	QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
+
+	QApplication app(argc, argv);
+
+	init_info_t init_info;
+	init_info.m_keys_path = "";
+	init_info.m_syntax = disas_syntax::intel;
+	init_info.m_console_type = console_t::xbox;
+	init_info.m_use_dbg = 0;
+	init_info.m_sync_part = -1; // -1=don't sync, 0=sync all partitions, [1-7]=sync that partition
+
+	/* parameter parsing */
+	if (const auto &opt = parse_cmd_line_opt(app.arguments(), init_info); opt) {
+		return *opt;
 	}
 
 	if (nxbx::init_settings(init_info) == false) {
