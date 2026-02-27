@@ -220,7 +220,7 @@ namespace io {
 	static void
 	add_device_handles()
 	{
-		const auto &lambda = [](std::filesystem::path resolved_path, uint64_t handle) {
+		const auto &lambda = [](std::filesystem::path resolved_path, uint32_t handle) {
 			auto pair = s_xbox_handle_map[handle].emplace(handle, std::move(std::make_unique<file_info_base_t>(std::move(std::fstream()), resolved_path.string())));
 			assert(pair.second == true);
 			};
