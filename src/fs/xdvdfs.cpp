@@ -188,6 +188,6 @@ namespace xdvdfs {
 	{
 		m_xiso_fs.seekg(offset, m_xiso_fs.beg);
 		m_xiso_fs.read(buffer, size);
-		return m_xiso_fs.good() ? io::status_t::success : io::status_t::error;
+		return m_xiso_fs.good() ? io::status_t::STATUS_SUCCESS : io::status_t::STATUS_IO_DEVICE_ERROR;
 	}
 }

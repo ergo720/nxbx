@@ -358,33 +358,33 @@ namespace fatx {
 	driver::check_file_access(uint32_t desired_access, uint32_t create_options, uint32_t attributes, bool is_create, uint32_t flags)
 	{
 		if ((flags & io::flags_t::must_be_a_dir) && !(attributes & FATX_FILE_DIRECTORY)) {
-			return io::not_a_directory;
+			return io::STATUS_NOT_A_DIRECTORY;
 		}
 		else if ((flags & io::flags_t::must_not_be_a_dir) && (attributes & FATX_FILE_DIRECTORY)) {
-			return io::is_a_directory;
+			return io::STATUS_FILE_IS_A_DIRECTORY;
 		}
 
 		if (attributes & FATX_FILE_DIRECTORY) {
 			if (desired_access & ~m_valid_directory_access) {
-				return io::failed;
+				return io::STATUS_ACCESS_DENIED;
 			}
 		} else {
 			if (desired_access & ~m_valid_file_access) {
-				return io::failed;
+				return io::STATUS_ACCESS_DENIED;
 			}
 		}
 
 		// The read-only check must be done here because the kernel doesn't know the attribute stored in the dirent
 		if (attributes & FATX_FILE_READONLY) {
 			if (!is_create && (desired_access & ~m_access_implies_write)) {
-				return io::failed;
+				return io::STATUS_ACCESS_DENIED;
 			}
 			if (create_options & FATX_DELETE_ON_CLOSE) {
-				return io::cannot_delete;
+				return io::STATUS_CANNOT_DELETE;
 			}
 		}
 
-		return io::success;
+		return io::STATUS_SUCCESS;
 	}
 
 	io::status_t
@@ -407,7 +407,7 @@ namespace fatx {
 			std::filesystem::resize_file(m_ct_path, new_file_table_size, ec);
 			if (ec) {
 				metadata_set_corrupted_state();
-				return io::status_t::error;
+				return io::status_t::STATUS_IO_DEVICE_ERROR;
 			}
 			m_cluster_table_file_size = new_file_table_size;
 		}
@@ -424,7 +424,7 @@ namespace fatx {
 		if (!m_pt_fs.good()) {
 			m_pt_fs.clear();
 			metadata_set_corrupted_state();
-			return io::status_t::error;
+			return io::status_t::STATUS_IO_DEVICE_ERROR;
 		}
 
 		CLUSTER_DATA_ENTRY data_entry;
@@ -448,9 +448,9 @@ namespace fatx {
 				if (!m_ct_fs.good()) {
 					m_ct_fs.clear();
 					metadata_set_corrupted_state();
-					return io::status_t::error;
+					return io::status_t::STATUS_IO_DEVICE_ERROR;
 				}
-				return io::status_t::success;
+				return io::status_t::STATUS_SUCCESS;
 			};
 
 		const auto write_elem = [&]()
@@ -460,35 +460,35 @@ namespace fatx {
 				if (!m_ct_fs.good()) {
 					m_ct_fs.clear();
 					metadata_set_corrupted_state();
-					return io::status_t::error;
+					return io::status_t::STATUS_IO_DEVICE_ERROR;
 				}
-				return io::status_t::success;
+				return io::status_t::STATUS_SUCCESS;
 			};
 
-		if (read_elem(clusters[0].first) != io::status_t::success) {
-			return io::status_t::error;
+		if (read_elem(clusters[0].first) != io::status_t::STATUS_SUCCESS) {
+			return io::status_t::STATUS_IO_DEVICE_ERROR;
 		}
 
 		for (const auto &[cluster, chain_offset] : clusters) {
 			if (!util::in_range(cluster, cluster_elem_base, cluster_elem_end)) {
-				if (write_elem() != io::status_t::success) {
-					return io::status_t::error;
+				if (write_elem() != io::status_t::STATUS_SUCCESS) {
+					return io::status_t::STATUS_IO_DEVICE_ERROR;
 				}
-				if (read_elem(cluster) != io::status_t::success) {
-					return io::status_t::error;
+				if (read_elem(cluster) != io::status_t::STATUS_SUCCESS) {
+					return io::status_t::STATUS_IO_DEVICE_ERROR;
 				}
 			}
 			data_entry.info = chain_offset + cluster_chain_offset;
 			table_elem[cluster % CLUSTER_TABLE_ENTRIES_PER_ELEM] = data_entry;
 		}
 
-		if (write_elem() != io::status_t::success) {
-			return io::status_t::error;
+		if (write_elem() != io::status_t::STATUS_SUCCESS) {
+			return io::status_t::STATUS_IO_DEVICE_ERROR;
 		}
 
 		m_metadata_file_size += path_length;
 
-		return io::status_t::success;
+		return io::status_t::STATUS_SUCCESS;
 	}
 
 	io::status_t
@@ -504,7 +504,7 @@ namespace fatx {
 			std::filesystem::resize_file(m_ct_path, new_file_table_size, ec);
 			if (ec) {
 				metadata_set_corrupted_state();
-				return io::status_t::error;
+				return io::status_t::STATUS_IO_DEVICE_ERROR;
 			}
 			m_cluster_table_file_size = new_file_table_size;
 		}
@@ -521,10 +521,10 @@ namespace fatx {
 		if (!m_ct_fs.good()) {
 			m_ct_fs.clear();
 			metadata_set_corrupted_state();
-			return io::status_t::error;
+			return io::status_t::STATUS_IO_DEVICE_ERROR;
 		}
 
-		return io::status_t::success;
+		return io::status_t::STATUS_SUCCESS;
 	}
 
 	io::status_t
@@ -551,9 +551,9 @@ namespace fatx {
 				if (!m_ct_fs.good()) {
 					m_ct_fs.clear();
 					metadata_set_corrupted_state();
-					return io::status_t::error;
+					return io::status_t::STATUS_IO_DEVICE_ERROR;
 				}
-				return io::status_t::success;
+				return io::status_t::STATUS_SUCCESS;
 			};
 
 		const auto write_elem = [&]()
@@ -563,33 +563,33 @@ namespace fatx {
 				if (!m_ct_fs.good()) {
 					m_ct_fs.clear();
 					metadata_set_corrupted_state();
-					return io::status_t::error;
+					return io::status_t::STATUS_IO_DEVICE_ERROR;
 				}
-				return io::status_t::success;
+				return io::status_t::STATUS_SUCCESS;
 			};
 
-		if (read_elem(clusters[0]) != io::status_t::success) {
-			return io::status_t::error;
+		if (read_elem(clusters[0]) != io::status_t::STATUS_SUCCESS) {
+			return io::status_t::STATUS_IO_DEVICE_ERROR;
 		}
 
 		for (const auto &cluster : clusters) {
 			if (!util::in_range(cluster, cluster_elem_base, cluster_elem_end)) {
-				if (write_elem() != io::status_t::success) {
-					return io::status_t::error;
+				if (write_elem() != io::status_t::STATUS_SUCCESS) {
+					return io::status_t::STATUS_IO_DEVICE_ERROR;
 				}
-				if (read_elem(cluster) != io::status_t::success) {
-					return io::status_t::error;
+				if (read_elem(cluster) != io::status_t::STATUS_SUCCESS) {
+					return io::status_t::STATUS_IO_DEVICE_ERROR;
 				}
 			}
 			table_elem[cluster % CLUSTER_TABLE_ENTRIES_PER_ELEM] = CLUSTER_DATA_ENTRY(cluster_t::freed, 0, 0, 0);
 			m_cluster_map.erase(cluster);
 		}
 
-		if (write_elem() != io::status_t::success) {
-			return io::status_t::error;
+		if (write_elem() != io::status_t::STATUS_SUCCESS) {
+			return io::status_t::STATUS_IO_DEVICE_ERROR;
 		}
 
-		return io::status_t::success;
+		return io::status_t::STATUS_SUCCESS;
 	}
 
 	io::status_t
@@ -656,7 +656,7 @@ namespace fatx {
 			if (!m_pt_fs.good()) {
 				m_pt_fs.clear();
 				metadata_set_corrupted_state();
-				return io::status_t::error;
+				return io::status_t::STATUS_IO_DEVICE_ERROR;
 			}
 
 			bool has_found_enough_clusters;
@@ -671,10 +671,10 @@ namespace fatx {
 			if (!m_pt_fs.good()) {
 				m_pt_fs.clear();
 				metadata_set_corrupted_state();
-				return io::status_t::error;
+				return io::status_t::STATUS_IO_DEVICE_ERROR;
 			}
 			if (has_found_enough_clusters) {
-				return io::status_t::success;
+				return io::status_t::STATUS_SUCCESS;
 			}
 
 			fat_bytes_to_end -= bytes_to_access;
@@ -709,7 +709,7 @@ namespace fatx {
 		m_pt_fs.read((char *)fat_buffer, fat_buffer_size);
 		if (!m_pt_fs.good()) {
 			m_pt_fs.clear();
-			return io::status_t::error;
+			return io::status_t::STATUS_IO_DEVICE_ERROR;
 		}
 
 		for (uint32_t i = 0; i < clusters_left; ++i) {
@@ -728,7 +728,7 @@ namespace fatx {
 				if (!m_pt_fs.good()) {
 					m_pt_fs.clear();
 					metadata_set_corrupted_state();
-					return io::status_t::error;
+					return io::status_t::STATUS_IO_DEVICE_ERROR;
 				}
 			}
 			if (i == (clusters_left - 1)) {
@@ -738,7 +738,7 @@ namespace fatx {
 				if (!m_pt_fs.good()) {
 					m_pt_fs.clear();
 					metadata_set_corrupted_state();
-					return io::status_t::error;
+					return io::status_t::STATUS_IO_DEVICE_ERROR;
 				}
 			}
 		}
@@ -759,7 +759,7 @@ namespace fatx {
 				if (!m_pt_fs.good()) {
 					m_pt_fs.clear();
 					metadata_set_corrupted_state();
-					return io::status_t::error;
+					return io::status_t::STATUS_IO_DEVICE_ERROR;
 				}
 				break;
 			}
@@ -769,7 +769,7 @@ namespace fatx {
 				if (!m_pt_fs.good()) {
 					m_pt_fs.clear();
 					metadata_set_corrupted_state();
-					return io::status_t::error;
+					return io::status_t::STATUS_IO_DEVICE_ERROR;
 				}
 				buffer_cluster = found_cluster;
 				fat_offset = cluster_to_fat_offset(found_cluster);
@@ -778,7 +778,7 @@ namespace fatx {
 				if (!m_pt_fs.good()) {
 					m_pt_fs.clear();
 					metadata_set_corrupted_state();
-					return io::status_t::error;
+					return io::status_t::STATUS_IO_DEVICE_ERROR;
 				}
 			}
 			fat_buffer[prev_cluster - buffer_cluster] = (T)FATX32_CLUSTER_FREE;
@@ -786,7 +786,7 @@ namespace fatx {
 
 		m_cluster_free_num += num_of_freed_clusters;
 
-		return io::status_t::success;
+		return io::status_t::STATUS_SUCCESS;
 	}
 
 	template<typename T>
@@ -794,7 +794,7 @@ namespace fatx {
 	driver::extend_cluster_chain(uint32_t start_cluster, uint32_t clusters_to_add, std::string_view file_path)
 	{
 		if (m_cluster_free_num < clusters_to_add) {
-			return io::status_t::full; // not enough free clusters for the dirent stream and/or file/directory
+			return io::status_t::STATUS_DISK_FULL; // not enough free clusters for the dirent stream and/or file/directory
 		}
 
 		constexpr uint32_t fat_buffer_size = 4096 / sizeof(T);
@@ -807,7 +807,7 @@ namespace fatx {
 		m_pt_fs.read((char *)fat_buffer, fat_buffer_size);
 		if (!m_pt_fs.good()) {
 			m_pt_fs.clear();
-			return io::status_t::error;
+			return io::status_t::STATUS_IO_DEVICE_ERROR;
 		}
 
 		// Find the eoc of the existing chain
@@ -831,13 +831,13 @@ namespace fatx {
 				if (!m_pt_fs.good()) {
 					m_pt_fs.clear();
 					metadata_set_corrupted_state();
-					return io::status_t::error;
+					return io::status_t::STATUS_IO_DEVICE_ERROR;
 				}
 			}
 		}
 
 		std::vector<std::pair<uint32_t, uint32_t>> found_clusters;
-		if (io::status_t status = allocate_free_clusters(clusters_to_add, found_clusters); status != io::status_t::success) {
+		if (io::status_t status = allocate_free_clusters(clusters_to_add, found_clusters); status != io::status_t::STATUS_SUCCESS) {
 			return status;
 		}
 
@@ -848,16 +848,16 @@ namespace fatx {
 		if (!m_pt_fs.good()) {
 			m_pt_fs.clear();
 			metadata_set_corrupted_state();
-			return io::status_t::error;
+			return io::status_t::STATUS_IO_DEVICE_ERROR;
 		}
 
-		if (io::status_t status = update_cluster_table(found_clusters, file_path, old_cluster_num); status != io::status_t::success) {
+		if (io::status_t status = update_cluster_table(found_clusters, file_path, old_cluster_num); status != io::status_t::STATUS_SUCCESS) {
 			return status;
 		}
 		// No need to write the file's clusters to metadata.bin
 		m_cluster_free_num -= clusters_to_add;
 		
-		return io::status_t::success;
+		return io::status_t::STATUS_SUCCESS;
 	}
 
 	io::status_t
@@ -872,7 +872,7 @@ namespace fatx {
 		m_pt_fs.write(cluster_buffer, bytes_in_cluster);
 		if (!m_pt_fs.good()) {
 			m_pt_fs.clear();
-			return io::status_t::error;
+			return io::status_t::STATUS_IO_DEVICE_ERROR;
 		}
 
 		// Chain the new cluster to the existing chain of the stream
@@ -883,16 +883,16 @@ namespace fatx {
 		if (!m_pt_fs.good()) {
 			m_pt_fs.clear();
 			metadata_set_corrupted_state();
-			return io::status_t::error;
+			return io::status_t::STATUS_IO_DEVICE_ERROR;
 		}
 
-		if (io::status_t status = update_cluster_table(cluster, m_metadata_file_size, cluster_t::directory); status != io::status_t::success) {
+		if (io::status_t status = update_cluster_table(cluster, m_metadata_file_size, cluster_t::directory); status != io::status_t::STATUS_SUCCESS) {
 			return status;
 		}
 
 		m_metadata_file_size += bytes_in_cluster;
 
-		return io::status_t::success;
+		return io::status_t::STATUS_SUCCESS;
 	}
 
 	template<bool check_is_empty>
@@ -905,7 +905,7 @@ namespace fatx {
 			std::string is_root_str(std::filesystem::path("Harddisk/Partition" + std::to_string(m_pt_num - DEV_PARTITION0) + '/').make_preferred().string());
 			if (remaining_path.compare(is_root_str) == 0) {
 				// This happens when searching for the root directory
-				return io::status_t::is_root_dir;
+				return io::status_t::IS_ROOT_DIRECTORY;
 			}
 			if (IS_HDD_HANDLE(m_pt_num)) {
 				constexpr uint64_t length = std::string("Harddisk/PartitionX/").length();
@@ -921,7 +921,7 @@ namespace fatx {
 		bool is_last_name, found_free_dirent = false;
 		while (true) {
 			if (!((dirent_cluster - 1) < m_cluster_tot_num)) {
-				return io::status_t::corrupt;
+				return io::status_t::STATUS_FILE_CORRUPT_ERROR;
 			}
 
 			const auto &cluster_info = cluster_to_offset(dirent_cluster);
@@ -929,7 +929,7 @@ namespace fatx {
 			if (cluster_info.offset == 0) [[unlikely]] {
 				// Trying to find a dirent that was not cached by the metadata file (this should not happen...)
 				logger_mod_en(error, io, "Dirent stream at cluster %u was not found in Partition%u.bin file", dirent_cluster, m_pt_num);
-				return io::status_t::error;
+				return io::status_t::STATUS_IO_DEVICE_ERROR;
 			}
 
 			// Read one full cluster
@@ -937,7 +937,7 @@ namespace fatx {
 			m_pt_fs.read(buffer.get(), bytes_in_cluster);
 			if (!m_pt_fs.good()) {
 				m_pt_fs.clear();
-				return io::status_t::error;
+				return io::status_t::STATUS_IO_DEVICE_ERROR;
 			}
 
 			// NOTE: pos2 == std::string_view::npos happens when reaching the last name and it's a file
@@ -952,7 +952,7 @@ namespace fatx {
 			while (bytes_in_cluster > 0) {
 				if (num_dirent == FATX_MAX_NUM_DIRENT) {
 					// Exceeded the maximum number of allowed directories in a single stream
-					return io::status_t::corrupt;
+					return io::status_t::STATUS_FILE_CORRUPT_ERROR;
 				}
 
 				PDIRENT dirent = (PDIRENT)(buffer.get() + offset_in_cluster);
@@ -967,7 +967,7 @@ namespace fatx {
 						// Reached the end of the stream
 						// NOTE: clusters are not guaranteed to be aligned on a cluster boundary in metadata.bin files
 						m_last_free_dirent_is_on_boundary = (num_dirent + 1) == num_dirent_per_cluster;
-						return check_is_empty ? io::status_t::success : (is_last_name ? io::status_t::name_not_found : io::status_t::path_not_found);
+						return check_is_empty ? io::status_t::STATUS_SUCCESS : (is_last_name ? io::status_t::STATUS_OBJECT_NAME_NOT_FOUND : io::status_t::STATUS_OBJECT_PATH_NOT_FOUND);
 					}
 					if constexpr (check_is_empty) {
 						++num_dirent;
@@ -979,7 +979,7 @@ namespace fatx {
 
 				if constexpr (check_is_empty) {
 					// If we reach here, then we found at least a valid dirent, so the stream is not empty
-					return io::status_t::not_empty;
+					return io::status_t::STATUS_DIRECTORY_NOT_EMPTY;
 				}
 
 				if ((dirent->name_length == xbox_file_name.length()) &&
@@ -996,7 +996,7 @@ namespace fatx {
 						io_dirent.last_access_time = dirent->last_access_time;
 						m_last_found_dirent_offset = dirent_offset = cluster_info.offset + offset_in_cluster;
 						m_last_dirent_stream_cluster = 0;
-						return io::status_t::success;
+						return io::status_t::STATUS_SUCCESS;
 					} else {
 						if (dirent->attributes & FATX_FILE_DIRECTORY) {
 							pos = pos2 + 1;
@@ -1029,7 +1029,7 @@ namespace fatx {
 			m_pt_fs.read(buffer, fat_entry_size);
 			if (uint32_t found_cluster; !m_pt_fs.good()) {
 				m_pt_fs.clear();
-				return io::status_t::error;
+				return io::status_t::STATUS_IO_DEVICE_ERROR;
 			} else {
 				if (fat_entry_size == 2) {
 					found_cluster = *(uint16_t *)buffer;
@@ -1042,7 +1042,7 @@ namespace fatx {
 					// Reached the end of the stream
 					// NOTE: clusters are not guaranteed to be aligned on a cluster boundary in metadata.bin files
 					m_last_free_dirent_is_on_boundary = (num_dirent + 1) == num_dirent_per_cluster;
-					check_is_empty ? io::status_t::success : (is_last_name ? io::status_t::name_not_found : io::status_t::path_not_found);
+					check_is_empty ? io::status_t::STATUS_SUCCESS : (is_last_name ? io::status_t::STATUS_OBJECT_NAME_NOT_FOUND : io::status_t::STATUS_OBJECT_PATH_NOT_FOUND);
 				}
 				dirent_cluster = m_last_dirent_stream_cluster = found_cluster;
 				bytes_in_cluster = m_cluster_size;
@@ -1084,20 +1084,20 @@ namespace fatx {
 			m_pt_fs.write((const char *)&io_dirent, sizeof(DIRENT));
 			if (!m_pt_fs.good()) {
 				m_pt_fs.clear();
-				return io::status_t::error;
+				return io::status_t::STATUS_IO_DEVICE_ERROR;
 			}
-			return io::status_t::success;
+			return io::status_t::STATUS_SUCCESS;
 		} else {
 			std::unique_ptr<char[]> cluster_buffer = std::make_unique_for_overwrite<char[]>(bytes_in_cluster);
 			if (clusters_needed_for_file) {
 				// Either we are creating a directory, or a file with a non-zero initial size
 				if (clusters_needed_for_dirent_stream) {
 					if (m_cluster_free_num < (clusters_needed_for_file + 1)) {
-						return io::status_t::full; // not enough free clusters for the dirent stream and/or file/directory
+						return io::status_t::STATUS_DISK_FULL; // not enough free clusters for the dirent stream and/or file/directory
 					}
 					// This must search for the file and dirent clusters separately, because they belong to different chains
 					std::vector<std::pair<uint32_t, uint32_t>> found_clusters;
-					if (io::status_t status = allocate_free_clusters(clusters_needed_for_file, found_clusters); status != io::status_t::success) {
+					if (io::status_t status = allocate_free_clusters(clusters_needed_for_file, found_clusters); status != io::status_t::STATUS_SUCCESS) {
 						return status;
 					}
 					// Write the dirent for the created file/directory
@@ -1107,7 +1107,7 @@ namespace fatx {
 					if (!m_pt_fs.good()) {
 						m_pt_fs.clear();
 						metadata_set_corrupted_state();
-						return io::status_t::error;
+						return io::status_t::STATUS_IO_DEVICE_ERROR;
 					}
 					if (io_dirent.attributes & FATX_FILE_DIRECTORY) {
 						std::fill_n(cluster_buffer.get(), bytes_in_cluster, FATX_DIRENT_END2); // write the cluster of the new directory
@@ -1116,32 +1116,32 @@ namespace fatx {
 						if (!m_pt_fs.good()) {
 							m_pt_fs.clear();
 							metadata_set_corrupted_state();
-							return io::status_t::error;
+							return io::status_t::STATUS_IO_DEVICE_ERROR;
 						}
-						if (io::status_t status = update_cluster_table(found_clusters[0].first, m_metadata_file_size, cluster_t::directory); status != io::status_t::success) {
+						if (io::status_t status = update_cluster_table(found_clusters[0].first, m_metadata_file_size, cluster_t::directory); status != io::status_t::STATUS_SUCCESS) {
 							return status;
 						}
 						m_metadata_file_size += bytes_in_cluster;
 					} else {
 						// No need to write the file's clusters to metadata.bin
-						if (io::status_t status = update_cluster_table(found_clusters, file_path); status != io::status_t::success) {
+						if (io::status_t status = update_cluster_table(found_clusters, file_path); status != io::status_t::STATUS_SUCCESS) {
 							return status;
 						}
 					}
 					found_clusters.clear();
-					if (io::status_t status = allocate_free_clusters(1, found_clusters); status != io::status_t::success) {
+					if (io::status_t status = allocate_free_clusters(1, found_clusters); status != io::status_t::STATUS_SUCCESS) {
 						return status;
 					}
 					// Write the cluster used to extend the dirent stream
-					if (io::status_t status = extend_dirent_stream(found_clusters[0].first, cluster_buffer.get()); status != io::status_t::success) {
+					if (io::status_t status = extend_dirent_stream(found_clusters[0].first, cluster_buffer.get()); status != io::status_t::STATUS_SUCCESS) {
 						return status;
 					}
 				} else {
 					if (m_cluster_free_num < clusters_needed_for_file) {
-						return io::status_t::full; // not enough free clusters for the file/directory
+						return io::status_t::STATUS_DISK_FULL; // not enough free clusters for the file/directory
 					}
 					std::vector<std::pair<uint32_t, uint32_t>> found_clusters;
-					if (io::status_t status = allocate_free_clusters(clusters_needed_for_file, found_clusters); status != io::status_t::success) {
+					if (io::status_t status = allocate_free_clusters(clusters_needed_for_file, found_clusters); status != io::status_t::STATUS_SUCCESS) {
 						return status;
 					}
 					// Write the dirent for the created file/directory
@@ -1151,7 +1151,7 @@ namespace fatx {
 					if (!m_pt_fs.good()) {
 						m_pt_fs.clear();
 						metadata_set_corrupted_state();
-						return io::status_t::error;
+						return io::status_t::STATUS_IO_DEVICE_ERROR;
 					}
 					if (io_dirent.attributes & FATX_FILE_DIRECTORY) {
 						std::fill_n(cluster_buffer.get(), bytes_in_cluster, FATX_DIRENT_END2); // write the cluster of the new directory
@@ -1160,15 +1160,15 @@ namespace fatx {
 						if (!m_pt_fs.good()) {
 							m_pt_fs.clear();
 							metadata_set_corrupted_state();
-							return io::status_t::error;
+							return io::status_t::STATUS_IO_DEVICE_ERROR;
 						}
-						if (io::status_t status = update_cluster_table(found_clusters[0].first, m_metadata_file_size, cluster_t::directory); status != io::status_t::success) {
+						if (io::status_t status = update_cluster_table(found_clusters[0].first, m_metadata_file_size, cluster_t::directory); status != io::status_t::STATUS_SUCCESS) {
 							return status;
 						}
 						m_metadata_file_size += bytes_in_cluster;
 					} else {
 						// No need to write the file's clusters to metadata.bin
-						if (io::status_t status = update_cluster_table(found_clusters, file_path); status != io::status_t::success) {
+						if (io::status_t status = update_cluster_table(found_clusters, file_path); status != io::status_t::STATUS_SUCCESS) {
 							return status;
 						}
 					}
@@ -1176,26 +1176,26 @@ namespace fatx {
 
 				m_cluster_free_num -= (clusters_needed_for_dirent_stream + clusters_needed_for_file);
 
-				return io::status_t::success;
+				return io::status_t::STATUS_SUCCESS;
 			}
 
 			if (clusters_needed_for_dirent_stream) {
 				if (m_cluster_free_num == 0) {
-					return io::status_t::full; // not enough free clusters to extend the dirent stream
+					return io::status_t::STATUS_DISK_FULL; // not enough free clusters to extend the dirent stream
 				}
 				// This happens when we are creating a file with an initial allocation size of zero, but there isn't a free slot in the existing dirent stream
 				std::vector<std::pair<uint32_t, uint32_t>> found_clusters;
-				if (io::status_t status = allocate_free_clusters(1, found_clusters); status != io::status_t::success) {
+				if (io::status_t status = allocate_free_clusters(1, found_clusters); status != io::status_t::STATUS_SUCCESS) {
 					return status;
 				}
 				// Write the cluster used to extend the dirent stream
-				if (io::status_t status = extend_dirent_stream(found_clusters[0].first, cluster_buffer.get()); status != io::status_t::success) {
+				if (io::status_t status = extend_dirent_stream(found_clusters[0].first, cluster_buffer.get()); status != io::status_t::STATUS_SUCCESS) {
 					return status;
 				}
 
 				m_cluster_free_num -= 1;
 
-				return io::status_t::success;
+				return io::status_t::STATUS_SUCCESS;
 			}
 
 			std::unreachable();
@@ -1214,14 +1214,14 @@ namespace fatx {
 			if (new_size != io_dirent.size) {
 				if (new_size > io_dirent.size) {
 					if (m_cluster_free_num < new_cluster_num) {
-						return io::status_t::full; // not enough free clusters for the file
+						return io::status_t::STATUS_DISK_FULL; // not enough free clusters for the file
 					}
 					uint32_t old_cluster_num = ((io_dirent.size + bytes_in_cluster - 1) & ~(bytes_in_cluster - 1)) >> m_cluster_shift;
 					std::vector<std::pair<uint32_t, uint32_t>> found_clusters;
-					if (io::status_t status = allocate_free_clusters(new_cluster_num - old_cluster_num, found_clusters); status != io::status_t::success) {
+					if (io::status_t status = allocate_free_clusters(new_cluster_num - old_cluster_num, found_clusters); status != io::status_t::STATUS_SUCCESS) {
 						return status;
 					}
-					if (io::status_t status = update_cluster_table(found_clusters, file_path, old_cluster_num); status != io::status_t::success) {
+					if (io::status_t status = update_cluster_table(found_clusters, file_path, old_cluster_num); status != io::status_t::STATUS_SUCCESS) {
 						return status;
 					}
 					// No need to write the file's clusters to metadata.bin
@@ -1235,10 +1235,10 @@ namespace fatx {
 					} else {
 						status = free_allocated_clusters<uint32_t>(io_dirent.first_cluster, new_cluster_num, found_clusters);
 					}
-					if (status != io::status_t::success) {
+					if (status != io::status_t::STATUS_SUCCESS) {
 						return status;
 					}
-					if (status = update_cluster_table(found_clusters); status != io::status_t::success) {
+					if (status = update_cluster_table(found_clusters); status != io::status_t::STATUS_SUCCESS) {
 						return status;
 					}
 					io_dirent.size = new_size;
@@ -1252,10 +1252,10 @@ namespace fatx {
 		if (!m_pt_fs.good()) {
 			m_pt_fs.clear();
 			metadata_set_corrupted_state();
-			return io::status_t::error;
+			return io::status_t::STATUS_IO_DEVICE_ERROR;
 		}
 
-		return io::status_t::success;
+		return io::status_t::STATUS_SUCCESS;
 	}
 
 	io::status_t
@@ -1265,7 +1265,7 @@ namespace fatx {
 		// the kernel marks files scheduled for deletion and won't allow new create/open request to them
 
 		// Folders can only be deleted if they are empty
-		assert(io_dirent.attributes & FATX_FILE_DIRECTORY ? is_dirent_stream_empty(io_dirent.first_cluster) == io::status_t::success : true);
+		assert(io_dirent.attributes & FATX_FILE_DIRECTORY ? is_dirent_stream_empty(io_dirent.first_cluster) == io::status_t::STATUS_SUCCESS : true);
 
 		if (io_dirent.first_cluster != FATX32_CLUSTER_FREE) {
 			io::status_t status;
@@ -1275,10 +1275,10 @@ namespace fatx {
 			} else {
 				status = free_allocated_clusters<uint32_t>(io_dirent.first_cluster, 0, found_clusters);
 			}
-			if (status != io::status_t::success) {
+			if (status != io::status_t::STATUS_SUCCESS) {
 				return status;
 			}
-			if (status = update_cluster_table(found_clusters); status != io::status_t::success) {
+			if (status = update_cluster_table(found_clusters); status != io::status_t::STATUS_SUCCESS) {
 				return status;
 			}
 		}
@@ -1286,7 +1286,7 @@ namespace fatx {
 		io_dirent.name_length = FATX_DIRENT_DELETED;
 		io_dirent.first_cluster = FATX32_CLUSTER_FREE;
 
-		return io::status_t::success;
+		return io::status_t::STATUS_SUCCESS;
 	}
 
 	io::status_t
@@ -1304,14 +1304,14 @@ namespace fatx {
 
 				uint32_t clusters_needed_for_file = ((file_new_size + cluster_mask) & ~cluster_mask) >> m_cluster_shift;
 				if (m_cluster_free_num < clusters_needed_for_file) {
-					return io::status_t::full; // not enough free clusters for the file/directory
+					return io::status_t::STATUS_DISK_FULL; // not enough free clusters for the file/directory
 				}
 				std::vector<std::pair<uint32_t, uint32_t>> found_clusters;
-				if (io::status_t status = allocate_free_clusters(clusters_needed_for_file, found_clusters); status != io::status_t::success) {
+				if (io::status_t status = allocate_free_clusters(clusters_needed_for_file, found_clusters); status != io::status_t::STATUS_SUCCESS) {
 					return status;
 				}
 				io_dirent.first_cluster = found_clusters[0].first;
-				if (io::status_t status = update_cluster_table(found_clusters, file_path); status != io::status_t::success) {
+				if (io::status_t status = update_cluster_table(found_clusters, file_path); status != io::status_t::STATUS_SUCCESS) {
 					return status;
 				}
 			}
@@ -1325,7 +1325,7 @@ namespace fatx {
 				} else {
 					status = extend_cluster_chain<uint32_t>(io_dirent.first_cluster, clusters_needed, file_path);
 				}
-				if (status != io::status_t::success) {
+				if (status != io::status_t::STATUS_SUCCESS) {
 					return status;
 				}
 			}
@@ -1333,7 +1333,7 @@ namespace fatx {
 			io_dirent.size = file_new_size;
 		}
 
-		return io::status_t::success;
+		return io::status_t::STATUS_SUCCESS;
 	}
 
 	bool
@@ -1441,7 +1441,7 @@ namespace fatx {
 			m_pt_fs.read(buffer, size);
 			if (!m_pt_fs.good()) {
 				m_pt_fs.clear();
-				return io::status_t::error;
+				return io::status_t::STATUS_IO_DEVICE_ERROR;
 			}
 		}
 		else {
@@ -1465,7 +1465,7 @@ namespace fatx {
 					m_pt_fs.read(buffer + buffer_offset, bytes_to_read);
 					if (!m_pt_fs.good()) {
 						m_pt_fs.clear();
-						return io::status_t::error;
+						return io::status_t::STATUS_IO_DEVICE_ERROR;
 					}
 				} else {
 					assert(info_entry.type == cluster_t::file);
@@ -1473,7 +1473,7 @@ namespace fatx {
 					std::filesystem::path file_path(io::g_hdd_dir);
 					file_path /= info_entry.path;
 					if (auto opt = open_file(file_path); !opt) {
-						return io::status_t::error;
+						return io::status_t::STATUS_IO_DEVICE_ERROR;
 					} else {
 						uint64_t file_offset = (uint64_t)info_entry.cluster << cluster_shift1;
 						opt->seekg(file_offset + cluster_offset, m_pt_fs.beg);
@@ -1484,7 +1484,7 @@ namespace fatx {
 								uint64_t bytes_read = opt->gcount();
 								std::fill_n(buffer + buffer_offset + bytes_read, bytes_to_read - bytes_read, 0);
 							} else {
-								return io::status_t::error;
+								return io::status_t::STATUS_IO_DEVICE_ERROR;
 							}
 						}
 					}
@@ -1496,7 +1496,7 @@ namespace fatx {
 			}
 		}
 
-		return io::status_t::success;
+		return io::status_t::STATUS_SUCCESS;
 	}
 
 	io::status_t
@@ -1514,7 +1514,7 @@ namespace fatx {
 			m_pt_fs.write(buffer, size);
 			if (!m_pt_fs.good()) {
 				m_pt_fs.clear();
-				return io::status_t::error;
+				return io::status_t::STATUS_IO_DEVICE_ERROR;
 			}
 			if (util::in_range(offset, (uint64_t)0, (uint64_t)sizeof(XBOX_PARTITION_TABLE) - 1)) {
 				// If we have written to the partition table, reload our copy of it. We don't reformat all partitions because we expect the homebrew to do it
@@ -1522,7 +1522,7 @@ namespace fatx {
 				m_pt_fs.read((char *)&g_current_partition_table, sizeof(XBOX_PARTITION_TABLE));
 				if (!m_pt_fs.good()) {
 					m_pt_fs.clear();
-					return io::status_t::error;
+					return io::status_t::STATUS_IO_DEVICE_ERROR;
 				}
 			}
 		}
@@ -1548,17 +1548,17 @@ namespace fatx {
 						m_pt_fs.write(cluster_buffer.get(), bytes_to_write);
 						if (!m_pt_fs.good()) {
 							m_pt_fs.clear();
-							return io::status_t::error;
+							return io::status_t::STATUS_IO_DEVICE_ERROR;
 						}
 					} else {
 						m_pt_fs.seekp(0, m_pt_fs.end);
 						m_pt_fs.write(buffer + buffer_offset, bytes_to_write);
 						if (!m_pt_fs.good()) {
 							m_pt_fs.clear();
-							return io::status_t::error;
+							return io::status_t::STATUS_IO_DEVICE_ERROR;
 						}
 					}
-					if (io::status_t status = update_cluster_table(cluster, m_metadata_file_size, cluster_t::raw); status != io::status_t::success) {
+					if (io::status_t status = update_cluster_table(cluster, m_metadata_file_size, cluster_t::raw); status != io::status_t::STATUS_SUCCESS) {
 						return status;
 					}
 				} else if ((info_entry.type == cluster_t::directory) || (info_entry.type == cluster_t::raw)) {
@@ -1566,7 +1566,7 @@ namespace fatx {
 					m_pt_fs.write(buffer + buffer_offset, bytes_to_write);
 					if (!m_pt_fs.good()) {
 						m_pt_fs.clear();
-						return io::status_t::error;
+						return io::status_t::STATUS_IO_DEVICE_ERROR;
 					}
 				} else {
 					assert(info_entry.type == cluster_t::file);
@@ -1574,13 +1574,13 @@ namespace fatx {
 					std::filesystem::path file_path(io::g_hdd_dir);
 					file_path /= info_entry.path;
 					if (auto opt = open_file(file_path); !opt) {
-						return io::status_t::error;
+						return io::status_t::STATUS_IO_DEVICE_ERROR;
 					} else {
 						uint64_t file_offset = (uint64_t)info_entry.cluster << cluster_shift1;
 						opt->seekp(file_offset + cluster_offset, m_pt_fs.beg);
 						opt->write(buffer + buffer_offset, bytes_to_write);
 						if (!opt->good()) {
-							return io::status_t::error;
+							return io::status_t::STATUS_IO_DEVICE_ERROR;
 						}
 					}
 				}
@@ -1599,13 +1599,13 @@ namespace fatx {
 					for (unsigned i = DEV_PARTITION0; i < DEV_PARTITION6; ++i) {
 						get(i).metadata_set_corrupted_state();
 					}
-					return io::status_t::error;
+					return io::status_t::STATUS_IO_DEVICE_ERROR;
 				}
 				format_partition(buffer, offset, sizeof(SUPERBLOCK) - offset);
 			}
 		}
 
-		return io::status_t::success;
+		return io::status_t::STATUS_SUCCESS;
 	}
 
 	void
@@ -1800,9 +1800,9 @@ namespace fatx {
 				io_dirent.last_access_time = 0;
 				uint64_t dirent_offset;
 				io::status_t io_status = find_dirent_for_file(file_path.substr(io::g_hdd_dir.string().length() - 9), io_dirent, dirent_offset);
-				assert(io_status != io::status_t::success);
-				if ((io_status = create_dirent_for_file(io_dirent, file_path)) != io::status_t::success) {
-					if (io_status == io::status_t::full) {
+				assert(io_status != io::status_t::STATUS_SUCCESS);
+				if ((io_status = create_dirent_for_file(io_dirent, file_path)) != io::status_t::STATUS_SUCCESS) {
+					if (io_status == io::status_t::STATUS_DISK_FULL) {
 						logger_mod_en(warn, io, "Partition %u is full, skipping all remaining file(s)", m_pt_num - DEV_PARTITION0);
 						break;
 					}

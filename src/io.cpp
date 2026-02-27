@@ -311,7 +311,7 @@ namespace io {
 				std::string relative_path = parse_path(curr_oc_request);
 				info_block_oc_t io_result;
 				std::fill_n((char *)&io_result.header, sizeof(io_result.header), 0);
-				io_result.header.status = error;
+				io_result.header.status = STATUS_IO_DEVICE_ERROR;
 				uint32_t disposition = IO_GET_DISPOSITION(host_io_request->type);
 				uint32_t flags = IO_GET_FLAGS(host_io_request->type);
 
@@ -343,13 +343,13 @@ namespace io {
 						io_result.header.info = exists;
 
 						if ((flags & io::flags_t::must_be_a_dir) && !file_info.is_directory) {
-							io_result.header.status = not_a_directory;
+							io_result.header.status = STATUS_NOT_A_DIRECTORY;
 						}
 						else if ((flags & io::flags_t::must_not_be_a_dir) && file_info.is_directory) {
-							io_result.header.status = is_a_directory;
+							io_result.header.status = STATUS_FILE_IS_A_DIRECTORY;
 						}
 						else {
-							io_result.header.status = success;
+							io_result.header.status = STATUS_SUCCESS;
 							io_result.header.info = opened;
 							io_result.file_size = file_info.size;
 							io_result.xdvdfs_timestamp = file_info.timestamp;
@@ -364,7 +364,7 @@ namespace io {
 							// doesn't allow duplicated keys. This is ok though, because we can reuse the same std::fstream for the same file and it will have the same path too
 							logger_en(info, "Opened %s with handle 0x%08" PRIX32 " and path %s", opt->is_open() ? "file" : "directory", curr_oc_request->handle, relative_path.c_str());
 							s_xbox_handle_map[dev].emplace(curr_oc_request->handle, std::move(std::make_unique<file_info_fatx_t>(std::move(*opt), relative_path, dirent_offset, io_dirent)));
-							io_result->header.status = success;
+							io_result->header.status = STATUS_SUCCESS;
 							io_result->file_size = io_dirent.size;
 							io_result->fatx.creation_time = io_dirent.creation_time;
 							io_result->fatx.last_access_time = io_dirent.last_access_time;
@@ -377,7 +377,7 @@ namespace io {
 					uint64_t dirent_offset;
 					status_t fatx_search_status = fatx::driver::get(dev).find_dirent_for_file(relative_path, io_dirent, dirent_offset);
 
-					if (fatx_search_status == is_root_dir) {
+					if (fatx_search_status == IS_ROOT_DIRECTORY) {
 						assert((disposition == IO_OPEN) || (disposition == IO_OPEN_IF));
 
 						io_dirent.name_length = 1;
@@ -392,7 +392,7 @@ namespace io {
 						io_result.header.info = opened;
 						add_to_map(std::make_optional<std::fstream>(), &io_result, 0, io_dirent);
 					}
-					else if (fatx_search_status == success) {
+					else if (fatx_search_status == STATUS_SUCCESS) {
 						if (!file_exists(g_nxbx_dir, relative_path, resolved_path)) {
 							// The fatx fs indicates that the file exists, but it doesn't on the host side. This can happen for example if the user manually moves/deletes
 							// the host file with the OS
@@ -402,13 +402,13 @@ namespace io {
 							io_result.header.info = exists;
 							if (disposition == IO_CREATE) {
 								// Create if doesn't exist - FILE_CREATE
-								io_result.header.status = failed;
+								io_result.header.status = STATUS_ACCESS_DENIED;
 								io_result.header.info = exists;
 							} else if ((disposition == IO_OPEN) || (disposition == IO_OPEN_IF)) {
 								// Open if exists - FILE_OPEN
 								// Open always - FILE_OPEN_IF
 								status_t status = fatx::driver::get(dev).check_file_access(curr_oc_request->desired_access, curr_oc_request->create_options, io_dirent.attributes, false, flags);
-								if (status == success) {
+								if (status == STATUS_SUCCESS) {
 									if (is_directory) {
 										// Open directory: nothing to do
 										io_result.header.info = opened;
@@ -426,19 +426,19 @@ namespace io {
 								// Truncate if exists - FILE_OVERWRITE
 								// Truncate always - FILE_OVERWRITE_IF
 								status_t status = fatx::driver::get(dev).check_file_access(curr_oc_request->desired_access, curr_oc_request->create_options, io_dirent.attributes, true, flags);
-								if (status == success) {
+								if (status == STATUS_SUCCESS) {
 									io_dirent.attributes = curr_oc_request->attributes;
 									io_dirent.last_write_time = curr_oc_request->timestamp;
 									if (is_directory) {
 										// Create directory: already exists
-										if (fatx::driver::get(dev).overwrite_dirent_for_file(io_dirent, 0, "") == success) {
+										if (fatx::driver::get(dev).overwrite_dirent_for_file(io_dirent, 0, "") == STATUS_SUCCESS) {
 											io_result.header.info = exists;
 											add_to_map(std::make_optional<std::fstream>(), &io_result, dirent_offset, io_dirent);
 										}
 									} else {
 										// Create file
 										if (auto opt = create_file(resolved_path, curr_oc_request->initial_size); opt) {
-											if (fatx::driver::get(dev).overwrite_dirent_for_file(io_dirent, curr_oc_request->initial_size, relative_path) == success) {
+											if (fatx::driver::get(dev).overwrite_dirent_for_file(io_dirent, curr_oc_request->initial_size, relative_path) == STATUS_SUCCESS) {
 												io_result.header.info = (disposition == IO_SUPERSEDE) ? superseded : overwritten;
 												add_to_map(opt, &io_result, dirent_offset, io_dirent);
 											}
@@ -448,7 +448,7 @@ namespace io {
 							}
 						}
 					}
-					else if (fatx_search_status == name_not_found) {
+					else if (fatx_search_status == STATUS_OBJECT_NAME_NOT_FOUND) {
 						bool is_directory = curr_oc_request->attributes & IO_FILE_DIRECTORY;
 						io_result.header.info = not_exists;
 						resolved_path = g_nxbx_dir / relative_path;
@@ -466,7 +466,7 @@ namespace io {
 							// Open always - FILE_OPEN_IF
 							// Truncate always - FILE_OVERWRITE_IF
 							status_t status = fatx::driver::get(dev).check_file_access(curr_oc_request->desired_access, curr_oc_request->create_options, curr_oc_request->attributes, true, flags);
-							if (status == success) {
+							if (status == STATUS_SUCCESS) {
 								io_dirent.name_length = file_name.length();
 								io_dirent.attributes = curr_oc_request->attributes;
 								std::copy_n(file_name.c_str(), file_name.length(), io_dirent.name);
@@ -478,7 +478,7 @@ namespace io {
 									// Create directory
 									if (::create_directory(resolved_path)) {
 										io_dirent.size = 0;
-										if (fatx::driver::get(dev).create_dirent_for_file(io_dirent, relative_path) == status_t::success) {
+										if (fatx::driver::get(dev).create_dirent_for_file(io_dirent, relative_path) == status_t::STATUS_SUCCESS) {
 											io_result.header.info = created;
 											add_to_map(std::make_optional<std::fstream>(), &io_result, dirent_offset, io_dirent);
 										}
@@ -487,7 +487,7 @@ namespace io {
 									// Create file
 									if (auto opt = create_file(resolved_path, curr_oc_request->initial_size); opt) {
 										io_dirent.size = curr_oc_request->initial_size;
-										if (fatx::driver::get(dev).create_dirent_for_file(io_dirent, relative_path) == status_t::success) {
+										if (fatx::driver::get(dev).create_dirent_for_file(io_dirent, relative_path) == status_t::STATUS_SUCCESS) {
 											io_result.header.info = created;
 											add_to_map(opt, &io_result, dirent_offset, io_dirent);
 										}
@@ -497,14 +497,14 @@ namespace io {
 						} else {
 							// Open if exists - FILE_OPEN
 							// Truncate if exists - FILE_OVERWRITE
-							io_result.header.status = name_not_found;
+							io_result.header.status = STATUS_OBJECT_NAME_NOT_FOUND;
 							io_result.header.info = not_exists;
 						}
 					}
 					else {
-						assert((fatx_search_status == corrupt) || // dirent stream is full or it has an invalid cluster number
-							(fatx_search_status == error) || // host i/o error
-							(fatx_search_status == path_not_found)); // a directory in the middle of the path doesn't exist
+						assert((fatx_search_status == STATUS_FILE_CORRUPT_ERROR) || // dirent stream is full or it has an invalid cluster number
+							(fatx_search_status == STATUS_IO_DEVICE_ERROR) || // host i/o error
+							(fatx_search_status == STATUS_OBJECT_PATH_NOT_FOUND)); // a directory in the middle of the path doesn't exist
 						io_result.header.status = fatx_search_status;
 					}
 				}
@@ -521,7 +521,7 @@ namespace io {
 			auto it = s_xbox_handle_map[dev].find(host_io_request->handle);
 			if (it == s_xbox_handle_map[dev].end()) [[unlikely]] {
 				logger_en(warn, "Handle 0x%08" PRIX32 " not found", host_io_request->handle); // this should not happen...
-				io_result.status = error;
+				io_result.status = STATUS_IO_DEVICE_ERROR;
 				s_completed_io_mtx.lock();
 				s_completed_io_info.emplace(host_io_request->id, std::move(host_io_request));
 				s_completed_io_mtx.unlock();
@@ -543,7 +543,7 @@ namespace io {
 				break;
 
 			case request_type_t::read: {
-				io_result.status = error;
+				io_result.status = STATUS_IO_DEVICE_ERROR;
 				io_result.info = no_data;
 
 				request_rw_t *curr_rw_request = (request_rw_t *)host_io_request.get();
@@ -555,7 +555,7 @@ namespace io {
 								curr_rw_request->offset, curr_rw_request->size);
 						}
 						io_result.status = xdvdfs::driver::get().read_raw_disc(curr_rw_request->offset, curr_rw_request->size, curr_rw_request->buffer.get());
-						if (io_result.status == success) {
+						if (io_result.status == STATUS_SUCCESS) {
 							io_result.info = static_cast<info_t>(curr_rw_request->size);
 						}
 					} else {
@@ -565,7 +565,7 @@ namespace io {
 							offset = disk_offset_to_partition_offset(curr_rw_request->offset, dev);
 						}
 						io_result.status = fatx::driver::get(dev).read_raw_partition(offset, curr_rw_request->size, curr_rw_request->buffer.get());
-						if (io_result.status == success) {
+						if (io_result.status == STATUS_SUCCESS) {
 							io_result.info = static_cast<info_t>(curr_rw_request->size);
 						}
 					}
@@ -587,7 +587,7 @@ namespace io {
 						if (dev != DEV_CDROM) {
 							static_cast<file_info_fatx_t &&>(*it->second).last_access_time(curr_rw_request->timestamp);
 						}
-						io_result.status = success;
+						io_result.status = STATUS_SUCCESS;
 						io_result.info = static_cast<info_t>(fs->gcount());
 						logger_en(info, "Read operation to file handle 0x%08" PRIX32 ", offset=0x%016" PRIX64 ", size=0x%08" PRIX32 ", actual bytes transferred=0x%08" PRIX32 " -> %s",
 							it->first, curr_rw_request->offset, curr_rw_request->size, io_result.info, fs->good() ? "OK!" : "EOF!");
@@ -601,14 +601,14 @@ namespace io {
 			break;
 
 			case request_type_t::write: {
-				io_result.status = error;
+				io_result.status = STATUS_IO_DEVICE_ERROR;
 				io_result.info = no_data;
 
 				request_rw_t *curr_rw_request = (request_rw_t *)host_io_request.get();
 				if (IS_DEV_HANDLE(curr_rw_request->handle)) {
 					if (curr_rw_request->handle == CDROM_HANDLE) [[unlikely]] {
 						// Raw write to the dvd disc (this should not happen...)
-						io_result.status = error;
+						io_result.status = STATUS_IO_DEVICE_ERROR;
 						logger_en(error, "Unexpected dvd raw disc write; offset=0x%016" PRIX64 ", size=0x%08" PRIX32 " -> IGNORED!",
 							curr_rw_request->offset, curr_rw_request->size);
 					} else {
@@ -618,7 +618,7 @@ namespace io {
 							offset = disk_offset_to_partition_offset(curr_rw_request->offset, dev);
 						}
 						io_result.status = fatx::driver::get(dev).write_raw_partition(offset, curr_rw_request->size, curr_rw_request->buffer.get());
-						if (io_result.status == success) {
+						if (io_result.status == STATUS_SUCCESS) {
 							io_result.info = static_cast<info_t>(curr_rw_request->size);
 						}
 					}
@@ -626,7 +626,7 @@ namespace io {
 				else {
 					if (dev == DEV_CDROM) [[unlikely]] {
 						// Write to a dvd file (this should not happen...)
-						io_result.status = error;
+						io_result.status = STATUS_IO_DEVICE_ERROR;
 						logger_en(error, "Unexpected dvd file write; offset=0x%016" PRIX64 ", size=0x%08" PRIX32 " -> IGNORED!",
 							curr_rw_request->offset, curr_rw_request->size);
 					} else {
@@ -638,7 +638,7 @@ namespace io {
 						fs->seekg(curr_rw_request->offset);
 						fs->write(curr_rw_request->buffer.get(), curr_rw_request->size);
 						fatx::DIRENT file_dirent = static_cast<file_info_fatx_t &&>(*it->second).dirent;
-						if (!fs->good() || (fatx::driver::get(dev).append_clusters_to_file(file_dirent, curr_rw_request->offset, curr_rw_request->size, it->second->path) != success)) {
+						if (!fs->good() || (fatx::driver::get(dev).append_clusters_to_file(file_dirent, curr_rw_request->offset, curr_rw_request->size, it->second->path) != STATUS_SUCCESS)) {
 							fs->clear();
 							logger_en(info, "Write operation to file handle 0x%08" PRIX32 " with path %s, offset=0x%016" PRIX64 ", size=0x%08" PRIX32 " -> FAILED!",
 								it->first, it->second->path.c_str(), curr_rw_request->offset, curr_rw_request->size);
@@ -646,7 +646,7 @@ namespace io {
 							static_cast<file_info_fatx_t &&>(*it->second).set_dirent(file_dirent);
 							static_cast<file_info_fatx_t &&>(*it->second).last_access_time(curr_rw_request->timestamp);
 							static_cast<file_info_fatx_t &&>(*it->second).last_write_time(curr_rw_request->timestamp);
-							io_result.status = success;
+							io_result.status = STATUS_SUCCESS;
 							io_result.info = static_cast<info_t>(curr_rw_request->size);
 							logger_en(info, "Write operation to file handle 0x%08" PRIX32 ", offset=0x%016" PRIX64 ", size=0x%08" PRIX32 " -> OK!",
 								it->first, curr_rw_request->offset, curr_rw_request->size);
@@ -659,7 +659,7 @@ namespace io {
 			case request_type_t::remove: {
 				if (dev == DEV_CDROM) [[unlikely]] {
 					// File delete operation to the dvd disc (this should not happen...)
-					io_result.status = error;
+					io_result.status = STATUS_IO_DEVICE_ERROR;
 					logger_en(error, "Unexpected dvd file delete operation -> IGNORED!");
 				} else {
 					file_info_fatx_t *file_info_fatx = (file_info_fatx_t *)(it->second.get());
@@ -774,7 +774,7 @@ namespace io {
 			if (it != s_completed_io_info.end()) {
 				uint64_t size_of_request;
 				request_t *request = it->second.get();
-				if ((IO_GET_TYPE(request->type) == read) && (request->info.header.status == success)) {
+				if ((IO_GET_TYPE(request->type) == read) && (request->info.header.status == STATUS_SUCCESS)) {
 					// Do the transfer here instead of the IO thread to avoid races with the cpu thread
 					request_rw_t *request_rw = (request_rw_t *)request;
 					mem_write_block_virt(s_lc86cpu, request_rw->address, request_rw->size, request_rw->buffer.get());

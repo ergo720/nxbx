@@ -46,21 +46,21 @@
 struct cpu_t;
 
 namespace io {
-	// These definitions are the same used by nboxkrnl to submit I/O request, and should be kept synchronized with those
+	// These definitions are the same used by nboxkrnl to report the final ntstatus of I/O requests
 	enum status_t : int32_t {
-		success = 0,
-		pending,
-		error,
-		failed,
-		is_a_directory,
-		not_a_directory,
-		name_not_found,
-		path_not_found,
-		corrupt,
-		full,
-		cannot_delete,
-		not_empty,
-		is_root_dir // never returned to the kernel
+		STATUS_SUCCESS = (int32_t)0,
+		STATUS_PENDING = (int32_t)0x00000103,
+		STATUS_IO_DEVICE_ERROR = (int32_t)0xC0000185,
+		STATUS_ACCESS_DENIED = (int32_t)0xC0000022,
+		STATUS_FILE_IS_A_DIRECTORY = (int32_t)0xC00000BA,
+		STATUS_NOT_A_DIRECTORY = (int32_t)0xC0000103,
+		STATUS_OBJECT_NAME_NOT_FOUND = (int32_t)0xC0000034,
+		STATUS_OBJECT_PATH_NOT_FOUND = (int32_t)0xC000003A,
+		STATUS_FILE_CORRUPT_ERROR = (int32_t)0xC0000102,
+		STATUS_DISK_FULL = (int32_t)0xC000007F,
+		STATUS_CANNOT_DELETE = (int32_t)0xC0000121,
+		STATUS_DIRECTORY_NOT_EMPTY = (int32_t)0xC0000101,
+		IS_ROOT_DIRECTORY = (int32_t)1 // never returned to the kernel
 	};
 
 	enum flags_t : uint32_t {
