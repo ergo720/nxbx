@@ -57,7 +57,7 @@ public:
 		if (!m_smbus.init()) {
 			return false;
 		}
-		if (!m_eeprom.init(init_info.m_nxbx_path)) {
+		if (!m_eeprom.init(init_info.m_nxbx_dir)) {
 			return false;
 		}
 		if (!m_smc.init()) {

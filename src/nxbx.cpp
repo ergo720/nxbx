@@ -48,7 +48,7 @@ namespace nxbx {
 	bool
 	init_settings(const init_info_t &init_info)
 	{
-		return get_settings()->init(init_info.m_nxbx_path);
+		return get_settings()->init(init_info.m_nxbx_dir);
 	}
 
 	void

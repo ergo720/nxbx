@@ -1470,7 +1470,7 @@ namespace fatx {
 				} else {
 					assert(info_entry.type == cluster_t::file);
 					assert(IS_HDD_HANDLE(m_pt_num)); // only device supported right now
-					std::filesystem::path file_path(io::hdd_path);
+					std::filesystem::path file_path(io::g_hdd_dir);
 					file_path /= info_entry.path;
 					if (auto opt = open_file(file_path); !opt) {
 						return io::status_t::error;
@@ -1571,7 +1571,7 @@ namespace fatx {
 				} else {
 					assert(info_entry.type == cluster_t::file);
 					assert(IS_HDD_HANDLE(m_pt_num)); // only device supported right now
-					std::filesystem::path file_path(io::hdd_path);
+					std::filesystem::path file_path(io::g_hdd_dir);
 					file_path /= info_entry.path;
 					if (auto opt = open_file(file_path); !opt) {
 						return io::status_t::error;
@@ -1592,7 +1592,7 @@ namespace fatx {
 
 			if (util::in_range(offset, (uint64_t)0, (uint64_t)sizeof(SUPERBLOCK) - 1)) {
 				// If we have written to the superblock, reformat the partition
-				std::fstream fs0(io::hdd_path / "Partition0.bin");
+				std::fstream fs0(io::g_hdd_dir / "Partition0.bin");
 				fs0.seekg(0, fs0.beg);
 				fs0.read((char *)&g_current_partition_table, sizeof(XBOX_PARTITION_TABLE));
 				if (!fs0.good()) {
@@ -1778,7 +1778,7 @@ namespace fatx {
 		format_partition();
 
 		// Now, enumerate all files in the partition folder, and create a dirent for each of them
-		std::filesystem::path partition_dir = (io::hdd_path / ("Partition" + std::to_string(m_pt_num - DEV_PARTITION0))).make_preferred();
+		std::filesystem::path partition_dir = (io::g_hdd_dir / ("Partition" + std::to_string(m_pt_num - DEV_PARTITION0))).make_preferred();
 		try {
 			for (const auto &dir_entry : std::filesystem::recursive_directory_iterator(partition_dir)) {
 				std::error_code ec;
@@ -1799,7 +1799,7 @@ namespace fatx {
 				io_dirent.last_write_time = 0;
 				io_dirent.last_access_time = 0;
 				uint64_t dirent_offset;
-				io::status_t io_status = find_dirent_for_file(file_path.substr(io::hdd_path.string().length() - 9), io_dirent, dirent_offset);
+				io::status_t io_status = find_dirent_for_file(file_path.substr(io::g_hdd_dir.string().length() - 9), io_dirent, dirent_offset);
 				assert(io_status != io::status_t::success);
 				if ((io_status = create_dirent_for_file(io_dirent, file_path)) != io::status_t::success) {
 					if (io_status == io::status_t::full) {

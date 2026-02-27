@@ -80,7 +80,7 @@ namespace kernel {
 			break;
 
 		case XE_DVD_XBE_LENGTH:
-			value = (uint32_t)io::xbe_path.size();
+			value = (uint32_t)io::g_xbe_path_xbox.size();
 			break;
 
 		case ACPI_TIME_LOW:
@@ -135,7 +135,7 @@ namespace kernel {
 			break;
 
 		case XE_DVD_XBE_ADDR:
-			mem_write_block_virt(static_cast<cpu_t *>(opaque), value, (uint32_t)io::xbe_path.size(), io::xbe_path.c_str());
+			mem_write_block_virt(static_cast<cpu_t *>(opaque), value, (uint32_t)io::g_xbe_path_xbox.size(), io::g_xbe_path_xbox.c_str());
 			break;
 		}
 	}

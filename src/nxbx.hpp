@@ -37,7 +37,7 @@ enum class input_t : uint32_t {
 
 struct init_info_t {
 	std::string m_kernel_path;
-	std::string m_nxbx_path;
+	std::string m_nxbx_dir;
 	std::string m_input_path;
 	std::string m_keys_path;
 	disas_syntax m_syntax;
