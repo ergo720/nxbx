@@ -36,7 +36,7 @@ namespace fatx {
 				std::string dev_path("Harddisk/Partition");
 				std::filesystem::path file_path(dev_path + std::to_string(partition_num - DEV_PARTITION0));
 				file_path /= p;
-				file_path.make_preferred();
+				file_path = to_slash_separator(file_path);
 				size_t path_length = file_path.string().length();
 				this->path = new char[path_length + 1];
 				std::copy_n(file_path.string().c_str(), path_length, this->path);

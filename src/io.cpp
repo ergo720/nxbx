@@ -226,11 +226,11 @@ namespace io {
 			};
 
 		if (s_dvd_input_type == input_t::xiso) {
-			lambda((g_dvd_dir / xdvdfs::driver::get().m_xiso_name).make_preferred(), CDROM_HANDLE);
+			lambda(to_slash_separator(g_dvd_dir / xdvdfs::driver::get().m_xiso_name), CDROM_HANDLE);
 		}
 
 		for (unsigned i = 0; i < XBOX_NUM_OF_HDD_PARTITIONS; ++i) {
-			std::filesystem::path curr_partition_dir = (g_hdd_dir / ("Partition" + std::to_string(i) + ".bin")).make_preferred();
+			std::filesystem::path curr_partition_dir = to_slash_separator(g_hdd_dir / ("Partition" + std::to_string(i) + ".bin"));
 			lambda(curr_partition_dir, PARTITION0_HANDLE + i);
 		}
 	}
@@ -264,10 +264,11 @@ namespace io {
 			pos = pos2;
 		}
 		std::string name(path.substr(std::min(pos + 1, path.length())));
-		xbox_to_host_separator(name);
 		resolved_path /= name;
+		std::string resolved_str(resolved_path.string());
+		std::replace(resolved_str.begin(), resolved_str.end(), '\\', '/'); // xbox paths always use the backslash
 
-		return resolved_path.string();
+		return resolved_str;
 	}
 
 	static void
@@ -451,12 +452,12 @@ namespace io {
 					else if (fatx_search_status == STATUS_OBJECT_NAME_NOT_FOUND) {
 						bool is_directory = curr_oc_request->attributes & IO_FILE_DIRECTORY;
 						io_result.header.info = not_exists;
-						resolved_path = g_nxbx_dir / relative_path;
+						resolved_path = to_slash_separator(g_nxbx_dir / relative_path);
 
 						// Extract the filename to put in the dirent
 						size_t path_length = relative_path.length();
-						size_t pos = relative_path[path_length - 1] == std::filesystem::path::preferred_separator ? path_length - 2 : path_length - 1;
-						size_t pos2 = relative_path.find_last_of(std::filesystem::path::preferred_separator, pos);
+						size_t pos = relative_path[path_length - 1] == '/' ? path_length - 2 : path_length - 1;
+						size_t pos2 = relative_path.find_last_of('/', pos);
 						assert(pos != std::string::npos);
 						std::string file_name(relative_path.substr(pos2 + 1, pos - pos2 + 1));
 
@@ -801,12 +802,12 @@ namespace io {
 		g_nxbx_dir = init_info.m_nxbx_dir;
 		std::filesystem::path hdd_dir = g_nxbx_dir;
 		hdd_dir /= "Harddisk/";
-		hdd_dir.make_preferred();
+		hdd_dir = to_slash_separator(hdd_dir);
 		if (!::create_directory(hdd_dir)) {
 			return false;
 		}
 		for (unsigned i = 1; i < XBOX_NUM_OF_HDD_PARTITIONS; ++i) {
-			if (!::create_directory((hdd_dir / ("Partition" + std::to_string(i))).make_preferred())) {
+			if (!::create_directory(to_slash_separator(hdd_dir / ("Partition" + std::to_string(i))))) {
 				return false;
 			}
 		}
@@ -819,12 +820,12 @@ namespace io {
 		if (init_info.m_input_type == input_t::xiso) {
 			g_xbe_name = "default.xbe";
 			g_hdd_dir = hdd_dir;
-			g_dvd_dir = std::filesystem::path(init_info.m_input_path).make_preferred().remove_filename();
+			g_dvd_dir = std::filesystem::path(init_info.m_input_path).remove_filename();
 			g_xbe_path_xbox = "\\Device\\CdRom0\\" + g_xbe_name;
 			s_dvd_input_type = input_t::xiso;
 		}
 		else {
-			std::filesystem::path local_xbe_path = std::filesystem::path(init_info.m_input_path).make_preferred();
+			std::filesystem::path local_xbe_path = to_slash_separator(std::filesystem::path(init_info.m_input_path));
 			g_xbe_name = util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(local_xbe_path.filename().string());
 			g_hdd_dir = hdd_dir;
 			g_dvd_dir = local_xbe_path.remove_filename();
@@ -835,11 +836,7 @@ namespace io {
 				size_t partition_num_off = g_hdd_dir.string().size() + 9;
 				std::string xbox_hdd_dir = "\\Device\\Harddisk0\\Partition" + std::to_string(g_dvd_dir.string()[partition_num_off] - '0');
 				std::string xbox_remaining_hdd_dir = g_dvd_dir.string().substr(partition_num_off + 1);
-				for (size_t pos = 0; pos < xbox_remaining_hdd_dir.size(); ++pos) {
-					if (xbox_remaining_hdd_dir[pos] == '/') {
-						xbox_remaining_hdd_dir[pos] = '\\'; // convert to xbox path separator
-					}
-				}
+				std::replace(xbox_remaining_hdd_dir.begin(), xbox_remaining_hdd_dir.end(), '/', '\\'); // convert to xbox path separator
 				g_xbe_path_xbox = util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(xbox_hdd_dir + xbox_remaining_hdd_dir + g_xbe_name.c_str());
 				g_dvd_dir = "";
 				console::get().update_tray_state(tray_state::no_media, false);

@@ -64,13 +64,13 @@ parse_cmd_line_opt(const QStringList &args, init_info_t &init_info)
 					if (!nxbx::validate_input_file(init_info, qPrintable(*it))) {
 						return 1;
 					}
-					init_info.m_input_path = qPrintable(*it);
+					init_info.m_input_path = to_slash_separator(qPrintable(*it)).string();
 				}
 				else if (*it == QStringLiteral("-kernel")) {
 					if (check_missing_arg(it)) {
 						return 1;
 					}
-					init_info.m_kernel_path = qPrintable(*it);
+					init_info.m_kernel_path = to_slash_separator(qPrintable(*it)).string();
 				}
 				else if (*it == QStringLiteral("-disas")) {
 					if (check_missing_arg(it)) {
@@ -127,7 +127,7 @@ parse_cmd_line_opt(const QStringList &args, init_info_t &init_info)
 					if (check_missing_arg(it)) {
 						return 1;
 					}
-					init_info.m_keys_path = qPrintable(*it);
+					init_info.m_keys_path = to_slash_separator(qPrintable(*it)).string();
 				}
 				else if (*it == QStringLiteral("-sync_hdd")) {
 					if (check_missing_arg(it)) {
@@ -162,11 +162,12 @@ parse_cmd_line_opt(const QStringList &args, init_info_t &init_info)
 		return 1;
 	}
 
-	init_info.m_nxbx_dir = qPrintable(QCoreApplication::applicationDirPath());
+	init_info.m_nxbx_dir = qPrintable(QCoreApplication::applicationDirPath()); // NOTE: the path returned by Qt already uses slashes
 	if (init_info.m_kernel_path.empty()) {
 		// Attempt to find nboxkrnl in the current directory of nxbx
 		std::filesystem::path curr_dir = init_info.m_nxbx_dir;
 		curr_dir /= "nboxkrnl.exe";
+		to_slash_separator(curr_dir);
 		std::error_code ec;
 		bool exists = std::filesystem::exists(curr_dir, ec);
 		if (ec || !exists) {

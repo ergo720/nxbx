@@ -89,7 +89,7 @@ eeprom::init(std::filesystem::path eeprom_dir)
 {
 	uintmax_t size;
 	eeprom_dir /= "eeprom.bin";
-	eeprom_dir.make_preferred();
+	eeprom_dir = to_slash_separator(eeprom_dir);
 	if (auto opt = open_file(eeprom_dir, &size); !opt) {
 		if (auto opt = create_file(eeprom_dir); !opt) {
 			logger_en(error, "Failed to create eeprom file");

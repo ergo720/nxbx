@@ -16,7 +16,7 @@
 #pragma GCC diagnostic ignored "-Wmultichar"
 #endif
 
-#define METADATA_VERSION_NUM 1
+#define METADATA_VERSION_NUM 2
 #define METADATA_FAT_OFFSET (sizeof(USER_DATA_AREA) + sizeof(fatx::SUPERBLOCK))
 #define CLUSTER_TABLE_ELEM_SIZE 4096
 #define CLUSTER_TABLE_ENTRIES_PER_ELEM (CLUSTER_TABLE_ELEM_SIZE / sizeof(CLUSTER_DATA_ENTRY))
@@ -416,7 +416,7 @@ namespace fatx {
 		std::string dev_path("Harddisk/Partition");
 		std::filesystem::path path(dev_path + std::to_string(m_pt_num - DEV_PARTITION0));
 		path /= file_path;
-		path.make_preferred();
+		path = to_slash_separator(path);
 		size_t path_length = path.string().length();
 		assert(path_length <= std::numeric_limits<uint16_t>::max());
 		m_pt_fs.seekp(0, m_pt_fs.end);
@@ -902,7 +902,7 @@ namespace fatx {
 		m_last_free_dirent_offset = m_last_found_dirent_offset = 0;
 
 		if constexpr (!check_is_empty) {
-			std::string is_root_str(std::filesystem::path("Harddisk/Partition" + std::to_string(m_pt_num - DEV_PARTITION0) + '/').make_preferred().string());
+			std::string is_root_str(to_slash_separator(std::filesystem::path("Harddisk/Partition" + std::to_string(m_pt_num - DEV_PARTITION0) + '/')).string());
 			if (remaining_path.compare(is_root_str) == 0) {
 				// This happens when searching for the root directory
 				return io::status_t::IS_ROOT_DIRECTORY;
@@ -941,7 +941,7 @@ namespace fatx {
 			}
 
 			// NOTE: pos2 == std::string_view::npos happens when reaching the last name and it's a file
-			size_t pos2 = remaining_path.find_first_of(std::filesystem::path::preferred_separator, pos);
+			size_t pos2 = remaining_path.find_first_of('/', pos);
 			is_last_name = (pos2 == std::string_view::npos) || (pos2 == remaining_path.length());
 			std::string_view file_name = remaining_path.substr(pos, is_last_name ? remaining_path.length() : pos2 - pos);
 			util::xbox_string_view xbox_file_name = util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(file_name);
@@ -1472,6 +1472,7 @@ namespace fatx {
 					assert(IS_HDD_HANDLE(m_pt_num)); // only device supported right now
 					std::filesystem::path file_path(io::g_hdd_dir);
 					file_path /= info_entry.path;
+					file_path = to_slash_separator(file_path);
 					if (auto opt = open_file(file_path); !opt) {
 						return io::status_t::STATUS_IO_DEVICE_ERROR;
 					} else {
@@ -1573,6 +1574,7 @@ namespace fatx {
 					assert(IS_HDD_HANDLE(m_pt_num)); // only device supported right now
 					std::filesystem::path file_path(io::g_hdd_dir);
 					file_path /= info_entry.path;
+					file_path = to_slash_separator(file_path);
 					if (auto opt = open_file(file_path); !opt) {
 						return io::status_t::STATUS_IO_DEVICE_ERROR;
 					} else {
@@ -1656,7 +1658,7 @@ namespace fatx {
 	driver::init(std::filesystem::path hdd_dir)
 	{
 		for (unsigned i = DEV_PARTITION0; i < DEV_PARTITION6; ++i) {
-			std::filesystem::path curr_partition_dir = (hdd_dir / ("Partition" + std::to_string(i - DEV_PARTITION0))).make_preferred();
+			std::filesystem::path curr_partition_dir = to_slash_separator(hdd_dir / ("Partition" + std::to_string(i - DEV_PARTITION0)));
 			if (!get(i).init(curr_partition_dir, i)) {
 				logger_mod_en(error, io, "Failed to create partition%u.bin file", i - DEV_PARTITION0);
 				return false;
@@ -1778,7 +1780,7 @@ namespace fatx {
 		format_partition();
 
 		// Now, enumerate all files in the partition folder, and create a dirent for each of them
-		std::filesystem::path partition_dir = (io::g_hdd_dir / ("Partition" + std::to_string(m_pt_num - DEV_PARTITION0))).make_preferred();
+		std::filesystem::path partition_dir = to_slash_separator(io::g_hdd_dir / ("Partition" + std::to_string(m_pt_num - DEV_PARTITION0)));
 		try {
 			for (const auto &dir_entry : std::filesystem::recursive_directory_iterator(partition_dir)) {
 				std::error_code ec;

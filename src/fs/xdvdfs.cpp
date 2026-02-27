@@ -129,7 +129,7 @@ namespace xdvdfs {
 		uint32_t curr_sector = m_root_dirent_first_sector;
 		file_entry_t file_entry;
 		util::xbox_string_view path_to_parse = util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(arg_str);
-		uint64_t pos = std::min(path_to_parse.find_first_of(std::filesystem::path::preferred_separator, curr_pos), path_to_parse.length());
+		uint64_t pos = std::min(path_to_parse.find_first_of('/', curr_pos), path_to_parse.length());
 		util::xbox_string_view curr_name = path_to_parse.substr(curr_pos, pos - curr_pos);
 
 		while (true) {
@@ -157,7 +157,7 @@ namespace xdvdfs {
 				}
 				else {
 					curr_pos = pos + 1;
-					pos = std::min(path_to_parse.find_first_of(std::filesystem::path::preferred_separator, curr_pos), path_to_parse.length());
+					pos = std::min(path_to_parse.find_first_of('/', curr_pos), path_to_parse.length());
 					if (curr_pos > path_to_parse.length()) {
 						return file_info_t // processed all path -> we found the requested file/directory
 						{

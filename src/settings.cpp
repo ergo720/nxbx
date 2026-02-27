@@ -18,7 +18,7 @@ settings::init(const std::string_view ini_path)
 	m_ini.SetMultiKey(false);
 	std::filesystem::path curr_dir = ini_path;
 	curr_dir /= "nxbx.ini";
-	m_path = curr_dir.string();
+	m_path = to_slash_separator(curr_dir).string();
 	
 	if (m_ini.LoadFile(m_path.c_str()) < 0) {
 		// ini file doesn't exist, so create a new one with default values
