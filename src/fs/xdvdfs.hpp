@@ -41,9 +41,8 @@ namespace xdvdfs {
 		io::status_t read_raw_disc(uint64_t offset, uint32_t size, char *buffer);
 
 		std::fstream m_xiso_fs; // fs of xiso image file
-		static uint64_t g_xiso_offset; // offset to add to reach the game partition
-		static std::string g_xiso_name;
-
+		uint64_t m_xiso_offset; // offset to add to reach the game partition
+		std::string m_xiso_name;
 
 	private:
 		driver() {};

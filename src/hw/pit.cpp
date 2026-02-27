@@ -15,7 +15,7 @@
 uint64_t
 pit::counter_to_us()
 {
-	constexpr double time_scale = static_cast<double>(timer::ticks_per_second) / static_cast<double>(clock_freq);
+	constexpr double time_scale = static_cast<double>(timer::g_ticks_per_second) / static_cast<double>(clock_freq);
 	return (uint64_t)(static_cast<double>(m_chan[0].counter) * time_scale);
 }
 

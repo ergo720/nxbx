@@ -87,7 +87,7 @@ using PUSER_DATA_AREA = USER_DATA_AREA *;
 namespace fatx {
 #pragma pack(1)
 	struct XBOX_PARTITION_TABLE {
-		uint8_t magic[16];
+		uint8_t s_magic[16];
 		int8_t res0[32];
 		struct TABLE_ENTRY {
 			uint8_t name[16];
@@ -1377,7 +1377,7 @@ namespace fatx {
 		if (m_pt_num == DEV_PARTITION0) {
 			// NOTE: place partition0_buffer on the heap instead of the stack because it's quite big
 			std::unique_ptr<char[]> partition0_buffer = std::make_unique<char[]>(XBOX_HDD_SECTOR_SIZE * XBOX_SWAPPART1_LBA_START);
-			std::copy_n(&g_hdd_partitiong_table.magic[0], sizeof(XBOX_PARTITION_TABLE), partition0_buffer.get());
+			std::copy_n(&g_hdd_partitiong_table.s_magic[0], sizeof(XBOX_PARTITION_TABLE), partition0_buffer.get());
 			g_current_partition_table = g_hdd_partitiong_table;
 			m_pt_fs.seekp(0, m_pt_fs.beg);
 			m_pt_fs.write(partition0_buffer.get(), XBOX_HDD_SECTOR_SIZE * XBOX_SWAPPART1_LBA_START);
@@ -1758,7 +1758,7 @@ namespace fatx {
 					else {
 						opt->seekg(0, opt->beg);
 						opt->read((char *)&g_current_partition_table, sizeof(fatx::XBOX_PARTITION_TABLE));
-						if (!opt->good() || std::strncmp((const char *)g_current_partition_table.magic, "****PARTINFO****", std::strlen("****PARTINFO****"))) {
+						if (!opt->good() || std::strncmp((const char *)g_current_partition_table.s_magic, "****PARTINFO****", std::strlen("****PARTINFO****"))) {
 							g_current_partition_table = g_hdd_partitiong_table;
 						}
 					}

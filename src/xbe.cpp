@@ -9,19 +9,19 @@
 
 
 namespace xbe {
-	constexpr char magic[] = { 'X', 'B', 'E', 'H' };
+	constexpr char s_magic[] = { 'X', 'B', 'E', 'H' };
 
 
 	bool
 	validate(std::string_view arg_str)
 	{
 		if (auto opt = open_file(arg_str)) {
-			// XBE: magic is 4 bytes at the very beginning of the file
+			// XBE: s_magic is 4 bytes at the very beginning of the file
 
 			char buff[4];
 			opt->seekg(0);
 			opt->read(buff, 4);
-			if (opt->good() && (std::memcmp(buff, magic, 4) == 0)) {
+			if (opt->good() && (std::memcmp(buff, s_magic, 4) == 0)) {
 				logger("Detected xbe file");
 				return true;
 			}

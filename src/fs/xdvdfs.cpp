@@ -39,16 +39,14 @@ namespace xdvdfs {
 
 
 	static_assert(sizeof(volume_desc_t) == 2048);
-	static constexpr char magic[] = { 'M', 'I', 'C', 'R', 'O', 'S', 'O', 'F', 'T', '*', 'X', 'B', 'O', 'X', '*', 'M', 'E', 'D', 'I', 'A' };
-	uint64_t driver::g_xiso_offset;
-	std::string driver::g_xiso_name;
+	static constexpr char s_magic[] = { 'M', 'I', 'C', 'R', 'O', 'S', 'O', 'F', 'T', '*', 'X', 'B', 'O', 'X', '*', 'M', 'E', 'D', 'I', 'A' };
 
 
 	bool
 	driver::validate(std::string_view arg_str)
 	{
 		if (auto opt = open_file(arg_str)) {
-			// XDVDFS: magic is 20 bytes at start of sector 32 and also at offset 0x7EC of the same sector
+			// XDVDFS: s_magic is 20 bytes at start of sector 32 and also at offset 0x7EC of the same sector
 
 			char buff[2048];
 			const auto validate_image = [&](size_t offset) {
@@ -56,15 +54,15 @@ namespace xdvdfs {
 				opt->read(buff, 2048);
 				volume_desc_t *volume_desc = (volume_desc_t *)buff;
 				if (opt->good() &&
-					(std::memcmp(volume_desc->magic1, magic, 20) == 0) &&
-					(std::memcmp(volume_desc->magic2, magic, 20) == 0) &&
+					(std::memcmp(volume_desc->magic1, s_magic, 20) == 0) &&
+					(std::memcmp(volume_desc->magic2, s_magic, 20) == 0) &&
 					(volume_desc->m_root_dirent_first_sector) &&
 					(volume_desc->root_dirent_file_size))
 				{
 					m_root_dirent_first_sector = volume_desc->m_root_dirent_first_sector;
 					m_xiso_fs = std::move(*opt);
-					g_xiso_offset = offset;
-					g_xiso_name = std::filesystem::path(arg_str).filename().string();
+					m_xiso_name = offset;
+					m_xiso_name = std::filesystem::path(arg_str).filename().string();
 					return true;
 				}
 				return false;
@@ -84,7 +82,7 @@ namespace xdvdfs {
 			logger(("Failed to open file \"" + std::string(arg_str) + "\"").c_str());
 		}
 
-		g_xiso_name = "";
+		m_xiso_name = "";
 
 		return false;
 	}
@@ -93,7 +91,7 @@ namespace xdvdfs {
 	driver::read_dirent(file_entry_t &file_entry, uint64_t sector, uint64_t offset)
 	{
 		char buff[SECTOR_SIZE];
-		m_xiso_fs.seekg(SECTOR_SIZE * sector + g_xiso_offset + offset);
+		m_xiso_fs.seekg(SECTOR_SIZE * sector + m_xiso_offset + offset);
 		m_xiso_fs.read(buff, 255 + sizeof(dirent_t) - 1);
 		if (!m_xiso_fs.good()) {
 			m_xiso_fs.clear();
@@ -121,7 +119,7 @@ namespace xdvdfs {
 			{
 				.exists = true,
 				.is_directory = true,
-				.offset = g_xiso_offset,
+				.offset = m_xiso_offset,
 				.size = 0,
 				.timestamp = m_xiso_timestamp
 			};
@@ -165,7 +163,7 @@ namespace xdvdfs {
 						{
 							.exists = true,
 							.is_directory = (bool)(file_entry.attributes & FILE_DIRECTORY),
-							.offset = file_entry.file_sector * SECTOR_SIZE + g_xiso_offset,
+							.offset = file_entry.file_sector * SECTOR_SIZE + m_xiso_offset,
 							.size = file_entry.file_size,
 							.timestamp = m_xiso_timestamp
 						};

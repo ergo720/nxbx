@@ -127,14 +127,14 @@ uint8_t cmos::read(uint8_t idx)
 		//  0                          UIP    1                          UIP    2
 		//
 		// A: cmos.last_second_update
-		// B: cmos.last_second_update + ticks_per_second
+		// B: cmos.last_second_update + g_ticks_per_second
 		// B <==> C: cmos.uip_period
-		// C: cmos.last_second_update + ticks_per_second - cmos.uip_period
+		// C: cmos.last_second_update + g_ticks_per_second - cmos.uip_period
 		// UIP will be set if it's within regions B and C.
 
 		value = m_ram[0xA];
 		uint64_t now = timer::get_now();
-		uint64_t next_second = m_last_clock + timer::ticks_per_second;
+		uint64_t next_second = m_last_clock + timer::g_ticks_per_second;
 		if ((now >= (next_second - UIP_PERIOD)) && (now < next_second)) {
 			value |= 0x80; // UIP bit is still set.
 		}
@@ -324,7 +324,7 @@ cmos::update_timer()
 			uint64_t freq = CMOS_FREQ >> (period - 1); // actual interrupt frequency in Hz
 
 			m_int_running = 1;
-			m_period_int = timer::ticks_per_second / freq; // period of the currently selected periodic interrupt rate, in us
+			m_period_int = timer::g_ticks_per_second / freq; // period of the currently selected periodic interrupt rate, in us
 			m_last_int = now;
 			m_periodic_ticks = 0;
 			m_periodic_ticks_max = freq; // number of periodic interrupts in 1 sec
@@ -351,9 +351,9 @@ void
 cmos::update_clock(uint64_t elapsed_us)
 {
 	m_lost_us += elapsed_us;
-	uint64_t actual_elapsed_sec = m_lost_us / timer::ticks_per_second;
+	uint64_t actual_elapsed_sec = m_lost_us / timer::g_ticks_per_second;
 	m_sys_time += actual_elapsed_sec;
-	m_lost_us -= (actual_elapsed_sec * timer::ticks_per_second);
+	m_lost_us -= (actual_elapsed_sec * timer::g_ticks_per_second);
 }
 
 uint64_t
@@ -429,18 +429,18 @@ cmos::get_next_update_time(uint64_t now)
 					raise_irq(why);
 				}
 
-				return m_int_running ? m_period_int : timer::ticks_per_second;
+				return m_int_running ? m_period_int : timer::g_ticks_per_second;
 			}
 
 			return next_int - now;
 		}
 		else {
-			uint64_t next_clock = m_last_clock + timer::ticks_per_second;
+			uint64_t next_clock = m_last_clock + timer::g_ticks_per_second;
 			if (now >= next_clock) {
 				update_clock(now - m_last_clock);
 				m_last_clock = now; // we just updated the seconds
 
-				return timer::ticks_per_second;
+				return timer::g_ticks_per_second;
 			}
 
 			return next_clock - now;

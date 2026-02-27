@@ -190,24 +190,24 @@ namespace io {
 		}
 	}
 
-	static cpu_t *lc86cpu;
-	static std::jthread jthr;
-	static std::deque<std::unique_ptr<request_t>> curr_io_queue;
-	static std::vector<std::unique_ptr<request_t>> pending_io_vec;
-	static std::unordered_map<uint32_t, std::unique_ptr<request_t>> completed_io_info;
-	static std::array<std::map<uint32_t, std::unique_ptr<file_info_base_t>>, NUM_OF_DEVS> xbox_handle_map;
-	static std::mutex queue_mtx;
-	static std::mutex completed_io_mtx;
-	static std::atomic_flag pending_io;
-	static input_t dvd_input_type;
+	static cpu_t *s_lc86cpu;
+	static std::jthread s_jthr;
+	static std::deque<std::unique_ptr<request_t>> s_curr_io_queue;
+	static std::vector<std::unique_ptr<request_t>> s_pending_io_vec;
+	static std::unordered_map<uint32_t, std::unique_ptr<request_t>> s_completed_io_info;
+	static std::array<std::map<uint32_t, std::unique_ptr<file_info_base_t>>, NUM_OF_DEVS> s_xbox_handle_map;
+	static std::mutex s_queue_mtx;
+	static std::mutex s_completed_io_mtx;
+	static std::atomic_flag s_pending_io;
+	static input_t s_dvd_input_type;
 
 
 	static void
 	flush_all_files()
 	{
 		for (unsigned i = DEV_PARTITION1; i < DEV_PARTITION6; ++i) {
-			xbox_handle_map[i].erase(xbox_handle_map[i].begin()); // delete the partition file object
-			std::for_each(xbox_handle_map[i].begin(), xbox_handle_map[i].end(), [i](auto &pair)
+			s_xbox_handle_map[i].erase(s_xbox_handle_map[i].begin()); // delete the partition file object
+			std::for_each(s_xbox_handle_map[i].begin(), s_xbox_handle_map[i].end(), [i](auto &pair)
 				{
 					file_info_fatx_t *file_info_fatx = (file_info_fatx_t *)(pair.second.get());
 					if (file_info_fatx->dirent.name[0] != '\\') { // the root directory hasn't a dirent to flush
@@ -221,12 +221,12 @@ namespace io {
 	add_device_handles()
 	{
 		const auto &lambda = [](std::filesystem::path resolved_path, uint64_t handle) {
-			auto pair = xbox_handle_map[handle].emplace(handle, std::move(std::make_unique<file_info_base_t>(std::move(std::fstream()), resolved_path.string())));
+			auto pair = s_xbox_handle_map[handle].emplace(handle, std::move(std::make_unique<file_info_base_t>(std::move(std::fstream()), resolved_path.string())));
 			assert(pair.second == true);
 			};
 
-		if (dvd_input_type == input_t::xiso) {
-			lambda((g_dvd_dir / xdvdfs::driver::g_xiso_name).make_preferred(), CDROM_HANDLE);
+		if (s_dvd_input_type == input_t::xiso) {
+			lambda((g_dvd_dir / xdvdfs::driver::get().m_xiso_name).make_preferred(), CDROM_HANDLE);
 		}
 
 		for (unsigned i = 0; i < XBOX_NUM_OF_HDD_PARTITIONS; ++i) {
@@ -276,31 +276,31 @@ namespace io {
 		while (true) {
 
 			// Wait until there's some work to do
-			pending_io.wait(false);
+			s_pending_io.wait(false);
 
 			// Check to see if we need to terminate this thread
 			if (stok.stop_requested()) [[unlikely]] {
 				flush_all_files();
 				fatx::driver::deinit();
 				pending_packets = false;
-				curr_io_queue.clear();
-				completed_io_info.clear();
-				for (auto &handle_map : xbox_handle_map) {
+				s_curr_io_queue.clear();
+				s_completed_io_info.clear();
+				for (auto &handle_map : s_xbox_handle_map) {
 					handle_map.clear();
 				}
-				pending_io_vec.clear();
+				s_pending_io_vec.clear();
 				return;
 			}
 
-			queue_mtx.lock();
-			if (curr_io_queue.empty()) {
-				pending_io.clear();
-				queue_mtx.unlock();
+			s_queue_mtx.lock();
+			if (s_curr_io_queue.empty()) {
+				s_pending_io.clear();
+				s_queue_mtx.unlock();
 				continue;
 			}
-			std::unique_ptr<request_t> host_io_request = std::move(curr_io_queue.front());
-			curr_io_queue.pop_front();
-			queue_mtx.unlock();
+			std::unique_ptr<request_t> host_io_request = std::move(s_curr_io_queue.front());
+			s_curr_io_queue.pop_front();
+			s_queue_mtx.unlock();
 
 			request_type_t io_type = IO_GET_TYPE(host_io_request->type);
 			uint32_t dev = IO_GET_DEV(host_io_request->type);
@@ -318,10 +318,10 @@ namespace io {
 				if (dev == DEV_CDROM) {
 					xdvdfs::file_info_t file_info;
 					std::optional<std::fstream> opt = std::fstream();
-					if (dvd_input_type == input_t::xiso) {
+					if (s_dvd_input_type == input_t::xiso) {
 						file_info = xdvdfs::driver::get().search_file(relative_path); // search for the file in the xiso
 					} else {
-						assert(dvd_input_type == input_t::xbe);
+						assert(s_dvd_input_type == input_t::xbe);
 						std::filesystem::path resolved_path;
 						file_info.exists = file_exists(g_dvd_dir, relative_path, resolved_path, &file_info.is_directory); // search for the file in the dvd folder
 						if (file_info.exists) {
@@ -353,7 +353,7 @@ namespace io {
 							io_result.header.info = opened;
 							io_result.file_size = file_info.size;
 							io_result.xdvdfs_timestamp = file_info.timestamp;
-							xbox_handle_map[dev].emplace(curr_oc_request->handle, std::move(std::make_unique<file_info_xdvdfs_t>(std::move(*opt), relative_path, file_info.offset)));
+							s_xbox_handle_map[dev].emplace(curr_oc_request->handle, std::move(std::make_unique<file_info_xdvdfs_t>(std::move(*opt), relative_path, file_info.offset)));
 							logger_en(info, "Opened %s with handle 0x%08" PRIX32 " and path %s", file_info.is_directory ? "directory" : "file", curr_oc_request->handle, relative_path.c_str());
 						}
 					}
@@ -363,7 +363,7 @@ namespace io {
 							// NOTE: this insertion will fail when the guest creates a new handle to the same file. This, because it will pass the same host handle, and std::unordered_map
 							// doesn't allow duplicated keys. This is ok though, because we can reuse the same std::fstream for the same file and it will have the same path too
 							logger_en(info, "Opened %s with handle 0x%08" PRIX32 " and path %s", opt->is_open() ? "file" : "directory", curr_oc_request->handle, relative_path.c_str());
-							xbox_handle_map[dev].emplace(curr_oc_request->handle, std::move(std::make_unique<file_info_fatx_t>(std::move(*opt), relative_path, dirent_offset, io_dirent)));
+							s_xbox_handle_map[dev].emplace(curr_oc_request->handle, std::move(std::make_unique<file_info_fatx_t>(std::move(*opt), relative_path, dirent_offset, io_dirent)));
 							io_result->header.status = success;
 							io_result->file_size = io_dirent.size;
 							io_result->fatx.creation_time = io_dirent.creation_time;
@@ -510,21 +510,21 @@ namespace io {
 				}
 
 				curr_oc_request->info = io_result;
-				completed_io_mtx.lock();
-				completed_io_info.emplace(curr_oc_request->id, std::move(host_io_request));
-				completed_io_mtx.unlock();
+				s_completed_io_mtx.lock();
+				s_completed_io_info.emplace(curr_oc_request->id, std::move(host_io_request));
+				s_completed_io_mtx.unlock();
 				continue;
 			}
 
 			info_block_t io_result;
 			std::fill_n((char *)&io_result, sizeof(io_result), 0);
-			auto it = xbox_handle_map[dev].find(host_io_request->handle);
-			if (it == xbox_handle_map[dev].end()) [[unlikely]] {
+			auto it = s_xbox_handle_map[dev].find(host_io_request->handle);
+			if (it == s_xbox_handle_map[dev].end()) [[unlikely]] {
 				logger_en(warn, "Handle 0x%08" PRIX32 " not found", host_io_request->handle); // this should not happen...
 				io_result.status = error;
-				completed_io_mtx.lock();
-				completed_io_info.emplace(host_io_request->id, std::move(host_io_request));
-				completed_io_mtx.unlock();
+				s_completed_io_mtx.lock();
+				s_completed_io_info.emplace(host_io_request->id, std::move(host_io_request));
+				s_completed_io_mtx.unlock();
 				continue;
 			}
 
@@ -539,7 +539,7 @@ namespace io {
 					}
 				}
 				logger_en(info, "Closed file handle 0x%08" PRIX32 " with path %s", it->first, it->second->path.c_str());
-				xbox_handle_map[dev].erase(it);
+				s_xbox_handle_map[dev].erase(it);
 				break;
 
 			case request_type_t::read: {
@@ -549,7 +549,7 @@ namespace io {
 				request_rw_t *curr_rw_request = (request_rw_t *)host_io_request.get();
 				if (IS_DEV_HANDLE(curr_rw_request->handle)) {
 					if (curr_rw_request->handle == CDROM_HANDLE) {
-						if (dvd_input_type != input_t::xiso) {
+						if (s_dvd_input_type != input_t::xiso) {
 							// We can only handle raw disc accesses if the user has booted from an xiso
 							logger_en(error, "Unhandled raw dvd disc read, boot from an xiso to solve this; offset=0x%016" PRIX64 ", size=0x%08" PRIX32,
 								curr_rw_request->offset, curr_rw_request->size);
@@ -572,9 +572,9 @@ namespace io {
 				}
 				else {
 					uint64_t offset = 0;
-					if ((dev == DEV_CDROM) && (dvd_input_type == input_t::xiso)) {
+					if ((dev == DEV_CDROM) && (s_dvd_input_type == input_t::xiso)) {
 						fs = &xdvdfs::driver::get().m_xiso_fs;
-						offset = xdvdfs::driver::g_xiso_offset + static_cast<file_info_xdvdfs_t &&>(*it->second).offset;
+						offset = xdvdfs::driver::get().m_xiso_offset + static_cast<file_info_xdvdfs_t &&>(*it->second).offset;
 					}
 					if (!fs->is_open()) [[unlikely]] {
 						// Read operation on a directory (this should not happen...)
@@ -675,9 +675,9 @@ namespace io {
 			}
 
 			host_io_request->info.header = io_result;
-			completed_io_mtx.lock();
-			completed_io_info.emplace(host_io_request->id, std::move(host_io_request));
-			completed_io_mtx.unlock();
+			s_completed_io_mtx.lock();
+			s_completed_io_info.emplace(host_io_request->id, std::move(host_io_request));
+			s_completed_io_mtx.unlock();
 		}
 	}
 
@@ -685,15 +685,15 @@ namespace io {
 	enqueue_io_packet(std::unique_ptr<request_t> host_io_request)
 	{
 		// If the I/O thread is currently holding the lock, we won't wait and instead retry the operation later
-		if (queue_mtx.try_lock()) {
-			curr_io_queue.push_back(std::move(host_io_request));
+		if (s_queue_mtx.try_lock()) {
+			s_curr_io_queue.push_back(std::move(host_io_request));
 			// Signal that there's a new packet to process
-			pending_io.test_and_set();
-			pending_io.notify_one();
-			queue_mtx.unlock();
+			s_pending_io.test_and_set();
+			s_pending_io.notify_one();
+			s_queue_mtx.unlock();
 		}
 		else {
-			pending_io_vec.push_back(std::move(host_io_request));
+			s_pending_io_vec.push_back(std::move(host_io_request));
 			pending_packets = true;
 		}
 	}
@@ -702,7 +702,7 @@ namespace io {
 	submit_io_packet(uint32_t addr)
 	{
 		packed_request_t io_request;
-		mem_read_block_virt(lc86cpu, addr, sizeof(packed_request_t), (uint8_t *)&io_request);
+		mem_read_block_virt(s_lc86cpu, addr, sizeof(packed_request_t), (uint8_t *)&io_request);
 
 		if (request_type_t io_type = IO_GET_TYPE(io_request.header.type); io_type == open) {
 			std::unique_ptr<request_oc_t> host_io_request = std::make_unique<request_oc_t>();
@@ -712,7 +712,7 @@ namespace io {
 			host_io_request->size = io_request.m_oc.size;
 			host_io_request->handle = io_request.m_oc.handle;
 			host_io_request->path = new char[io_request.m_oc.size + 1];
-			mem_read_block_virt(lc86cpu, io_request.m_oc.path, host_io_request->size, (uint8_t *)host_io_request->path);
+			mem_read_block_virt(s_lc86cpu, io_request.m_oc.path, host_io_request->size, (uint8_t *)host_io_request->path);
 			host_io_request->path[io_request.m_oc.size] = '\0';
 			host_io_request->attributes = io_request.m_oc.attributes;
 			host_io_request->timestamp = io_request.m_oc.timestamp;
@@ -732,7 +732,7 @@ namespace io {
 				host_io_request->timestamp = io_request.m_rw.timestamp;
 				host_io_request->buffer = std::make_unique_for_overwrite<char[]>(host_io_request->size);
 				if (io_type == write) {
-					mem_read_block_virt(lc86cpu, host_io_request->address, host_io_request->size, reinterpret_cast<uint8_t *>(host_io_request->buffer.get()));
+					mem_read_block_virt(s_lc86cpu, host_io_request->address, host_io_request->size, reinterpret_cast<uint8_t *>(host_io_request->buffer.get()));
 				}
 				enqueue_io_packet(std::move(host_io_request));
 			} else {
@@ -748,18 +748,18 @@ namespace io {
 	void
 	flush_pending_packets()
 	{
-		if (!pending_io_vec.empty()) {
+		if (!s_pending_io_vec.empty()) {
 			// If the I/O thread is currently holding the lock, we won't wait and instead retry the operation later
-			if (queue_mtx.try_lock()) {
-				std::for_each(pending_io_vec.begin(), pending_io_vec.end(), [](auto &&packet) {
-					curr_io_queue.push_back(std::move(packet));
+			if (s_queue_mtx.try_lock()) {
+				std::for_each(s_pending_io_vec.begin(), s_pending_io_vec.end(), [](auto &&packet) {
+					s_curr_io_queue.push_back(std::move(packet));
 					});
-				pending_io_vec.clear();
+				s_pending_io_vec.clear();
 				pending_packets = false;
 				// Signal that there are new packets to process
-				pending_io.test_and_set();
-				pending_io.notify_one();
-				queue_mtx.unlock();
+				s_pending_io.test_and_set();
+				s_pending_io.notify_one();
+				s_queue_mtx.unlock();
 			}
 		}
 	}
@@ -767,17 +767,17 @@ namespace io {
 	void
 	query_io_packet(uint32_t addr)
 	{
-		if (completed_io_mtx.try_lock()) { // don't wait if the I/O thread is currently using the map
+		if (s_completed_io_mtx.try_lock()) { // don't wait if the I/O thread is currently using the map
 			info_block_oc_t block;
-			mem_read_block_virt(lc86cpu, addr, sizeof(info_block_oc_t), (uint8_t *)&block);
-			auto it = completed_io_info.find(block.header.id);
-			if (it != completed_io_info.end()) {
+			mem_read_block_virt(s_lc86cpu, addr, sizeof(info_block_oc_t), (uint8_t *)&block);
+			auto it = s_completed_io_info.find(block.header.id);
+			if (it != s_completed_io_info.end()) {
 				uint64_t size_of_request;
 				request_t *request = it->second.get();
 				if ((IO_GET_TYPE(request->type) == read) && (request->info.header.status == success)) {
 					// Do the transfer here instead of the IO thread to avoid races with the cpu thread
 					request_rw_t *request_rw = (request_rw_t *)request;
-					mem_write_block_virt(lc86cpu, request_rw->address, request_rw->size, request_rw->buffer.get());
+					mem_write_block_virt(s_lc86cpu, request_rw->address, request_rw->size, request_rw->buffer.get());
 				}
 				if (IO_GET_TYPE(request->type) == open) {
 					block = request->info;
@@ -787,17 +787,17 @@ namespace io {
 					size_of_request = sizeof(info_block_t);
 				}
 				block.header.ready = 1;
-				mem_write_block_virt(lc86cpu, addr, size_of_request, &block);
-				completed_io_info.erase(it);
+				mem_write_block_virt(s_lc86cpu, addr, size_of_request, &block);
+				s_completed_io_info.erase(it);
 			}
-			completed_io_mtx.unlock();
+			s_completed_io_mtx.unlock();
 		}
 	}
 
 	bool
 	init(const init_info_t &init_info, cpu_t *cpu)
 	{
-		lc86cpu = cpu;
+		s_lc86cpu = cpu;
 		g_nxbx_dir = init_info.m_nxbx_dir;
 		std::filesystem::path hdd_dir = g_nxbx_dir;
 		hdd_dir /= "Harddisk/";
@@ -821,7 +821,7 @@ namespace io {
 			g_hdd_dir = hdd_dir;
 			g_dvd_dir = std::filesystem::path(init_info.m_input_path).make_preferred().remove_filename();
 			g_xbe_path_xbox = "\\Device\\CdRom0\\" + g_xbe_name;
-			dvd_input_type = input_t::xiso;
+			s_dvd_input_type = input_t::xiso;
 		}
 		else {
 			std::filesystem::path local_xbe_path = std::filesystem::path(init_info.m_input_path).make_preferred();
@@ -829,7 +829,7 @@ namespace io {
 			g_hdd_dir = hdd_dir;
 			g_dvd_dir = local_xbe_path.remove_filename();
 			g_xbe_path_xbox = "\\Device\\CdRom0\\" + g_xbe_name;
-			dvd_input_type = input_t::xbe;
+			s_dvd_input_type = input_t::xbe;
 			if (g_dvd_dir.string().starts_with(g_hdd_dir.string())) {
 				// XBE is installed inside a HDD partition, so set the dvd drive to be empty by setting the dvd path to an invalid directory
 				size_t partition_num_off = g_hdd_dir.string().size() + 9;
@@ -859,7 +859,7 @@ namespace io {
 
 		add_device_handles();
 
-		jthr = std::jthread(&io::worker);
+		s_jthr = std::jthread(&io::worker);
 
 		return true;
 	}
@@ -867,14 +867,14 @@ namespace io {
 	void
 	stop()
 	{
-		if (jthr.joinable()) {
+		if (s_jthr.joinable()) {
 			// Signal the I/O thread that it needs to exit
-			jthr.request_stop();
-			queue_mtx.lock();
-			pending_io.test_and_set();
-			pending_io.notify_one();
-			queue_mtx.unlock();
-			jthr.join();
+			s_jthr.request_stop();
+			s_queue_mtx.lock();
+			s_pending_io.test_and_set();
+			s_pending_io.notify_one();
+			s_queue_mtx.unlock();
+			s_jthr.join();
 		}
 	}
 }

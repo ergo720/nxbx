@@ -18,7 +18,7 @@ ptimer::counter_to_us()
 	// Tested on a Retail 1.0 xbox: the ratio is calculated with denominator / numerator, and not the other way around like it might seem at first. The gpu documentation
 	// from envytools also indicates this. Also, the alarm value has no effect on the counter period, which is only affected by the ratio instead
 	constexpr uint64_t max_alarm = 0xFFFFFFE0 >> 5;
-	return util::muldiv128(util::muldiv128(max_alarm, timer::ticks_per_second, m_machine->get<pramdac>().core_freq), divider, multiplier);
+	return util::muldiv128(util::muldiv128(max_alarm, timer::g_ticks_per_second, m_machine->get<pramdac>().core_freq), divider, multiplier);
 }
 
 uint64_t

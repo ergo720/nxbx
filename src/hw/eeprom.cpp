@@ -12,7 +12,7 @@
 
 
 // This is bunnie's eeprom, except that it stores the encrypted settings unencrypted, because nboxkrnl cannot decrypt them yet
-static constexpr uint8_t g_default_eeprom[] = {
+static constexpr uint8_t s_default_eeprom[] = {
 	0xe3, 0x1c, 0x5c, 0x23, 0x6a, 0x58, 0x68, 0x37,
 	0xb7, 0x12, 0x26, 0x6c, 0x99, 0x11, 0x30, 0xd1,
 	0xe2, 0x3e, 0x4d, 0x56, 0x00, 0x00, 0x00, 0x00,
@@ -46,7 +46,7 @@ static constexpr uint8_t g_default_eeprom[] = {
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
-static_assert(sizeof(g_default_eeprom) == 256);
+static_assert(sizeof(s_default_eeprom) == 256);
 
 
 uint8_t
@@ -98,12 +98,12 @@ eeprom::init(std::filesystem::path eeprom_dir)
 		else {
 			m_fs = std::move(*opt);
 			m_fs.seekg(0);
-			m_fs.write((const char *)g_default_eeprom, 256);
+			m_fs.write((const char *)s_default_eeprom, 256);
 			if (!m_fs.good()) {
 				logger_en(error, "Failed to update eeprom file");
 				return false;
 			}
-			std::memcpy(m_eeprom, g_default_eeprom, 256);
+			std::memcpy(m_eeprom, s_default_eeprom, 256);
 			return true;
 		}
 	}

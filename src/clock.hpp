@@ -8,8 +8,8 @@
 
 
 namespace timer {
-	inline constexpr uint64_t ticks_per_second = 1000000;
-	inline constexpr uint64_t ticks_per_millisecond = 1000;
+	inline constexpr uint64_t g_ticks_per_second = 1000000;
+	inline constexpr uint64_t g_ticks_per_millisecond = 1000;
 
 	void init();
 	uint64_t get_now();

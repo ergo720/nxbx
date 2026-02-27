@@ -14,7 +14,7 @@ namespace kernel {
 	enum IO_PORTS {
 		IO_BASE = 0x200,
 		DBG_STR = 0x200,
-		SYS_TYPE,
+		MACHINE_TYPE,
 		ABORT,
 		CLOCK_INCREMENT_LOW,
 		CLOCK_INCREMENT_HIGH,

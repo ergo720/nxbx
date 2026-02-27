@@ -153,8 +153,8 @@ usb0::calc_frame_left()
 	}
 
 	// NOTE: usb time here must be relative to the last sof time, not the boot time as used by get_dev_now
-	uint64_t curr_time = (timer::get_now() - m_sof_time) % timer::ticks_per_millisecond;
-	curr_time = util::muldiv128(curr_time, m_usb_freq, timer::ticks_per_second);
+	uint64_t curr_time = (timer::get_now() - m_sof_time) % timer::g_ticks_per_millisecond;
+	curr_time = util::muldiv128(curr_time, m_usb_freq, timer::g_ticks_per_second);
 	assert((curr_time & ~FM_INTERVAL_FI) == 0);
 	uint32_t frame_time = (REG_USB0(FM_INTERVAL) & FM_INTERVAL_FI) - (curr_time & FM_INTERVAL_FI);
 
@@ -258,13 +258,13 @@ usb0::get_next_update_time(uint64_t now)
 {
 	if (m_frame_running) {
 		uint64_t next_time;
-		if ((now - m_sof_time) >= timer::ticks_per_millisecond) { // frame length of ohci is 1 ms
+		if ((now - m_sof_time) >= timer::g_ticks_per_millisecond) { // frame length of ohci is 1 ms
 			m_sof_time = now;
-			next_time = timer::ticks_per_millisecond;
+			next_time = timer::g_ticks_per_millisecond;
 			eof_worker();
 		}
 		else {
-			next_time = m_sof_time + timer::ticks_per_millisecond - now;
+			next_time = m_sof_time + timer::g_ticks_per_millisecond - now;
 		}
 
 		return next_time;

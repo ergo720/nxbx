@@ -11,10 +11,10 @@
 
 
 namespace nxbx {
-	static const std::string console_xbox_string("xbox");
-	static const std::string console_chihiro_string("chihiro");
-	static const std::string console_devkit_string("devkit");
-	static const std::string console_unknown_string("unknown");
+	static const std::string s_console_xbox_string("xbox");
+	static const std::string s_console_chihiro_string("chihiro");
+	static const std::string s_console_devkit_string("devkit");
+	static const std::string s_console_unknown_string("unknown");
 
 	bool
 	init_console(const init_info_t &init_info)
@@ -88,16 +88,16 @@ namespace nxbx {
 		switch (type)
 		{
 		case console_t::xbox:
-			return console_xbox_string;
+			return s_console_xbox_string;
 
 		case console_t::chihiro:
-			return console_chihiro_string;
+			return s_console_chihiro_string;
 
 		case console_t::devkit:
-			return console_devkit_string;
+			return s_console_devkit_string;
 
 		default:
-			return console_unknown_string;
+			return s_console_unknown_string;
 		}
 	}
 
