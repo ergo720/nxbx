@@ -68,12 +68,7 @@ namespace io {
 		must_not_be_a_dir = 1 << 5,
 	};
 
-	inline bool pending_packets = false;
-	inline util::xbox_string g_xbe_name;
-	inline util::xbox_string g_xbe_path_xbox;
-	inline std::filesystem::path g_nxbx_dir;
-	inline std::filesystem::path g_hdd_dir;
-	inline std::filesystem::path g_dvd_dir;
+	inline bool g_pending_packets = false;
 
 	bool init(const init_info_t &init_info, cpu_t *cpu);
 	void stop();

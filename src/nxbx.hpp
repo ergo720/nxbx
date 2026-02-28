@@ -58,4 +58,5 @@ namespace nxbx {
 	void exit();
 	const std::string &console_to_string(console_t type);
 	void fatal(log_module name, const char *msg, ...);
+	const char *get_default_theme_name();
 }

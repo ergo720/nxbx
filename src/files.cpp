@@ -23,7 +23,7 @@ file_exists(const std::filesystem::path dev_path, const std::string remaining_na
 	// dev_path -> base device part, decided by host, remaining_name -> remaining variable part, decided by xbox
 
 	try {
-		resolved_path = to_slash_separator(dev_path / remaining_name);
+		resolved_path = combine_file_paths(dev_path, remaining_name);
 		if (!std::filesystem::exists(resolved_path)) {
 			// If it failed, the path might still exists, but the OS filesystem doesn't do case-insensitive comparisons (which the xbox always does)
 			// E.g.: on Linux, the ext4 filesystem might trigger this case
@@ -185,4 +185,10 @@ to_slash_separator(const std::filesystem::path path)
 	else {
 		return path;
 	}
+}
+
+std::filesystem::path
+combine_file_paths(const std::filesystem::path path1, const std::filesystem::path path2)
+{
+	return to_slash_separator(path1 / path2);
 }

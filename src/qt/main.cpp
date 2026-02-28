@@ -4,6 +4,7 @@
 
 #include "files.hpp"
 #include "nxbx.hpp"
+#include "qthost.hpp"
 #include <cstring>
 #include <cstdio>
 #include <filesystem>
@@ -166,8 +167,7 @@ parse_cmd_line_opt(const QStringList &args, init_info_t &init_info)
 	if (init_info.m_kernel_path.empty()) {
 		// Attempt to find nboxkrnl in the current directory of nxbx
 		std::filesystem::path curr_dir = init_info.m_nxbx_dir;
-		curr_dir /= "nboxkrnl.exe";
-		to_slash_separator(curr_dir);
+		curr_dir = combine_file_paths(curr_dir, "nboxkrnl.exe");
 		std::error_code ec;
 		bool exists = std::filesystem::exists(curr_dir, ec);
 		if (ec || !exists) {
@@ -205,12 +205,17 @@ main(int argc, char **argv)
 		return 1;
 	}
 
+	// Set theme before creating any windows.
+	QtHost::UpdateApplicationTheme();
+
 	if (nxbx::init_console(init_info) == false) {
 		return 1;
 	}
 
 	nxbx::start();
 	nxbx::exit();
+
+	// TODO: save theme settings
 
 	return 0;
 }

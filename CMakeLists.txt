@@ -72,6 +72,7 @@ include_directories(
  ${NXBX_ROOT_DIR}/import/simpleini
  ${NXBX_ROOT_DIR}/src/fs
  ${NXBX_ROOT_DIR}/src/hw
+ ${NXBX_ROOT_DIR}/src/qt
  ${NXBX_ROOT_DIR}/src
 )
 
@@ -85,6 +86,7 @@ set(HEADERS
  "${NXBX_ROOT_DIR}/src/kernel_head_ref.hpp"
  "${NXBX_ROOT_DIR}/src/logger.hpp"
  "${NXBX_ROOT_DIR}/src/nxbx.hpp"
+ "${NXBX_ROOT_DIR}/src/paths.hpp"
  "${NXBX_ROOT_DIR}/src/pe.hpp"
  "${NXBX_ROOT_DIR}/src/settings.hpp"
  "${NXBX_ROOT_DIR}/src/util.hpp"
@@ -101,6 +103,7 @@ set(HEADERS
  "${NXBX_ROOT_DIR}/src/hw/pit.hpp"
  "${NXBX_ROOT_DIR}/src/hw/smbus.hpp"
  "${NXBX_ROOT_DIR}/src/hw/smc.hpp"
+ "${NXBX_ROOT_DIR}/src/qt/qthost.hpp"
  "${NXBX_ROOT_DIR}/src/hw/usb/ohci.hpp"
  "${NXBX_ROOT_DIR}/src/hw/usb/ohci_reg_defs.hpp"
  "${NXBX_ROOT_DIR}/src/hw/video/conexant.hpp"
@@ -127,7 +130,6 @@ set(SOURCES
  "${NXBX_ROOT_DIR}/src/io.cpp"
  "${NXBX_ROOT_DIR}/src/kernel.cpp"
  "${NXBX_ROOT_DIR}/src/nxbx.cpp"
- "${NXBX_ROOT_DIR}/src/main.cpp"
  "${NXBX_ROOT_DIR}/src/settings.cpp"
  "${NXBX_ROOT_DIR}/src/util.cpp"
  "${NXBX_ROOT_DIR}/src/xbe.cpp"
@@ -142,6 +144,8 @@ set(SOURCES
  "${NXBX_ROOT_DIR}/src/hw/pit.cpp"
  "${NXBX_ROOT_DIR}/src/hw/smbus.cpp"
  "${NXBX_ROOT_DIR}/src/hw/smc.cpp"
+ "${NXBX_ROOT_DIR}/src/qt/main.cpp"
+ "${NXBX_ROOT_DIR}/src/qt/themes.cpp"
  "${NXBX_ROOT_DIR}/src/hw/usb/ohci.cpp"
  "${NXBX_ROOT_DIR}/src/hw/video/conexant.cpp"
  "${NXBX_ROOT_DIR}/src/hw/video/vga.cpp"
@@ -163,6 +167,7 @@ set(SOURCES
 source_group(TREE ${NXBX_ROOT_DIR} PREFIX header FILES ${HEADERS})
 source_group(TREE ${NXBX_ROOT_DIR} PREFIX source FILES ${SOURCES})
 
+add_definitions(-DQT_UI_BUILD)
 if(${COMPILER_IS_MSVC})
 set(CMAKE_CXX_FLAGS "/EHsc /Zc:preprocessor")
 add_definitions(-D_CRT_SECURE_NO_WARNINGS -D_CRT_NONSTDC_NO_WARNINGS -D_SCL_SECURE_NO_WARNINGS)

@@ -9,6 +9,7 @@
 #include "xdvdfs.hpp"
 #include "fatx.hpp"
 #include "console.hpp"
+#include "paths.hpp"
 #include <thread>
 #include <deque>
 #include <map>
@@ -226,11 +227,11 @@ namespace io {
 			};
 
 		if (s_dvd_input_type == input_t::xiso) {
-			lambda(to_slash_separator(g_dvd_dir / xdvdfs::driver::get().m_xiso_name), CDROM_HANDLE);
+			lambda(combine_file_paths(emu_path::g_dvd_dir, xdvdfs::driver::get().m_xiso_name), CDROM_HANDLE);
 		}
 
 		for (unsigned i = 0; i < XBOX_NUM_OF_HDD_PARTITIONS; ++i) {
-			std::filesystem::path curr_partition_dir = to_slash_separator(g_hdd_dir / ("Partition" + std::to_string(i) + ".bin"));
+			std::filesystem::path curr_partition_dir = combine_file_paths(emu_path::g_hdd_dir, ("Partition" + std::to_string(i) + ".bin"));
 			lambda(curr_partition_dir, PARTITION0_HANDLE + i);
 		}
 	}
@@ -283,7 +284,7 @@ namespace io {
 			if (stok.stop_requested()) [[unlikely]] {
 				flush_all_files();
 				fatx::driver::deinit();
-				pending_packets = false;
+				g_pending_packets = false;
 				s_curr_io_queue.clear();
 				s_completed_io_info.clear();
 				for (auto &handle_map : s_xbox_handle_map) {
@@ -324,7 +325,7 @@ namespace io {
 					} else {
 						assert(s_dvd_input_type == input_t::xbe);
 						std::filesystem::path resolved_path;
-						file_info.exists = file_exists(g_dvd_dir, relative_path, resolved_path, &file_info.is_directory); // search for the file in the dvd folder
+						file_info.exists = file_exists(emu_path::g_dvd_dir, relative_path, resolved_path, &file_info.is_directory); // search for the file in the dvd folder
 						if (file_info.exists) {
 							file_info.offset = file_info.size = file_info.timestamp = 0;
 							if (!file_info.is_directory) {
@@ -394,7 +395,7 @@ namespace io {
 						add_to_map(std::make_optional<std::fstream>(), &io_result, 0, io_dirent);
 					}
 					else if (fatx_search_status == STATUS_SUCCESS) {
-						if (!file_exists(g_nxbx_dir, relative_path, resolved_path)) {
+						if (!file_exists(emu_path::g_nxbx_dir, relative_path, resolved_path)) {
 							// The fatx fs indicates that the file exists, but it doesn't on the host side. This can happen for example if the user manually moves/deletes
 							// the host file with the OS
 							logger_en(error, "File with path %s exists on fatx but doesn't on the host", relative_path.c_str());
@@ -452,7 +453,7 @@ namespace io {
 					else if (fatx_search_status == STATUS_OBJECT_NAME_NOT_FOUND) {
 						bool is_directory = curr_oc_request->attributes & IO_FILE_DIRECTORY;
 						io_result.header.info = not_exists;
-						resolved_path = to_slash_separator(g_nxbx_dir / relative_path);
+						resolved_path = combine_file_paths(emu_path::g_nxbx_dir, relative_path);
 
 						// Extract the filename to put in the dirent
 						size_t path_length = relative_path.length();
@@ -695,7 +696,7 @@ namespace io {
 		}
 		else {
 			s_pending_io_vec.push_back(std::move(host_io_request));
-			pending_packets = true;
+			g_pending_packets = true;
 		}
 	}
 
@@ -756,7 +757,7 @@ namespace io {
 					s_curr_io_queue.push_back(std::move(packet));
 					});
 				s_pending_io_vec.clear();
-				pending_packets = false;
+				g_pending_packets = false;
 				// Signal that there are new packets to process
 				s_pending_io.test_and_set();
 				s_pending_io.notify_one();
@@ -799,15 +800,14 @@ namespace io {
 	init(const init_info_t &init_info, cpu_t *cpu)
 	{
 		s_lc86cpu = cpu;
-		g_nxbx_dir = init_info.m_nxbx_dir;
-		std::filesystem::path hdd_dir = g_nxbx_dir;
-		hdd_dir /= "Harddisk/";
-		hdd_dir = to_slash_separator(hdd_dir);
+		emu_path::g_nxbx_dir = init_info.m_nxbx_dir;
+		std::filesystem::path hdd_dir = emu_path::g_nxbx_dir;
+		hdd_dir = combine_file_paths(hdd_dir, "Harddisk/");
 		if (!::create_directory(hdd_dir)) {
 			return false;
 		}
 		for (unsigned i = 1; i < XBOX_NUM_OF_HDD_PARTITIONS; ++i) {
-			if (!::create_directory(to_slash_separator(hdd_dir / ("Partition" + std::to_string(i))))) {
+			if (!::create_directory(combine_file_paths(hdd_dir, ("Partition" + std::to_string(i))))) {
 				return false;
 			}
 		}
@@ -818,27 +818,27 @@ namespace io {
 		}
 
 		if (init_info.m_input_type == input_t::xiso) {
-			g_xbe_name = "default.xbe";
-			g_hdd_dir = hdd_dir;
-			g_dvd_dir = std::filesystem::path(init_info.m_input_path).remove_filename();
-			g_xbe_path_xbox = "\\Device\\CdRom0\\" + g_xbe_name;
+			emu_path::g_xbe_name = "default.xbe";
+			emu_path::g_hdd_dir = hdd_dir;
+			emu_path::g_dvd_dir = std::filesystem::path(init_info.m_input_path).remove_filename();
+			emu_path::g_xbe_path_xbox = "\\Device\\CdRom0\\" + emu_path::g_xbe_name;
 			s_dvd_input_type = input_t::xiso;
 		}
 		else {
 			std::filesystem::path local_xbe_path = to_slash_separator(std::filesystem::path(init_info.m_input_path));
-			g_xbe_name = util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(local_xbe_path.filename().string());
-			g_hdd_dir = hdd_dir;
-			g_dvd_dir = local_xbe_path.remove_filename();
-			g_xbe_path_xbox = "\\Device\\CdRom0\\" + g_xbe_name;
+			emu_path::g_xbe_name = util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(local_xbe_path.filename().string());
+			emu_path::g_hdd_dir = hdd_dir;
+			emu_path::g_dvd_dir = local_xbe_path.remove_filename();
+			emu_path::g_xbe_path_xbox = "\\Device\\CdRom0\\" + emu_path::g_xbe_name;
 			s_dvd_input_type = input_t::xbe;
-			if (g_dvd_dir.string().starts_with(g_hdd_dir.string())) {
+			if (emu_path::g_dvd_dir.string().starts_with(emu_path::g_hdd_dir.string())) {
 				// XBE is installed inside a HDD partition, so set the dvd drive to be empty by setting the dvd path to an invalid directory
-				size_t partition_num_off = g_hdd_dir.string().size() + 9;
-				std::string xbox_hdd_dir = "\\Device\\Harddisk0\\Partition" + std::to_string(g_dvd_dir.string()[partition_num_off] - '0');
-				std::string xbox_remaining_hdd_dir = g_dvd_dir.string().substr(partition_num_off + 1);
+				size_t partition_num_off = emu_path::g_hdd_dir.string().size() + 9;
+				std::string xbox_hdd_dir = "\\Device\\Harddisk0\\Partition" + std::to_string(emu_path::g_dvd_dir.string()[partition_num_off] - '0');
+				std::string xbox_remaining_hdd_dir = emu_path::g_dvd_dir.string().substr(partition_num_off + 1);
 				std::replace(xbox_remaining_hdd_dir.begin(), xbox_remaining_hdd_dir.end(), '/', '\\'); // convert to xbox path separator
-				g_xbe_path_xbox = util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(xbox_hdd_dir + xbox_remaining_hdd_dir + g_xbe_name.c_str());
-				g_dvd_dir = "";
+				emu_path::g_xbe_path_xbox = util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(xbox_hdd_dir + xbox_remaining_hdd_dir + emu_path::g_xbe_name.c_str());
+				emu_path::g_dvd_dir = "";
 				console::get().update_tray_state(tray_state::no_media, false);
 			}
 		}

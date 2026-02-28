@@ -2,6 +2,9 @@
 
 // SPDX-FileCopyrightText: 2024 ergo720
 
+#ifdef QT_UI_BUILD
+#include "qthost.hpp"
+#endif
 #include "nxbx.hpp"
 #include "console.hpp"
 #include "settings.hpp"
@@ -109,5 +112,13 @@ namespace nxbx {
 		logger<log_lv::highest, false>(name, msg, args);
 		va_end(args);
 		console::get().exit();
+	}
+
+	const char *
+	get_default_theme_name()
+	{
+#ifdef QT_UI_BUILD
+		return QtHost::GetDefaultThemeName();
+#endif
 	}
 }

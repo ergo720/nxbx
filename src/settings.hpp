@@ -27,11 +27,13 @@ public:
 	int64_t get_int64_value(const char *a_pSection, const char *a_pKey, int64_t a_nDefault = 0) override;
 	float get_float_value(const char *a_pSection, const char *a_pKey, float a_nDefault = 0) override;
 	std::vector<std::any> get_vector_values(const char *a_pSection, const char *a_pKey) override;
-	void set_long_value(const char *a_pSection, const char *a_pKey, long a_pValue = 0, bool a_bUseHex = false) override;
+	const char *get_string_value(const char *a_pSection, const char *a_pKey, const char *a_nDefault = nullptr) override;
+	void set_long_value(const char *a_pSection, const char *a_pKey, long a_pValue, bool a_bUseHex = false) override;
 	void set_uint32_value(const char *a_pSection, const char *a_pKey, uint32_t a_pValue, bool a_bUseHex = false) override;
 	void set_int64_value(const char *a_pSection, const char *a_pKey, int64_t a_pValue, bool a_bUseHex = false) override;
 	void set_float_value(const char *a_pSection, const char *a_pKey, float a_pValue) override;
 	void set_vector_values(const char *a_pSection, const char *a_pKey, std::vector<std::any> a_pValue) override;
+	void set_string_value(const char *a_pSection, const char *a_pKey, const char *a_pValue) override;
 
 
 private:

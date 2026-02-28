@@ -3,6 +3,7 @@
 // SPDX-FileCopyrightText: 2023 ergo720
 
 #include "fatx.hpp"
+#include "paths.hpp"
 #include <array>
 #include <algorithm>
 #include <limits>
@@ -415,8 +416,7 @@ namespace fatx {
 		// Write the file relative path to metadata.bin
 		std::string dev_path("Harddisk/Partition");
 		std::filesystem::path path(dev_path + std::to_string(m_pt_num - DEV_PARTITION0));
-		path /= file_path;
-		path = to_slash_separator(path);
+		path = combine_file_paths(path, file_path);
 		size_t path_length = path.string().length();
 		assert(path_length <= std::numeric_limits<uint16_t>::max());
 		m_pt_fs.seekp(0, m_pt_fs.end);
@@ -1470,9 +1470,8 @@ namespace fatx {
 				} else {
 					assert(info_entry.type == cluster_t::file);
 					assert(IS_HDD_HANDLE(m_pt_num)); // only device supported right now
-					std::filesystem::path file_path(io::g_hdd_dir);
-					file_path /= info_entry.path;
-					file_path = to_slash_separator(file_path);
+					std::filesystem::path file_path(emu_path::g_hdd_dir);
+					file_path = combine_file_paths(file_path, info_entry.path);
 					if (auto opt = open_file(file_path); !opt) {
 						return io::status_t::STATUS_IO_DEVICE_ERROR;
 					} else {
@@ -1572,9 +1571,8 @@ namespace fatx {
 				} else {
 					assert(info_entry.type == cluster_t::file);
 					assert(IS_HDD_HANDLE(m_pt_num)); // only device supported right now
-					std::filesystem::path file_path(io::g_hdd_dir);
-					file_path /= info_entry.path;
-					file_path = to_slash_separator(file_path);
+					std::filesystem::path file_path(emu_path::g_hdd_dir);
+					file_path = combine_file_paths(file_path, info_entry.path);
 					if (auto opt = open_file(file_path); !opt) {
 						return io::status_t::STATUS_IO_DEVICE_ERROR;
 					} else {
@@ -1594,7 +1592,7 @@ namespace fatx {
 
 			if (util::in_range(offset, (uint64_t)0, (uint64_t)sizeof(SUPERBLOCK) - 1)) {
 				// If we have written to the superblock, reformat the partition
-				std::fstream fs0(io::g_hdd_dir / "Partition0.bin");
+				std::fstream fs0(emu_path::g_hdd_dir / "Partition0.bin");
 				fs0.seekg(0, fs0.beg);
 				fs0.read((char *)&g_current_partition_table, sizeof(XBOX_PARTITION_TABLE));
 				if (!fs0.good()) {
@@ -1658,7 +1656,7 @@ namespace fatx {
 	driver::init(std::filesystem::path hdd_dir)
 	{
 		for (unsigned i = DEV_PARTITION0; i < DEV_PARTITION6; ++i) {
-			std::filesystem::path curr_partition_dir = to_slash_separator(hdd_dir / ("Partition" + std::to_string(i - DEV_PARTITION0)));
+			std::filesystem::path curr_partition_dir = combine_file_paths(hdd_dir, ("Partition" + std::to_string(i - DEV_PARTITION0)));
 			if (!get(i).init(curr_partition_dir, i)) {
 				logger_mod_en(error, io, "Failed to create partition%u.bin file", i - DEV_PARTITION0);
 				return false;
@@ -1780,7 +1778,7 @@ namespace fatx {
 		format_partition();
 
 		// Now, enumerate all files in the partition folder, and create a dirent for each of them
-		std::filesystem::path partition_dir = to_slash_separator(io::g_hdd_dir / ("Partition" + std::to_string(m_pt_num - DEV_PARTITION0)));
+		std::filesystem::path partition_dir = combine_file_paths(emu_path::g_hdd_dir, ("Partition" + std::to_string(m_pt_num - DEV_PARTITION0)));
 		try {
 			for (const auto &dir_entry : std::filesystem::recursive_directory_iterator(partition_dir)) {
 				std::error_code ec;
@@ -1815,7 +1813,7 @@ namespace fatx {
 				io_dirent.last_write_time = 0;
 				io_dirent.last_access_time = 0;
 				uint64_t dirent_offset;
-				io::status_t io_status = find_dirent_for_file(file_path.substr(io::g_hdd_dir.string().length() - 9), io_dirent, dirent_offset);
+				io::status_t io_status = find_dirent_for_file(file_path.substr(emu_path::g_hdd_dir.string().length() - 9), io_dirent, dirent_offset);
 				assert(io_status != io::status_t::STATUS_SUCCESS);
 				if ((io_status = create_dirent_for_file(io_dirent, file_path)) != io::status_t::STATUS_SUCCESS) {
 					if (io_status == io::status_t::STATUS_DISK_FULL) {

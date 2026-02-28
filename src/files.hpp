@@ -18,3 +18,4 @@ std::optional<std::fstream> create_file(const std::filesystem::path path, uint64
 std::optional<std::fstream> open_file(const std::filesystem::path path);
 std::optional<std::fstream> open_file(const std::filesystem::path path, std::uintmax_t *size);
 std::filesystem::path to_slash_separator(const std::filesystem::path path);
+std::filesystem::path combine_file_paths(const std::filesystem::path path1, const std::filesystem::path path2);

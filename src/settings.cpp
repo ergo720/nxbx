@@ -2,6 +2,7 @@
 
 // SPDX-FileCopyrightText: 2024 ergo720
 
+#include "qthost.hpp"
 #include "settings.hpp"
 #include "files.hpp"
 #include "logger.hpp"
@@ -16,9 +17,7 @@ bool
 settings::init(const std::string_view ini_path)
 {
 	m_ini.SetMultiKey(false);
-	std::filesystem::path curr_dir = ini_path;
-	curr_dir /= "nxbx.ini";
-	m_path = to_slash_separator(curr_dir).string();
+	m_path = combine_file_paths(ini_path, "nxbx.ini").string();
 	
 	if (m_ini.LoadFile(m_path.c_str()) < 0) {
 		// ini file doesn't exist, so create a new one with default values
@@ -69,6 +68,9 @@ settings::reset()
 	set_int64_value("core", "sys_time_bias", 0);
 	set_long_value("core", "log_level", std::to_underlying(g_default_log_lv));
 	set_uint32_value("core", "log_modules0", g_default_log_modules0, true);
+
+	// ui settings
+	set_string_value("ui", "theme", nxbx::get_default_theme_name());
 
 	// debugger settings
 	set_uint32_value("debugger", "version", g_dbg_opt.id);
@@ -213,6 +215,12 @@ settings::get_vector_values(const char *a_pSection, const char *a_pKey)
 	return any_vec;
 }
 
+const char *
+settings::get_string_value(const char *a_pSection, const char *a_pKey, const char *a_nDefault)
+{
+	return m_ini.GetValue(a_pSection, a_pKey, a_nDefault);
+}
+
 void
 settings::set_long_value(const char *a_pSection, const char *a_pKey, long a_pValue, bool a_bUseHex)
 {
@@ -290,4 +298,10 @@ settings::set_vector_values(const char *a_pSection, const char *a_pKey, std::vec
 			set_uint32_value(a_pSection, str_bk.c_str(), addr, true);
 		}
 	}
+}
+
+void
+settings::set_string_value(const char *a_pSection, const char *a_pKey, const char *a_pValue)
+{
+	m_ini.SetValue(a_pSection, a_pKey, a_pValue, nullptr, true);
 }

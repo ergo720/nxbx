@@ -19,9 +19,11 @@ public:
 	virtual int64_t get_int64_value(const char *a_pSection, const char *a_pKey, int64_t a_nDefault = 0) = 0;
 	virtual float get_float_value(const char *a_pSection, const char *a_pKey, float a_nDefault = 0) = 0;
 	virtual std::vector<std::any> get_vector_values(const char *a_pSection, const char *a_pKey) = 0;
+	virtual const char *get_string_value(const char *a_pSection, const char *a_pKey, const char *a_nDefault = nullptr) = 0;
 	virtual void set_long_value(const char *a_pSection, const char *a_pKey, long a_pValue, bool a_bUseHex = false) = 0;
 	virtual void set_uint32_value(const char *a_pSection, const char *a_pKey, uint32_t a_pValue, bool a_bUseHex = false) = 0;
 	virtual void set_int64_value(const char *a_pSection, const char *a_pKey, int64_t a_pValue, bool a_bUseHex = false) = 0;
 	virtual void set_float_value(const char *a_pSection, const char *a_pKey, float a_pValue) = 0;
 	virtual void set_vector_values(const char *a_pSection, const char *a_pKey, std::vector<std::any> a_pValue) = 0;
+	virtual void set_string_value(const char *a_pSection, const char *a_pKey, const char *a_pValue) = 0;
 };
