@@ -1786,12 +1786,26 @@ namespace fatx {
 				std::error_code ec;
 				DIRENT io_dirent;
 				std::string file_name(dir_entry.path().filename().string());
+				if (!is_name_valid(file_name)) {
+					logger_mod_en(warn, io, "File %s has characters not supported by FATX in its name, skipping it", file_name.c_str());
+					continue;
+				}
 				std::string file_path(dir_entry.path().string());
 				bool is_directory = dir_entry.is_directory();
-				io_dirent.size = is_directory ? 0 : dir_entry.file_size(ec);
-				if (ec) {
-					logger_mod_en(warn, io, "Failed to determine the size of file %s, skipping it", file_path.c_str());
-					continue;
+				if (is_directory) {
+					io_dirent.size = 0;
+				}
+				else {
+					std::uintmax_t file_size = dir_entry.file_size(ec);
+					if (ec) {
+						logger_mod_en(warn, io, "Failed to determine the size of file %s, skipping it", file_path.c_str());
+						continue;
+					}
+					else if (file_size > std::numeric_limits<uint32_t>::max()) {
+						logger_mod_en(warn, io, "File %s with size in bytes of %" PRIuMAX " exceeds the 4 GB size limit allowed by FATX, skipping it", file_path.c_str(), file_size);
+						continue;
+					}
+					io_dirent.size = file_size;
 				}
 				io_dirent.name_length = file_name.length();
 				io_dirent.attributes = is_directory ? FATX_FILE_DIRECTORY : 0;
@@ -1818,6 +1832,41 @@ namespace fatx {
 		catch (const std::filesystem::filesystem_error &err) {
 			logger_mod_en(warn, io, "Failed to iterate through directory %s, the error was %s", err.path1(), err.what());
 		}
+	}
+
+	bool
+	driver::is_name_valid(const std::string name) const
+	{
+		if (name.empty() || (name.length() > FATX_MAX_FILE_LENGTH)) { // cannot be empty or exceed 42 chars
+			return false;
+		}
+
+		if (name[0] == '.') {
+			if ((name.length() == 1) || ((name.length() == 2) && (name[1] == '.'))) { // . or .. not allowed
+				return false;
+			}
+		}
+
+		static constexpr uint32_t s_illegal_char_table[] = {
+			0xFFFFFFFF, /* [0 - 31] chars not allowed */
+			0xFC009C04, /* " * / : < > ? not allowed */
+			0x10000000, /* \ not allowed */
+			0x10000000, /* | not allowed */
+			0x00000000,
+			0x00000000,
+			0x00000000,
+			0x00000000,
+		};
+
+		const char *buffer = name.c_str(), *buffer_end = name.c_str() + name.length();
+		while (buffer < buffer_end) {
+			char c = *buffer++;
+			if (s_illegal_char_table[c >> 5] & (1 << (c & 31))) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 }
 

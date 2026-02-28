@@ -118,6 +118,7 @@ namespace fatx {
 		bool create_fat();
 		bool create_root_dirent();
 		bool setup_cluster_info(std::filesystem::path partition_dir);
+		bool is_name_valid(const std::string name) const;
 
 		unsigned m_pt_num;
 		uint64_t m_metadata_file_size;
