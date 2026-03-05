@@ -19,6 +19,8 @@ public:
 	void write_word(uint8_t command, uint16_t value) override;
 
 private:
+	bool createDefault();
+
 	std::fstream m_fs;
 	uint8_t m_eeprom[256];
 };

@@ -97,23 +97,20 @@ eeprom::init()
 		}
 		else {
 			m_fs = std::move(*opt);
-			m_fs.seekg(0);
-			m_fs.write((const char *)s_default_eeprom, 256);
-			if (!m_fs.good()) {
-				logger_en(error, "Failed to update eeprom file");
-				return false;
-			}
-			std::memcpy(m_eeprom, s_default_eeprom, 256);
-			return true;
+			return createDefault();
 		}
 	}
 	else {
+		m_fs = std::move(*opt);
 		if (size != 256) {
+			if (size == 0) {
+				if (createDefault()) {
+					return true;
+				}
+			}
 			logger_en(error, "Unexpected eeprom file size (it was %" PRIuMAX ")", size);
 			return false;
 		}
-		m_fs = std::move(*opt);
-		m_fs.seekg(0);
 		m_fs.read((char *)m_eeprom, 256);
 		if (!m_fs.good()) {
 			logger_en(error, "Failed to copy eeprom file to memory");
@@ -121,4 +118,15 @@ eeprom::init()
 		}
 		return true;
 	}
+}
+
+bool eeprom::createDefault()
+{
+	m_fs.write((const char *)s_default_eeprom, 256);
+	if (!m_fs.good()) {
+		logger_en(error, "Failed to update eeprom file");
+		return false;
+	}
+	std::memcpy(m_eeprom, s_default_eeprom, 256);
+	return true;
 }
