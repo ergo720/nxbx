@@ -9,4 +9,4 @@
 .vscode/
 
 #Test files
-src/kernel_head_ref.hpp
+src/nxbx/kernel_head_ref.hpp
