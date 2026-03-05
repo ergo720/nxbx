@@ -274,7 +274,6 @@ void qtMessageHandler(QtMsgType type, const QMessageLogContext &context, const Q
 int
 main(int argc, char **argv)
 {
-	// Exceptions are disabled, so we can't try/catch this.
 	// Timestamps in some locales showed up wrong on Windows.
 	// Qt already applies the user locale on Unix-like systems.
 #ifdef _WIN32
