@@ -263,8 +263,8 @@ vga::update_size()
 void
 vga::io_write8(uint32_t addr, const uint8_t value)
 {
-	if ((addr >= 0x3B0 && addr <= 0x3BF && (Host & 1)) || (addr >= 0x3D0 && addr <= 0x3DF && !(Host & 1))) {
-		logger_en(warn, "Ignoring unsupported write to addr=%04" PRIX32 " value=%02" PRIX8 " Host=%02" PRIX8, addr, value, Host);
+	if ((addr >= 0x3B0 && addr <= 0x3BF && (misc & 1)) || (addr >= 0x3D0 && addr <= 0x3DF && !(misc & 1))) {
+		logger_en(warn, "Ignoring unsupported write to addr=%04" PRIX32 " value=%02" PRIX8 " misc=%02" PRIX8, addr, value, misc);
 		return;
 	}
 
@@ -420,7 +420,7 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 			  2=350(EGA)  350(VGA)
 			  3=          480(VGA).
 		*/
-		Host = value;
+		misc = value;
 		break;
 
 	case 0x3B8:
@@ -752,7 +752,7 @@ vga::io_write16(uint32_t addr, const uint16_t value)
 uint8_t
 vga::io_read8(uint32_t addr)
 {
-	if ((addr >= 0x3B0 && addr <= 0x3BF && (Host & 1)) || (addr >= 0x3D0 && addr <= 0x3DF && !(Host & 1))) {
+	if ((addr >= 0x3B0 && addr <= 0x3BF && (misc & 1)) || (addr >= 0x3D0 && addr <= 0x3DF && !(misc & 1))) {
 		return 0;
 	}
 
@@ -765,7 +765,7 @@ vga::io_read8(uint32_t addr)
 		return attr[attr_index & 0x1F];
 
 	case 0x3C2:
-		return Host;
+		return misc;
 
 	case 0x3C4:
 		return seq_index;
@@ -793,7 +793,7 @@ vga::io_read8(uint32_t addr)
 	}
 
 	case 0x3CC:
-		return Host;
+		return misc;
 
 	case 0x3CE:
 		return gfx_index;
@@ -1343,7 +1343,7 @@ vga::reset()
 	std::fill(dac_palette, &dac_palette[256], 0 );
 	dac_mask = dac_state = dac_address = dac_color = dac_read_address = 0;
 	std::fill(status, &status[2], 0);
-	Host = 1; // set to 1 because Direct3D_CreateDevice attempts to access port 0x3D4 without setting this register first
+	misc = 1; // set to 1 because Direct3D_CreateDevice attempts to access port 0x3D4 without setting this register first
 	char_width = 9; // default size of SR01 bit 0 is 0
 	std::fill(character_map, &character_map[2], 0);
 	pixel_panning = current_pixel_panning = 0;

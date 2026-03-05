@@ -56,7 +56,7 @@ private:
 	uint8_t status[2];
 
 	// Miscellaneous Graphics Register
-	uint8_t Host;
+	uint8_t misc;
 
 	// Text Mode Rendering variables
 	uint8_t char_width;
