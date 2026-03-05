@@ -1,0 +1,3 @@
+#pragma once
+
+#define _NBOXKRNL_HEAD_REF "b5a5c70556aa43d7976474eeb1148a56e36fe83a	HEAD"

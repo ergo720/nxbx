@@ -31,7 +31,7 @@ static bool s_unthemed_style_name_set;
 static Qt::ColorScheme s_color_scheme = Qt::ColorScheme::Unknown;
 
 
-const char* QtHost::GetDefaultThemeName()
+const char* Host::GetDefaultThemeName()
 {
 #ifdef __APPLE__
 	return "";
@@ -83,7 +83,7 @@ void QtHost::SetIconThemeFromStyle()
 
 void QtHost::SetStyleFromSettings()
 {
-	const std::string theme(nxbx::get_settings()->get_string_value("ui", "theme", GetDefaultThemeName()));
+	const std::string theme(get_settings()->get_string_value("ui", "theme", Host::GetDefaultThemeName()));
 
 	if (theme == "fusion")
 	{

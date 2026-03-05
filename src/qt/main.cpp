@@ -2,14 +2,25 @@
 
 // SPDX-FileCopyrightText: 2023 ergo720
 
+#include <QApplication>
+#include <QtGui/QFileOpenEvent>
+
 #include "files.hpp"
-#include "nxbx.hpp"
+#include "isettings.hpp"
+#include "console.hpp"
 #include "qthost.hpp"
+#include "main_window.hpp"
+#include "paths.hpp"
 #include <cstring>
 #include <cstdio>
 #include <filesystem>
-#include <QApplication>
+#include <mutex>
 
+
+static bool s_nogui_mode = false;
+
+static std::fstream s_qt_log_file;
+static std::mutex s_qt_log_mtx;
 
 static void
 print_help()
@@ -23,6 +34,7 @@ options:\n\
 -disas <num>    Specify assembly syntax (default is Intel)\n\
 -machine <name> Specify the console type to emulate (default is xbox)\n\
 -sync_hdd <num> Synchronize hard disk partition metadata with partition folder\n\
+-no_gui         Start with no gui\n\
 -debug          Start with debugger\n\
 -help           Print this message";
 
@@ -47,11 +59,6 @@ parse_cmd_line_opt(const QStringList &args, init_info_t &init_info)
 		return 0;
 		};
 
-	if (args.size() < 3) {
-		print_help();
-		return 0;
-	}
-
 	for (auto it = std::next(args.begin()); it != args.end(); ++it) {
 		try {
 			if (it->front() != '-') { // all options start with a dash
@@ -62,22 +69,25 @@ parse_cmd_line_opt(const QStringList &args, init_info_t &init_info)
 					if (check_missing_arg(it)) {
 						return 1;
 					}
-					if (!nxbx::validate_input_file(init_info, qPrintable(*it))) {
+					if (const auto exp = Host::validate_input_file(qPrintable(*it)); !exp) {
 						return 1;
 					}
-					init_info.m_input_path = to_slash_separator(qPrintable(*it)).string();
+					else {
+						init_info.input_type = exp.value();
+						init_info.input_path = to_slash_separator(qPrintable(*it)).string();
+					}
 				}
 				else if (*it == QStringLiteral("-kernel")) {
 					if (check_missing_arg(it)) {
 						return 1;
 					}
-					init_info.m_kernel_path = to_slash_separator(qPrintable(*it)).string();
+					init_info.kernel_path = to_slash_separator(qPrintable(*it)).string();
 				}
 				else if (*it == QStringLiteral("-disas")) {
 					if (check_missing_arg(it)) {
 						return 1;
 					}
-					switch (init_info.m_syntax = static_cast<disas_syntax>(std::stoul(std::string(qPrintable(*it)), nullptr, 0)))
+					switch (init_info.syntax = static_cast<disas_syntax>(std::stoul(std::string(qPrintable(*it)), nullptr, 0)))
 					{
 					case disas_syntax::att:
 					case disas_syntax::masm:
@@ -94,17 +104,17 @@ parse_cmd_line_opt(const QStringList &args, init_info_t &init_info)
 						return 1;
 					}
 					std::string console = qPrintable(*it);
-					if (console == nxbx::console_to_string(console_t::xbox)) {
-						init_info.m_console_type = console_t::xbox;
+					if (console == console::to_string(console_t::xbox)) {
+						init_info.console_type = console_t::xbox;
 					}
-					else if (console == nxbx::console_to_string(console_t::chihiro)) {
-						init_info.m_console_type = console_t::chihiro;
+					else if (console == console::to_string(console_t::chihiro)) {
+						init_info.console_type = console_t::chihiro;
 					}
-					else if (console == nxbx::console_to_string(console_t::devkit)) {
-						init_info.m_console_type = console_t::devkit;
+					else if (console == console::to_string(console_t::devkit)) {
+						init_info.console_type = console_t::devkit;
 					}
 					else {
-						switch (init_info.m_console_type = static_cast<console_t>(std::stoul(console, nullptr, 0)))
+						switch (init_info.console_type = static_cast<console_t>(std::stoul(console, nullptr, 0)))
 						{
 						case console_t::xbox:
 						case console_t::chihiro:
@@ -117,8 +127,11 @@ parse_cmd_line_opt(const QStringList &args, init_info_t &init_info)
 						}
 					}
 				}
+				else if (*it == QStringLiteral("-no_gui")) {
+					s_nogui_mode = true;
+				}
 				else if (*it == QStringLiteral("-debug")) {
-					init_info.m_use_dbg = 1;
+					init_info.use_dbg = 1;
 				}
 				else if (*it == QStringLiteral("-help")) {
 					print_help();
@@ -128,15 +141,15 @@ parse_cmd_line_opt(const QStringList &args, init_info_t &init_info)
 					if (check_missing_arg(it)) {
 						return 1;
 					}
-					init_info.m_keys_path = to_slash_separator(qPrintable(*it)).string();
+					init_info.keys_path = to_slash_separator(qPrintable(*it)).string();
 				}
 				else if (*it == QStringLiteral("-sync_hdd")) {
 					if (check_missing_arg(it)) {
 						return 1;
 					}
-					init_info.m_sync_part = std::stoul(qPrintable(*it));
-					if (init_info.m_sync_part > 5) {
-						logger("Invalid partition number %u specified by option \"-sync_hdd\" (must be in the range [0-5])", init_info.m_sync_part);
+					init_info.sync_part = std::stoul(qPrintable(*it));
+					if (init_info.sync_part > 5) {
+						logger("Invalid partition number %u specified by option \"-sync_hdd\" (must be in the range [0-5])", init_info.sync_part);
 						return 1;
 					}
 				}
@@ -152,21 +165,21 @@ parse_cmd_line_opt(const QStringList &args, init_info_t &init_info)
 		}
 	}
 
-	if (init_info.m_input_path.empty()) {
+	if (s_nogui_mode && init_info.input_path.empty()) {
 		logger("Input file is required");
 		return 1;
 	}
 
 	// FIXME: remove this when the chihiro and devkit console types are supported
-	if ((init_info.m_console_type == console_t::chihiro) || (init_info.m_console_type == console_t::devkit)) {
-		logger("The %s console type is currently not supported", nxbx::console_to_string(init_info.m_console_type).data());
+	if ((init_info.console_type == console_t::chihiro) || (init_info.console_type == console_t::devkit)) {
+		logger("The %s console type is currently not supported", console::to_string(init_info.console_type).data());
 		return 1;
 	}
 
-	init_info.m_nxbx_dir = qPrintable(QCoreApplication::applicationDirPath()); // NOTE: the path returned by Qt already uses slashes
-	if (init_info.m_kernel_path.empty()) {
+	init_info.nxbx_dir = qPrintable(QCoreApplication::applicationDirPath()); // NOTE: the path returned by Qt already uses slashes
+	if (init_info.kernel_path.empty()) {
 		// Attempt to find nboxkrnl in the current directory of nxbx
-		std::filesystem::path curr_dir = init_info.m_nxbx_dir;
+		std::filesystem::path curr_dir = init_info.nxbx_dir;
 		curr_dir = combine_file_paths(curr_dir, "nboxkrnl.exe");
 		std::error_code ec;
 		bool exists = std::filesystem::exists(curr_dir, ec);
@@ -174,48 +187,177 @@ parse_cmd_line_opt(const QStringList &args, init_info_t &init_info)
 			logger("Unable to find \"nboxkrnl.exe\" in the current working directory");
 			return 1;
 		}
-		init_info.m_kernel_path = curr_dir.string();
+		init_info.kernel_path = curr_dir.string();
 	}
 
 	return std::nullopt;
 }
 
+bool Host::InNoGUIMode()
+{
+	return s_nogui_mode;
+}
+
+class NxbxMainApplication : public QApplication
+{
+public:
+	using QApplication::QApplication;
+
+	bool event(QEvent* event) override
+	{
+		if (event->type() == QEvent::FileOpen)
+		{
+			QFileOpenEvent* open = static_cast<QFileOpenEvent*>(event);
+			const QUrl url = open->url();
+			if (url.isLocalFile()) {
+				return g_main_window->startFile(url.toLocalFile());
+			}
+			else {
+				return false; // No URL schemas currently supported
+			}
+		}
+		return QApplication::event(event);
+	}
+};
+
+void qtMessageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
+{
+	std::unique_lock<std::mutex> lock{s_qt_log_mtx};
+	QByteArray local_msg = msg.toLocal8Bit();
+
+	switch (type)
+	{
+	case QtDebugMsg:
+		s_qt_log_file << "Debug: ";
+		break;
+
+	case QtInfoMsg:
+		s_qt_log_file << "Info: ";
+		break;
+
+	case QtWarningMsg:
+		s_qt_log_file << "Warning: ";
+		break;
+
+	case QtCriticalMsg:
+		s_qt_log_file << "Critical: ";
+		break;
+
+	case QtFatalMsg:
+		s_qt_log_file << "Fatal: ";
+		break;
+
+	default:
+		s_qt_log_file << "Unknown: ";
+	}
+
+	// It seems that Qt sets the pointers of the context in debug builds only, otherwise they are nullptr
+	if (context.file && context.function) {
+		s_qt_log_file << local_msg.constData() << " (" << context.file << ':' << context.line << ", " << context.function << ")\n";
+	}
+	else {
+		s_qt_log_file << local_msg.constData() << '\n';
+	}
+
+	// Abort if the error was fatal
+	if (type == QtFatalMsg) {
+		if (g_console) {
+			g_console->exit();
+		}
+		else {
+			lock.unlock();
+			std::abort();
+		}
+	}
+}
+
 int
 main(int argc, char **argv)
 {
+	// Exceptions are disabled, so we can't try/catch this.
+	// Timestamps in some locales showed up wrong on Windows.
+	// Qt already applies the user locale on Unix-like systems.
+#ifdef _WIN32
 	std::locale::global(std::locale(""));
+#endif
 
 	QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 
-	QApplication app(argc, argv);
+	NxbxMainApplication app(argc, argv);
 
 	init_info_t init_info;
-	init_info.m_keys_path = "";
-	init_info.m_syntax = disas_syntax::intel;
-	init_info.m_console_type = console_t::xbox;
-	init_info.m_use_dbg = 0;
-	init_info.m_sync_part = -1; // -1=don't sync, 0=sync all partitions, [1-7]=sync that partition
+	init_info.syntax = disas_syntax::intel;
+	init_info.console_type = console_t::xbox;
+	init_info.input_type = input_t::invalid;
+	init_info.use_dbg = 0;
+	init_info.sync_part = -1; // -1=don't sync, 0=sync all partitions, [1-7]=sync that partition
 
-	/* parameter parsing */
+	// Parameter parsing
 	if (const auto &opt = parse_cmd_line_opt(app.arguments(), init_info); opt) {
 		return *opt;
 	}
 
-	if (nxbx::init_settings(init_info) == false) {
+	// Setup our global paths
+	if (emu_path::setup(init_info) == false) {
+		return 1;
+	}
+
+	// Install Qt message handler
+	s_qt_log_file = std::fstream(emu_path::g_qt_log_path, std::ios_base::out | std::ios_base::trunc);
+	qInstallMessageHandler(qtMessageHandler);
+
+	// Setup ini configuration file
+	if (init_settings() == false) {
 		return 1;
 	}
 
 	// Set theme before creating any windows.
 	QtHost::UpdateApplicationTheme();
 
-	if (nxbx::init_console(init_info) == false) {
+	boot_params params;
+	params.console_type = init_info.console_type;
+	params.syntax = init_info.syntax;
+	params.use_dbg = init_info.use_dbg;
+
+	g_console = new console(params);
+	if (g_console->get_state() == console_state::shut_down) {
+		delete g_console;
 		return 1;
 	}
 
-	nxbx::start();
-	nxbx::exit();
+	// Create all window objects
+	g_main_window = new MainWindow();
+	g_main_window->initialize();
 
-	// TODO: save theme settings
+	if (s_nogui_mode) {
+		// Start the emulation in the cpu thread
+		g_console->start();
+	}
+	else {
+		g_main_window->show();
+		g_main_window->raise();
+		g_main_window->activateWindow();
 
-	return 0;
+		// Start the emulation if we have an input file
+		if (!init_info.input_path.empty()) {
+			g_console->start();
+		}
+	}
+
+	// This doesn't return until we exit.
+	int result = app.exec();
+
+	// Shutting down.
+	if (g_console) {
+		g_console->exit(true);
+	}
+	if (g_main_window) {
+		g_main_window->close();
+	}
+	delete g_main_window;
+	delete g_console;
+
+	save_settings();
+
+	return result;
 }

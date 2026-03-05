@@ -4,16 +4,26 @@
 #include <QtCore/QString>
 
 
-namespace QtHost {
-	/// Default theme name for the platform.
-	const char* GetDefaultThemeName();
+class QWidget;
+class QUrl;
 
+namespace QtHost
+{
 	/// Sets application theme according to settings.
 	void UpdateApplicationTheme();
 
-	/// Returns true if the application theme is using dark colours.
+	/// Returns true if the application theme is using dark colors.
 	bool IsDarkApplicationTheme();
 
 	/// Sets the icon theme, based on the current style (light/dark).
 	void SetIconThemeFromStyle();
+
+	/// Opens a URL with the default handler.
+	void OpenURL(QWidget* parent, const QUrl& qurl);
+
+	/// Opens a URL string with the default handler.
+	void OpenURL(QWidget* parent, const char* url);
+
+	/// Opens a URL string with the default handler.
+	void OpenURL(QWidget* parent, const QString& url);
 }
