@@ -9,6 +9,8 @@
 #include "xbe.hpp"
 #include "xdvdfs.hpp"
 #include "console.hpp"
+#include "paths.hpp"
+#include "settings.hpp"
 
 
 namespace Host
@@ -39,5 +41,28 @@ namespace Host
 		}
 
 		return std::unexpected("Failed to open file \"" + std::string(path) + "\"");
+	}
+
+	std::string SetupKernelPath(std::string kernel_path)
+	{
+		std::filesystem::path local_path = kernel_path;
+
+		if (local_path.empty()) {
+			// Check if the ini file knows a valid kernel path already
+			local_path = get_settings()->get_string_value("core", "kernel_path", "");
+			if (local_path.empty()) {
+				// Attempt to find nboxkrnl in the current directory of nxbx
+				local_path = combine_file_paths(emu_path::g_nxbx_dir, "nboxkrnl.exe");
+				std::error_code ec;
+				bool exists = std::filesystem::exists(local_path, ec);
+				if (ec || !exists) {
+					return "";
+				}
+			}
+			emu_path::g_krnl_path = local_path;
+		}
+
+		get_settings()->set_string_value("core", "kernel_path", local_path.string().c_str());
+		return local_path.string();
 	}
 }

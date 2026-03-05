@@ -52,6 +52,9 @@ namespace Host
 	// Default theme name for the platform
 	const char *GetDefaultThemeName();
 
+	// Attempts to setup kernel file path
+	std::string SetupKernelPath(std::string kernel_path);
+
 	// Terminates the emulation
 	void fatal(log_module name, const char *msg, ...);
 

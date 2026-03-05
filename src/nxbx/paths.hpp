@@ -23,7 +23,7 @@ namespace emu_path
 	inline std::filesystem::path g_krnl_path; // full path name of nboxkrnl
 	inline std::filesystem::path g_keys_path; // full path name of the keys file
 #ifdef QT_UI_BUILD
-	inline std::filesystem::path g_qt_log_path;
+	inline std::filesystem::path g_qt_log_path; // full path name of the Qt debug log file
 #endif
 
 	bool setup(const init_info_t &init_info);

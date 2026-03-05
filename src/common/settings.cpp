@@ -98,6 +98,7 @@ settings::reset()
 	set_int64_value("core", "sys_time_bias", 0);
 	set_long_value("core", "log_level", std::to_underlying(g_default_log_lv));
 	set_uint32_value("core", "log_modules0", g_default_log_modules0, true);
+	set_string_value("core", "kernel_path", emu_path::g_krnl_path.string().c_str());
 
 	// ui settings
 	set_string_value("ui", "theme", Host::GetDefaultThemeName());

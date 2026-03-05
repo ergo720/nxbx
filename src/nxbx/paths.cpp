@@ -16,7 +16,7 @@ namespace emu_path
 		}
 
 #ifdef QT_UI_BUILD
-		g_qt_log_path = combine_file_paths(g_nxbx_dir, "qt_log.txt");
+		emu_path::g_qt_log_path = combine_file_paths(g_nxbx_dir, "qt_log.txt");
 #endif
 		emu_path::g_krnl_path = init_info.kernel_path;
 		emu_path::g_keys_path = init_info.keys_path;

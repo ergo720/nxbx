@@ -177,18 +177,6 @@ parse_cmd_line_opt(const QStringList &args, init_info_t &init_info)
 	}
 
 	init_info.nxbx_dir = qPrintable(QCoreApplication::applicationDirPath()); // NOTE: the path returned by Qt already uses slashes
-	if (init_info.kernel_path.empty()) {
-		// Attempt to find nboxkrnl in the current directory of nxbx
-		std::filesystem::path curr_dir = init_info.nxbx_dir;
-		curr_dir = combine_file_paths(curr_dir, "nboxkrnl.exe");
-		std::error_code ec;
-		bool exists = std::filesystem::exists(curr_dir, ec);
-		if (ec || !exists) {
-			logger("Unable to find \"nboxkrnl.exe\" in the current working directory");
-			return 1;
-		}
-		init_info.kernel_path = curr_dir.string();
-	}
 
 	return std::nullopt;
 }
@@ -220,7 +208,7 @@ public:
 	}
 };
 
-void qtMessageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
+static void qtMessageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
 {
 	std::unique_lock<std::mutex> lock{s_qt_log_mtx};
 	QByteArray local_msg = msg.toLocal8Bit();
@@ -307,6 +295,13 @@ main(int argc, char **argv)
 
 	// Setup ini configuration file
 	if (init_settings() == false) {
+		return 1;
+	}
+
+	// Find the kernel, in the case its path wasn't passed from the command line
+	init_info.kernel_path = Host::SetupKernelPath(init_info.kernel_path);
+	if (init_info.kernel_path.empty()) {
+		logger("Unable to find \"nboxkrnl.exe\" file");
 		return 1;
 	}
 
