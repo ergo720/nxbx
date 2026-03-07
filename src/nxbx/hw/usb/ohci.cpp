@@ -278,7 +278,7 @@ bool
 usb0::update_io(bool is_update)
 {
 	bool log = module_enabled();
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), USB0_BASE, USB0_SIZE, false,
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), USB0_BASE, USB0_SIZE, false,
 		{
 			.fnr32 = log ? cpu_read<usb0, uint32_t, &usb0::read<true>> : cpu_read<usb0, uint32_t, &usb0::read<false>>,
 			.fnw32 = log ? cpu_write<usb0, uint32_t, &usb0::write<true>> : cpu_write<usb0, uint32_t, &usb0::write<false>>

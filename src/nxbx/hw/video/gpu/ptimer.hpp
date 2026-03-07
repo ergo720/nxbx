@@ -27,8 +27,6 @@
 
 
 class machine;
-class pmc;
-class pramdac;
 enum engine_enabled : int;
 
 class ptimer {
@@ -42,15 +40,16 @@ public:
 	uint32_t read32(uint32_t addr);
 	template<bool log, engine_enabled enabled>
 	void write32(uint32_t addr, const uint32_t value);
+	uint8_t isCounterOn() { return counter_active; }
+	uint64_t getCounterPeriod() { return counter_period; }
+	void setCounterPeriod(uint64_t new_period) { counter_period = new_period; }
+	uint64_t counter_to_us();
 
 private:
 	bool update_io(bool is_update);
 	template<bool is_write>
 	auto get_io_func(bool log, bool enabled, bool is_be);
-	uint64_t counter_to_us();
 
-	friend class pmc;
-	friend class pramdac;
 	machine *const m_machine;
 	// Host time when the last alarm interrupt was triggered
 	uint64_t last_alarm_time;

@@ -15,7 +15,7 @@ void puser::write32(uint32_t addr, const uint32_t value)
 	}
 
 	uint32_t chan_id = ((addr - NV_PUSER_BASE) >> 16) & (NV2A_MAX_NUM_CHANNELS - 1); // addr increases of 0x10000 for each channel
-	uint32_t curr_chan_info = m_machine->get<pfifo>().m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_PUSH1)];
+	uint32_t curr_chan_info = m_machine->invoke(&pfifo::read32<false, on>, NV_PFIFO_CACHE1_PUSH1);
 	uint32_t curr_chan_id = curr_chan_info & NV_PFIFO_CACHE1_PUSH1_CHID;
 	uint32_t curr_chan_mode = curr_chan_info & NV_PFIFO_CACHE1_PUSH1_MODE;
 
@@ -27,8 +27,7 @@ void puser::write32(uint32_t addr, const uint32_t value)
 			{
 			case NV_PUSER_DMA_PUT:
 				// The pb put pointer changed, so notify the pusher
-				m_machine->get<pfifo>().m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_PUT)] = value;
-				m_machine->get<pfifo>().pusher();
+				m_machine->invoke(&pfifo::write32<false, on>, NV_PFIFO_CACHE1_DMA_PUT, value);
 				break;
 
 			case NV_PUSER_DMA_GET:
@@ -58,7 +57,7 @@ uint32_t puser::read32(uint32_t addr)
 {
 	uint32_t value = 0;
 	uint32_t chan_id = ((addr - NV_PUSER_BASE) >> 16) & (NV2A_MAX_NUM_CHANNELS - 1); // addr increases of 0x10000 for each channel
-	uint32_t curr_chan_info = m_machine->get<pfifo>().m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_PUSH1)];
+	uint32_t curr_chan_info = m_machine->invoke(&pfifo::read32<false, on>, NV_PFIFO_CACHE1_PUSH1);
 	uint32_t curr_chan_id = curr_chan_info & NV_PFIFO_CACHE1_PUSH1_CHID;
 	uint32_t curr_chan_mode = curr_chan_info & NV_PFIFO_CACHE1_PUSH1_MODE;
 
@@ -69,15 +68,15 @@ uint32_t puser::read32(uint32_t addr)
 			switch (addr)
 			{
 			case NV_PUSER_DMA_PUT:
-				value = m_machine->get<pfifo>().m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_PUT)];
+				value = m_machine->invoke(&pfifo::read32<false, on>, NV_PFIFO_CACHE1_DMA_PUT);
 				break;
 
 			case NV_PUSER_DMA_GET:
-				value = m_machine->get<pfifo>().m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_DMA_GET)];
+				value = m_machine->invoke(&pfifo::read32<false, on>, NV_PFIFO_CACHE1_DMA_GET);
 				break;
 
 			case NV_PUSER_REF:
-				value = m_machine->get<pfifo>().m_regs[REGS_PFIFO_idx(NV_PFIFO_CACHE1_REF)];
+				value = m_machine->invoke(&pfifo::read32<false, on>, NV_PFIFO_CACHE1_REF);
 				break;
 
 			default:
@@ -125,8 +124,8 @@ bool
 puser::update_io(bool is_update)
 {
 	bool log = module_enabled();
-	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG;
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PUSER_BASE, NV_PUSER_SIZE, false,
+	bool is_be = m_machine->invoke(&pmc::read32<false>, NV_PMC_BOOT_1) & NV_PMC_BOOT_1_ENDIAN24_BIG;
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), NV_PUSER_BASE, NV_PUSER_SIZE, false,
 		{
 			.fnr32 = get_io_func<false>(log, is_be),
 			.fnw32 = get_io_func<true>(log, is_be)

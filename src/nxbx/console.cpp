@@ -29,7 +29,7 @@ console::console(const boot_params &params)
 		m_machine.deinit();
 		return;
 	}
-	io::init(m_machine.get<cpu_t *>());
+	io::init(m_machine.get_cpu());
 	m_state = console_state::initialized;
 }
 
@@ -87,7 +87,7 @@ void console::apply_log_settings()
 void console::update_tray_state(tray_state state, bool do_int)
 {
 	if ((m_state == console_state::running) || (m_state == console_state::initialized)) {
-		m_machine.get<smc>().update_tray_state(state, do_int);
+		m_machine.invoke(&smc::update_tray_state, state, do_int);
 	}
 }
 

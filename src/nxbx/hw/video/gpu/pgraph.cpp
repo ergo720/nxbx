@@ -21,12 +21,12 @@ void pgraph::write32(uint32_t addr, const uint32_t value)
 	{
 	case NV_PGRAPH_INTR:
 		REG_PGRAPH(addr) &= ~value;
-		m_machine->get<pmc>().update_irq();
+		m_machine->invoke(&pmc::updateIrq);
 		break;
 
 	case NV_PGRAPH_INTR_EN:
 		REG_PGRAPH(addr) = value;
-		m_machine->get<pmc>().update_irq();
+		m_machine->invoke(&pmc::updateIrq);
 		break;
 
 	default:
@@ -85,9 +85,9 @@ bool
 pgraph::update_io(bool is_update)
 {
 	bool log = module_enabled();
-	bool enabled = m_machine->get<pmc>().engine_enabled & NV_PMC_ENABLE_PGRAPH;
-	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG;
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PGRAPH_BASE, NV_PGRAPH_SIZE, false,
+	bool enabled = m_machine->invoke(&pmc::read32<false>, NV_PMC_ENABLE) & NV_PMC_ENABLE_PGRAPH;
+	bool is_be = m_machine->invoke(&pmc::read32<false>, NV_PMC_BOOT_1) & NV_PMC_BOOT_1_ENDIAN24_BIG;
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), NV_PGRAPH_BASE, NV_PGRAPH_SIZE, false,
 		{
 			.fnr32 = get_io_func<false>(log, enabled, is_be),
 			.fnw32 = get_io_func<true>(log, enabled, is_be)

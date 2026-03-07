@@ -10,7 +10,7 @@
 template<bool log>
 uint8_t pvga::io_read8(uint32_t addr)
 {
-	uint8_t value = m_machine->get<vga>().io_read8(addr);
+	uint8_t value = m_machine->invoke(&vga::io_read8, addr);
 
 	if constexpr (log) {
 		prmvga_log_read(addr, value);
@@ -26,7 +26,7 @@ void pvga::io_write8(uint32_t addr, const uint8_t value)
 		prmvga_log_write(addr, value);
 	}
 
-	m_machine->get<vga>().io_write8(addr, value);
+	m_machine->invoke(&vga::io_write8, addr, value);
 }
 
 template<bool log>
@@ -36,13 +36,13 @@ void pvga::io_write16(uint32_t addr, const uint16_t value)
 		prmvga_log_write(addr, value);
 	}
 
-	m_machine->get<vga>().io_write16(addr, value);
+	m_machine->invoke(&vga::io_write16, addr, value);
 }
 
 template<bool log>
 uint8_t pvga::mem_read8(uint32_t addr)
 {
-	uint8_t value = m_machine->get<vga>().mem_read8(addr);
+	uint8_t value = m_machine->invoke(&vga::mem_read8, addr);
 
 	if constexpr (log) {
 		prmvga_log_read(addr, value);
@@ -54,7 +54,7 @@ uint8_t pvga::mem_read8(uint32_t addr)
 template<bool log>
 uint16_t pvga::mem_read16(uint32_t addr)
 {
-	uint16_t value = m_machine->get<vga>().mem_read16(addr);
+	uint16_t value = m_machine->invoke(&vga::mem_read16, addr);
 
 	if constexpr (log) {
 		prmvga_log_read(addr, value);
@@ -70,7 +70,7 @@ void pvga::mem_write8(uint32_t addr, const uint8_t value)
 		prmvga_log_write(addr, value);
 	}
 
-	m_machine->get<vga>().mem_write8(addr, value);
+	m_machine->invoke(&vga::mem_write8, addr, value);
 }
 
 template<bool log>
@@ -80,7 +80,7 @@ void pvga::mem_write16(uint32_t addr, const uint16_t value)
 		prmvga_log_write(addr, value);
 	}
 
-	m_machine->get<vga>().mem_write16(addr, value);
+	m_machine->invoke(&vga::mem_write16, addr, value);
 }
 
 void
@@ -100,7 +100,7 @@ pvga::update_io(bool is_update)
 {
 	bool log = module_enabled();
 	// PRMVIO is an alias for the vga sequencer and graphics controller ports
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PRMVIO_BASE, NV_PRMVIO_SIZE, false,
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), NV_PRMVIO_BASE, NV_PRMVIO_SIZE, false,
 		{
 			.fnr8 = log ? cpu_read<pvga, uint8_t, &pvga::io_read8<true>, NV_PRMVIO_BASE> : cpu_read<pvga, uint8_t, &pvga::io_read8<false>, NV_PRMVIO_BASE>,
 			.fnw8 = log ? cpu_write<pvga, uint8_t, &pvga::io_write8<true>, NV_PRMVIO_BASE> : cpu_write<pvga, uint8_t, &pvga::io_write8<false>, NV_PRMVIO_BASE>,
@@ -112,7 +112,7 @@ pvga::update_io(bool is_update)
 	}
 
 	// PRMCIO is an alias for the vga attribute controller and crt controller ports
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PRMCIO_BASE, NV_PRMCIO_SIZE, false,
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), NV_PRMCIO_BASE, NV_PRMCIO_SIZE, false,
 		{
 			.fnr8 = log ? cpu_read<pvga, uint8_t, &pvga::io_read8<true>, NV_PRMCIO_BASE> : cpu_read<pvga, uint8_t, &pvga::io_read8<false>, NV_PRMCIO_BASE>,
 			.fnw8 = log ? cpu_write<pvga, uint8_t, &pvga::io_write8<true>, NV_PRMCIO_BASE> : cpu_write<pvga, uint8_t, &pvga::io_write8<false>, NV_PRMCIO_BASE>,
@@ -124,7 +124,7 @@ pvga::update_io(bool is_update)
 	}
 
 	// PRMDIO is an alias for the vga digital-to-analog converter (DAC) ports
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PRMDIO_BASE, NV_PRMDIO_SIZE, false,
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), NV_PRMDIO_BASE, NV_PRMDIO_SIZE, false,
 		{
 			.fnr8 = log ? cpu_read<pvga, uint8_t, &pvga::io_read8<true>, NV_PRMDIO_BASE> : cpu_read<pvga, uint8_t, &pvga::io_read8<false>, NV_PRMDIO_BASE>,
 			.fnw8 = log ? cpu_write<pvga, uint8_t, &pvga::io_write8<true>, NV_PRMDIO_BASE> : cpu_write<pvga, uint8_t, &pvga::io_write8<false>, NV_PRMDIO_BASE>,
@@ -136,7 +136,7 @@ pvga::update_io(bool is_update)
 	}
 
 	// PRMVGA is an alias for the vga memory window
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PRMVGA_BASE, NV_PRMVGA_SIZE, false,
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), NV_PRMVGA_BASE, NV_PRMVGA_SIZE, false,
 		{
 			.fnr8 = log ? cpu_read<pvga, uint8_t, &pvga::mem_read8<true>, NV_PRMVGA_BASE> : cpu_read<pvga, uint8_t, &pvga::mem_read8<false>, NV_PRMVGA_BASE>,
 			.fnr16 = log ? cpu_read<pvga, uint16_t, &pvga::mem_read16<true>, NV_PRMVGA_BASE> : cpu_read<pvga, uint16_t, &pvga::mem_read16<false>, NV_PRMVGA_BASE>,
@@ -154,7 +154,7 @@ pvga::update_io(bool is_update)
 void
 pvga::reset()
 {
-	m_machine->get<vga>().reset();
+	m_machine->invoke(&vga::reset);
 }
 
 bool

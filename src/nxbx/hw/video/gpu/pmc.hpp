@@ -40,24 +40,15 @@
 
 
 class machine;
-class pfifo;
-class ptimer;
-class pfb;
-class pcrtc;
-class pvideo;
-class pbus;
-class pramdac;
-class pramin;
-class puser;
-class pgraph;
 
-class pmc {
+class pmc
+{
 public:
 	pmc(machine *machine) : m_machine(machine) {}
 	bool init();
 	void reset();
 	void update_io() { update_io(true); }
-	void update_irq();
+	void updateIrq();
 	template<bool log = false>
 	uint32_t read32(uint32_t addr);
 	template<bool log = false>
@@ -68,16 +59,6 @@ private:
 	template<bool is_write>
 	auto get_io_func(bool log, bool is_be);
 
-	friend class pfifo;
-	friend class ptimer;
-	friend class pfb;
-	friend class pcrtc;
-	friend class pvideo;
-	friend class pbus;
-	friend class pramdac;
-	friend class pramin;
-	friend class puser;
-	friend class pgraph;
 	machine *const m_machine;
 	// registers
 	uint32_t endianness;

@@ -12,5 +12,6 @@ public:
 	adm1032(log_module module_name) : smbus_device(module_name) {}
 	void deinit() override {}
 	void reset() {}
+	adm1032 *get() { return this; }
 	uint8_t read_byte(uint8_t command) override;
 };

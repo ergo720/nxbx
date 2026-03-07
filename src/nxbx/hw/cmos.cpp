@@ -344,7 +344,7 @@ cmos::update_timer()
 	}
 
 	if ((old_int_state ^ m_int_running) | (old_clock_state ^ m_clock_running)) {
-		cpu_set_timeout(m_machine->get<cpu_t *>(), m_machine->get<cpu>().check_periodic_events(now));
+		cpu_set_timeout(m_machine->get_cpu(), m_machine->invoke(static_cast<uint64_t(cpu::*)(uint64_t)>(&cpu::check_periodic_events), now));
 	}
 }
 
@@ -455,7 +455,7 @@ bool
 cmos::update_io(bool is_update)
 {
 	bool log = module_enabled();
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x70, 2, true,
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), 0x70, 2, true,
 		{
 			.fnr8 = log ? cpu_read<cmos, uint8_t, &cmos::read8<true>> : cpu_read<cmos, uint8_t, &cmos::read8<false>>,
 			.fnw8 = log ? cpu_write<cmos, uint8_t, &cmos::write8<true>> : cpu_write<cmos, uint8_t, &cmos::write8<false>>

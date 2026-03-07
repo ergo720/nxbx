@@ -23,6 +23,7 @@ public:
 	bool init();
 	void deinit() override {}
 	void reset();
+	smc *get() { return this; }
 	uint8_t read_byte(uint8_t command) override;
 	void write_byte(uint8_t command, uint8_t value) override;
 	void update_tray_state(tray_state state, bool do_int);

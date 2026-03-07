@@ -35,7 +35,7 @@ public:
 	template<bool log = false>
 	void write32(uint32_t addr, const uint32_t value);
 	void *create_device(uint32_t bus, uint32_t device, uint32_t function, pci_conf_write_cb cb, void *opaque);
-	void copy_default_configuration(void *confptr, void *area, int size);
+	void copy_default_configuration(void *confptr, void *area, size_t size);
 	void *get_configuration_ptr(uint32_t bus, uint32_t device, uint32_t function);
 
 private:

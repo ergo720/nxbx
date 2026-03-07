@@ -22,12 +22,12 @@ void pfifo::write32(uint32_t addr, const uint32_t value)
 	{
 	case NV_PFIFO_INTR_0:
 		REG_PFIFO(addr) &= ~value;
-		m_machine->get<pmc>().update_irq();
+		m_machine->invoke(&pmc::updateIrq);
 		break;
 
 	case NV_PFIFO_INTR_EN_0:
 		REG_PFIFO(addr) = value;
-		m_machine->get<pmc>().update_irq();
+		m_machine->invoke(&pmc::updateIrq);
 		break;
 
 	case NV_PFIFO_CACHE1_DMA_PUSH:
@@ -107,7 +107,7 @@ pfifo::pusher()
 		REG_PFIFO(NV_PFIFO_CACHE1_DMA_STATE) |= (code << 29); // set error code
 		REG_PFIFO(NV_PFIFO_CACHE1_DMA_PUSH) |= NV_PFIFO_CACHE1_DMA_PUSH_STATUS; // suspend pusher
 		REG_PFIFO(NV_PFIFO_INTR_0) |= NV_PFIFO_INTR_0_DMA_PUSHER; // raise pusher interrupt
-		m_machine->get<pmc>().update_irq();
+		m_machine->invoke(&pmc::updateIrq);
 		};
 
 	// We are running, so set the busy flag
@@ -116,7 +116,7 @@ pfifo::pusher()
 	uint32_t curr_pb_get = REG_PFIFO(NV_PFIFO_CACHE1_DMA_GET) & ~3;
 	uint32_t curr_pb_put = REG_PFIFO(NV_PFIFO_CACHE1_DMA_PUT) & ~3;
 	// Find the address of the new pb entries from the pb object
-	dma_obj pb_obj = m_machine->get<nv2a>().get_dma_obj((REG_PFIFO(NV_PFIFO_CACHE1_DMA_INSTANCE) & NV_PFIFO_CACHE1_DMA_INSTANCE_ADDRESS) << 4);
+	DmaObj pb_obj = m_machine->invoke(&nv2a::getDmaObj, (REG_PFIFO(NV_PFIFO_CACHE1_DMA_INSTANCE) & NV_PFIFO_CACHE1_DMA_INSTANCE_ADDRESS) << 4);
 
 	// Process all entries until the fifo is empty
 	while (curr_pb_get != curr_pb_put) {
@@ -313,9 +313,9 @@ bool
 pfifo::update_io(bool is_update)
 {
 	bool log = module_enabled();
-	bool enabled = m_machine->get<pmc>().engine_enabled & NV_PMC_ENABLE_PFIFO;
-	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG;
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PFIFO_BASE, NV_PFIFO_SIZE, false,
+	bool enabled = m_machine->invoke(&pmc::read32<false>, NV_PMC_ENABLE) & NV_PMC_ENABLE_PFIFO;
+	bool is_be = m_machine->invoke(&pmc::read32<false>, NV_PMC_BOOT_1) & NV_PMC_BOOT_1_ENDIAN24_BIG;
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), NV_PFIFO_BASE, NV_PFIFO_SIZE, false,
 		{
 			.fnr8 = get_io_func<false, uint8_t>(log, enabled, is_be),
 			.fnr32 = get_io_func<false, uint32_t>(log, enabled, is_be),
@@ -349,6 +349,6 @@ pfifo::init()
 	}
 
 	reset();
-	m_ram = get_ram_ptr(m_machine->get<cpu_t *>());
+	m_ram = get_ram_ptr(m_machine->get_cpu());
 	return true;
 }

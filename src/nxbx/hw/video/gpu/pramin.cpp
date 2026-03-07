@@ -37,7 +37,7 @@ uint32_t
 pramin::ramin_to_ram_addr(uint32_t ramin_addr)
 {
 	ramin_addr -= NV_PRAMIN_BASE;
-	return m_machine->get<pfb>().m_regs[REGS_PFB_idx(NV_PFB_CSTATUS)] - (ramin_addr - (ramin_addr % RAMIN_UNIT_SIZE)) - RAMIN_UNIT_SIZE + (ramin_addr % RAMIN_UNIT_SIZE);
+	return m_machine->invoke(&pfb::read32<false, on>, NV_PFB_CSTATUS) - (ramin_addr - (ramin_addr % RAMIN_UNIT_SIZE)) - RAMIN_UNIT_SIZE + (ramin_addr % RAMIN_UNIT_SIZE);
 }
 
 void
@@ -77,8 +77,8 @@ bool
 pramin::update_io(bool is_update)
 {
 	bool log = module_enabled();
-	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG;
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PRAMIN_BASE, NV_PRAMIN_SIZE, false,
+	bool is_be = m_machine->invoke(&pmc::read32<false>, NV_PMC_BOOT_1) & NV_PMC_BOOT_1_ENDIAN24_BIG;
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), NV_PRAMIN_BASE, NV_PRAMIN_SIZE, false,
 		{
 			.fnr8 = get_io_func<false, uint8_t>(log, is_be),
 			.fnr16 = get_io_func<false, uint16_t>(log, is_be),
@@ -118,6 +118,6 @@ pramin::init()
 		return false;
 	}
 
-	m_ram = get_ram_ptr(m_machine->get<cpu_t *>());
+	m_ram = get_ram_ptr(m_machine->get_cpu());
 	return true;
 }

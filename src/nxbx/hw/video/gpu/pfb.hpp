@@ -21,7 +21,6 @@
 
 
 class machine;
-class pramin;
 enum engine_enabled : int;
 
 class pfb {
@@ -40,7 +39,6 @@ private:
 	template<bool is_write>
 	auto get_io_func(bool log, bool enabled, bool is_be);
 
-	friend class pramin;
 	machine *const m_machine;
 	// registers
 	uint32_t m_regs[NV_PFB_SIZE / 4];

@@ -13,6 +13,7 @@ public:
 	bool init();
 	void deinit() override {}
 	void reset();
+	conexant *get() { return this; }
 	void quick_command(bool command) override;
 	uint8_t receive_byte() override;
 	void send_byte(uint8_t value) override;

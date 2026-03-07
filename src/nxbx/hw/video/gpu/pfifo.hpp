@@ -66,9 +66,6 @@
 
 
 class machine;
-class nv2a;
-class pmc;
-class puser;
 enum engine_enabled : int;
 
 class pfifo {
@@ -93,9 +90,6 @@ private:
 	void pusher();
 	void puller();
 
-	friend class nv2a;
-	friend class pmc;
-	friend class puser;
 	machine *const m_machine;
 	uint8_t *m_ram;
 	// registers

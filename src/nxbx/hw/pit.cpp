@@ -46,7 +46,7 @@ pit::start_timer(uint8_t channel)
 {
 	m_chan[channel].last_irq_time = timer::get_now();
 	m_chan[channel].timer_running = 1;
-	cpu_set_timeout(m_machine->get<cpu_t *>(), m_machine->get<cpu>().check_periodic_events(m_chan[channel].last_irq_time));
+	cpu_set_timeout(m_machine->get_cpu(), m_machine->invoke(static_cast<uint64_t(cpu::*)(uint64_t)>(&cpu::check_periodic_events), m_chan[channel].last_irq_time));
 }
 
 template<bool log>
@@ -138,7 +138,7 @@ bool
 pit::update_io(bool is_update)
 {
 	bool log = module_enabled();
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x40, 4, true,
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), 0x40, 4, true,
 		{
 		.fnw8 = log ? cpu_write<pit, uint8_t, &pit::write8<true>> : cpu_write<pit, uint8_t, &pit::write8<false>>
 		},

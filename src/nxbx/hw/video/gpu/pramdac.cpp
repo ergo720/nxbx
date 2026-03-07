@@ -23,10 +23,10 @@ void pramdac::write32(uint32_t addr, const uint32_t value)
 		uint64_t m = value & NV_PRAMDAC_NVPLL_COEFF_MDIV;
 		uint64_t n = (value & NV_PRAMDAC_NVPLL_COEFF_NDIV) >> 8;
 		uint64_t p = (value & NV_PRAMDAC_NVPLL_COEFF_PDIV) >> 16;
-		core_freq = m ? ((NV2A_CRYSTAL_FREQ * n) / (1ULL << p) / m) : 0;
-		if (m_machine->get<ptimer>().counter_active) {
-			m_machine->get<ptimer>().counter_period = m_machine->get<ptimer>().counter_to_us();
-			cpu_set_timeout(m_machine->get<cpu_t *>(), m_machine->get<cpu>().check_periodic_events(timer::get_now()));
+		m_core_freq = m ? ((NV2A_CRYSTAL_FREQ * n) / (1ULL << p) / m) : 0;
+		if (m_machine->invoke(&ptimer::isCounterOn)) {
+			m_machine->invoke(&ptimer::setCounterPeriod, m_machine->invoke(&ptimer::counter_to_us));
+			cpu_set_timeout(m_machine->get_cpu(), m_machine->invoke(static_cast<uint64_t(cpu::*)(uint64_t)>(&cpu::check_periodic_events), timer::get_now()));
 		}
 	}
 	break;
@@ -127,8 +127,8 @@ bool
 pramdac::update_io(bool is_update)
 {
 	bool log = module_enabled();
-	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG;
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PRAMDAC_BASE, NV_PRAMDAC_SIZE, false,
+	bool is_be = m_machine->invoke(&pmc::read32<false>, NV_PMC_BOOT_1) & NV_PMC_BOOT_1_ENDIAN24_BIG;
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), NV_PRAMDAC_BASE, NV_PRAMDAC_SIZE, false,
 		{
 			.fnr8 = get_io_func<false, uint8_t>(log, is_be),
 			.fnr32 = get_io_func<false, uint32_t>(log, is_be),
@@ -146,7 +146,7 @@ void
 pramdac::reset()
 {
 	// Values dumped from a Retail 1.0 xbox
-	core_freq = NV2A_CLOCK_FREQ;
+	m_core_freq = NV2A_CLOCK_FREQ;
 	nvpll_coeff = 0x00011C01;
 	mpll_coeff = 0x00007702;
 	vpll_coeff = 0x0003C20D;

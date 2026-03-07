@@ -9,7 +9,7 @@
 
 
 // Values dumped from a Retail 1.0 xbox
-static constexpr uint32_t default_pci_configuration[] = {
+static constexpr uint32_t s_default_pci_configuration[] = {
 	0x02A010DE,
 	0x02B00007,
 	0x030000A1,
@@ -161,9 +161,9 @@ pbus::pci_log_write(uint32_t addr, uint32_t value)
 void
 pbus::pci_init()
 {
-	void *pci_conf = m_machine->get<pci>().create_device(1, 0, 0, nv2a_pci_write, nullptr);
+	void *pci_conf = m_machine->invoke(&pci::create_device, 1, 0, 0, nv2a_pci_write, nullptr);
 	assert(pci_conf);
-	m_machine->get<pci>().copy_default_configuration(pci_conf, (void *)default_pci_configuration, sizeof(default_pci_configuration));
+	m_machine->invoke(&pci::copy_default_configuration, pci_conf, (void *)s_default_pci_configuration, sizeof(s_default_pci_configuration));
 	m_pci_conf = pci_conf;
 }
 
@@ -212,8 +212,8 @@ bool
 pbus::update_io(bool is_update)
 {
 	bool log = module_enabled();
-	bool is_be = m_machine->get<pmc>().endianness & NV_PMC_BOOT_1_ENDIAN24_BIG;
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PBUS_BASE, NV_PBUS_SIZE, false,
+	bool is_be = m_machine->invoke(&pmc::read32<false>, NV_PMC_BOOT_1) & NV_PMC_BOOT_1_ENDIAN24_BIG;
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), NV_PBUS_BASE, NV_PBUS_SIZE, false,
 		{
 			.fnr32 = get_io_func<false, false>(log, is_be),
 			.fnw32 = get_io_func<true, false>(log, is_be)
@@ -223,7 +223,7 @@ pbus::update_io(bool is_update)
 		return false;
 	}
 
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), NV_PBUS_PCI_BASE, sizeof(default_pci_configuration), false,
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), NV_PBUS_PCI_BASE, sizeof(s_default_pci_configuration), false,
 		{
 			.fnr32 = get_io_func<false, true>(log, is_be),
 			.fnw32 = get_io_func<true, true>(log, is_be)

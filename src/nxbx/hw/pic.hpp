@@ -21,6 +21,7 @@ public:
 	pic(machine *machine, unsigned idx, const char *const name) : m_machine(machine), m_name(name), idx(idx) {}
 	bool init();
 	void reset();
+	pic *get() { return this; }
 	void update_io_logging() { update_io(true); }
 	template<bool log = false>
 	uint8_t read8(uint32_t addr);

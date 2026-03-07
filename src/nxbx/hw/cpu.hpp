@@ -26,7 +26,7 @@ public:
 	void update_io_logging() { update_io(true); }
 	uint64_t check_periodic_events(uint64_t now);
 	cpu_t *get_lc86cpu() { return m_lc86cpu; }
-	uint32_t get_ramsize() { return m_ramsize; }
+	uint32_t getRamsize() { return m_ramsize; }
 
 private:
 	bool update_io(bool is_update);

@@ -115,7 +115,7 @@ cpu::init(const boot_params &params)
 	}
 
 	// Init lib86cpu
-	if (!LC86_SUCCESS(cpu_new(m_ramsize, m_lc86cpu, { get_interrupt_for_cpu, &m_machine->get<pic>() }))) {
+	if (!LC86_SUCCESS(cpu_new(m_ramsize, m_lc86cpu, { get_interrupt_for_cpu, m_machine->invoke(&pic::get) }))) {
 		logger_en(error, "Failed to create cpu instance");
 		return false;
 	}
@@ -315,10 +315,10 @@ uint64_t
 cpu::check_periodic_events(uint64_t now)
 {
 	std::array<uint64_t, 4> dev_timeout;
-	dev_timeout[0] = m_machine->get<pit>().get_next_irq_time(now);
-	dev_timeout[1] = m_machine->get<cmos>().get_next_update_time(now);
-	dev_timeout[2] = m_machine->get<nv2a>().get_next_update_time(now);
-	dev_timeout[3] = m_machine->get<usb0>().get_next_update_time(now);
+	dev_timeout[0] = m_machine->invoke(&pit::get_next_irq_time, now);
+	dev_timeout[1] = m_machine->invoke(&cmos::get_next_update_time, now);
+	dev_timeout[2] = m_machine->invoke(&nv2a::get_next_update_time, now);
+	dev_timeout[3] = m_machine->invoke(&usb0::get_next_update_time, now);
 
 	return *std::min_element(dev_timeout.begin(), dev_timeout.end());
 }

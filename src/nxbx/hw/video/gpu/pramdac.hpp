@@ -20,7 +20,6 @@
 
 
 class machine;
-class ptimer;
 
 class pramdac {
 public:
@@ -34,15 +33,15 @@ public:
 	uint32_t read32(uint32_t addr);
 	template<bool log = false>
 	void write32(uint32_t addr, const uint32_t value);
+	uint64_t getCoreFreq() { return m_core_freq; }
 
 private:
 	bool update_io(bool is_update);
 	template<bool is_write, typename T>
 	auto get_io_func(bool log, bool is_be);
 
-	friend class ptimer;
 	machine *const m_machine;
-	uint64_t core_freq; // gpu frequency
+	uint64_t m_core_freq; // gpu frequency
 	// registers
 	uint32_t nvpll_coeff, mpll_coeff, vpll_coeff;
 	const std::unordered_map<uint32_t, const std::string> m_regs_info = {

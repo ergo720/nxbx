@@ -27,7 +27,7 @@ pic::get_interrupt()
 	isr |= irq_mask;
 
 	if (is_master() && irq == 2) {
-		return m_machine->get<pic, 1>().get_interrupt();
+		return m_machine->invoke<1>(&pic::get_interrupt);
 	}
 
 	return vector_offset + irq;
@@ -39,7 +39,7 @@ get_interrupt_for_cpu(void *opaque)
 	// NOTE: called from the cpu thread when it services a hw interrupt
 	std::unique_lock lock(pic::m_mtx);
 	pic *master = static_cast<pic *>(opaque);
-	cpu_lower_hw_int_line(master->m_machine->get<cpu_t *>());
+	cpu_lower_hw_int_line(master->m_machine->get_cpu());
 	return master->get_interrupt();
 }
 
@@ -67,11 +67,11 @@ pic::update_state()
 			highest_priority_irq_to_send = (priority_base + 1 + i) & 7;
 
 			if (is_master()) {
-				cpu_raise_hw_int_line(m_machine->get<cpu_t *>());
+				cpu_raise_hw_int_line(m_machine->get_cpu());
 			}
 			else {
-				m_machine->get<pic, 0>().lower_irq(2);
-				m_machine->get<pic, 0>().raise_irq(2);
+				m_machine->invoke(&pic::lower_irq, 2);
+				m_machine->invoke(&pic::raise_irq, 2);
 			}
 
 			return;
@@ -111,7 +111,7 @@ pic::lower_irq(uint8_t irq)
 	irr &= ~mask;
 
 	if (!is_master() && !irr) {
-		m_machine->get<pic, 0>().lower_irq(2);
+		m_machine->invoke(&pic::lower_irq, 2);
 	}
 }
 
@@ -247,7 +247,7 @@ void pic::write8(uint32_t addr, const uint8_t value)
 			break;
 
 		default:
-			cpu_lower_hw_int_line(m_machine->get<cpu_t *>());
+			cpu_lower_hw_int_line(m_machine->get_cpu());
 			write_icw(1, value);
 		}
 	}
@@ -310,7 +310,7 @@ pic::update_io(bool is_update)
 {
 	bool log = module_enabled();
 	if (idx == 0) {
-		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x20, 2, true,
+		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), 0x20, 2, true,
 			{
 				.fnr8 = log ? cpu_read<pic, uint8_t, &pic::read8<true>> : cpu_read<pic, uint8_t, &pic::read8<false>>,
 				.fnw8 = log ? cpu_write<pic, uint8_t, &pic::write8<true>> : cpu_write<pic, uint8_t, &pic::write8<false>>
@@ -320,7 +320,7 @@ pic::update_io(bool is_update)
 			return false;
 		}
 
-		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x4D0, 1, true,
+		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), 0x4D0, 1, true,
 			{
 				.fnr8 = log ? cpu_read<pic, uint8_t, &pic::read8_elcr<true>> : cpu_read<pic, uint8_t, &pic::read8_elcr<false>>,
 				.fnw8 = log ? cpu_write<pic, uint8_t, &pic::write8_elcr<true>> : cpu_write<pic, uint8_t, &pic::write8_elcr<false>>
@@ -331,7 +331,7 @@ pic::update_io(bool is_update)
 		}
 	}
 	else {
-		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0xA0, 2, true,
+		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), 0xA0, 2, true,
 			{
 				.fnr8 = log ? cpu_read<pic, uint8_t, &pic::read8<true>> : cpu_read<pic, uint8_t, &pic::read8<false>>,
 				.fnw8 = log ? cpu_write<pic, uint8_t, &pic::write8<true>> : cpu_write<pic, uint8_t, &pic::write8<false>>
@@ -341,7 +341,7 @@ pic::update_io(bool is_update)
 			return false;
 		}
 
-		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0x4D1, 1, true,
+		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), 0x4D1, 1, true,
 			{
 				.fnr8 = log ? cpu_read<pic, uint8_t, &pic::read8_elcr<true>> : cpu_read<pic, uint8_t, &pic::read8_elcr<false>>,
 				.fnw8 = log ? cpu_write<pic, uint8_t, &pic::write8_elcr<true>> : cpu_write<pic, uint8_t, &pic::write8_elcr<false>>

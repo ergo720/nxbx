@@ -22,7 +22,7 @@
 #include <string>
 
 
-struct dma_obj {
+struct DmaObj {
 	uint32_t class_type;
 	uint32_t mem_type;
 	uint32_t target_addr;
@@ -57,11 +57,9 @@ public:
 	pvideo &get_pvideo() { return m_pvideo; }
 	pgraph &get_pgraph() { return m_pgraph; }
 	void apply_log_settings();
+	DmaObj getDmaObj(uint32_t addr);
 
 private:
-	dma_obj get_dma_obj(uint32_t addr);
-
-	friend class pfifo;
 	pmc m_pmc;
 	pcrtc m_pcrtc;
 	pramdac m_pramdac;

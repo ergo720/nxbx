@@ -20,7 +20,6 @@
 
 
 class machine;
-class pmc;
 enum engine_enabled : int;
 
 class pcrtc {
@@ -39,7 +38,6 @@ private:
 	template<bool is_write>
 	auto get_io_func(bool log, bool enabled, bool is_be);
 
-	friend class pmc;
 	machine *const m_machine;
 	// registers
 	uint32_t int_status;

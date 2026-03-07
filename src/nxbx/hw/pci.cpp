@@ -178,7 +178,7 @@ pci::create_device(uint32_t bus, uint32_t device, uint32_t function, pci_conf_wr
 }
 
 void
-pci::copy_default_configuration(void *confptr, void *area, int size)
+pci::copy_default_configuration(void *confptr, void *area, size_t size)
 {
 	memcpy(confptr, area, size > 256 ? 256 : size);
 }
@@ -206,7 +206,7 @@ bool
 pci::update_io(bool is_update)
 {
 	bool log = module_enabled();
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0xCF8, 8, true,
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), 0xCF8, 8, true,
 		{
 			.fnr8 = log ? cpu_read<pci, uint8_t, &pci::read8<true>> : cpu_read<pci, uint8_t, &pci::read8<false>>,
 			.fnr16 = log ? cpu_read<pci, uint16_t, &pci::read16<true>> : cpu_read<pci, uint16_t, &pci::read16<false>>,

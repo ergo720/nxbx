@@ -242,7 +242,7 @@ bool
 smbus::update_io(bool is_update)
 {
 	bool log = module_enabled();
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get<cpu_t *>(), 0xC000, 16, true,
+	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), 0xC000, 16, true,
 		{
 			.fnr8 = log ? cpu_read<smbus, uint8_t, &smbus::read8<true>> : cpu_read<smbus, uint8_t, &smbus::read8<false>>,
 			.fnr16 = log ? cpu_read<smbus, uint16_t, &smbus::read16<true>> : cpu_read<smbus, uint16_t, &smbus::read16<false>>,
@@ -280,10 +280,10 @@ smbus::init()
 		return false;
 	}
 
-	m_devs[0x54] = &m_machine->get<eeprom>(); // eeprom
-	m_devs[0x10] = &m_machine->get<smc>(); // smc
-	m_devs[0x4C] = &m_machine->get<adm1032>(); // adm1032
-	m_devs[0x45] = &m_machine->get<conexant>(); // conexant video encoder
+	m_devs[0x54] = m_machine->invoke(&eeprom::get); // eeprom
+	m_devs[0x10] = m_machine->invoke(&smc::get); // smc
+	m_devs[0x4C] = m_machine->invoke(&adm1032::get); // adm1032
+	m_devs[0x45] = m_machine->invoke(&conexant::get); // conexant video encoder
 	reset();
 	return true;
 }

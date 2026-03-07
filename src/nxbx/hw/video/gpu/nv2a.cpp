@@ -54,8 +54,8 @@ nv2a::get_next_update_time(uint64_t now)
 	return m_ptimer.get_next_alarm_time(now);
 }
 
-dma_obj
-nv2a::get_dma_obj(uint32_t addr)
+DmaObj
+nv2a::getDmaObj(uint32_t addr)
 {
 	/*
 	A dma object has the following memory layout:
@@ -69,7 +69,7 @@ nv2a::get_dma_obj(uint32_t addr)
 	uint32_t limit = m_pramin.read<uint32_t>(NV_PRAMIN_BASE + addr + 4);
 	uint32_t addr_info = m_pramin.read<uint32_t>(NV_PRAMIN_BASE + addr + 8);
 
-	return dma_obj{
+	return DmaObj{
 		.class_type = flags & NV_DMA_CLASS,
 		.mem_type = (flags & NV_DMA_TARGET) >> 16,
 		.target_addr = (((flags & NV_DMA_ADJUST) >> 20) | (addr_info & NV_DMA_ADDRESS)) & (RAM_SIZE128 - 1),

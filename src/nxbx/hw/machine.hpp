@@ -19,10 +19,8 @@
 #include "video/gpu/nv2a.hpp"
 
 
-template<typename T>
-concept is_cpu_t = std::is_same_v<T, cpu_t *>;
-
-class machine {
+class machine
+{
 public:
 	machine() : m_cpu(this), m_pit(this), m_pic{ {this, 0, "MASTER PIC"}, {this, 1, "SLAVE PIC"} }, m_pci(this), m_cmos(this), m_nv2a(this),
 	m_vga(this), m_smbus(this), m_eeprom(log_module::eeprom), m_smc(this, log_module::smc), m_adm1032(log_module::adm1032), m_conexant(log_module::conexant),
@@ -76,114 +74,120 @@ public:
 		m_cmos.deinit();
 		m_smbus.deinit();
 	}
+
 	void start() { m_cpu.start(); }
 	void exit() { m_cpu.exit(); }
-	template<typename T, size_t N = 0>
-	requires (!is_cpu_t<T>)
-	T &get()
+
+	template<size_t N = 0, typename D, typename R, typename... Args_f, typename... Args_p>
+	R invoke(R(D::*f)(Args_f...), Args_p... args)
 	{
-		if constexpr (std::is_same_v<T, cpu>) {
-			return m_cpu;
+		D *obj;
+		if constexpr (std::is_same_v<D, cpu>) {
+			obj = &m_cpu;
 		}
-		else if constexpr (std::is_same_v<T, pit>) {
-			return m_pit;
+		else if constexpr (std::is_same_v<D, pit>) {
+			obj = &m_pit;
 		}
-		else if constexpr (std::is_same_v<T, pic>) {
+		else if constexpr (std::is_same_v<D, pic>) {
 			if constexpr (N < 2) {
-				return m_pic[N];
+				obj = &m_pic[N];
 			}
 			else {
 				throw std::logic_error("Out of range index when accessing the PIC array");
 			}
 		}
-		else if constexpr (std::is_same_v<T, pci>) {
-			return m_pci;
+		else if constexpr (std::is_same_v<D, pci>) {
+			obj = &m_pci;
 		}
-		else if constexpr (std::is_same_v<T, cmos>) {
-			return m_cmos;
+		else if constexpr (std::is_same_v<D, cmos>) {
+			obj = &m_cmos;
 		}
-		else if constexpr (std::is_same_v<T, vga>) {
-			return m_vga;
+		else if constexpr (std::is_same_v<D, vga>) {
+			obj = &m_vga;
 		}
-		else if constexpr (std::is_same_v<T, smbus>) {
-			return m_smbus;
+		else if constexpr (std::is_same_v<D, smbus>) {
+			obj = &m_smbus;
 		}
-		else if constexpr (std::is_same_v<T, eeprom>) {
-			return m_eeprom;
+		else if constexpr (std::is_same_v<D, eeprom>) {
+			obj = &m_eeprom;
 		}
-		else if constexpr (std::is_same_v<T, smc>) {
-			return m_smc;
+		else if constexpr (std::is_same_v<D, smc>) {
+			obj = &m_smc;
 		}
-		else if constexpr (std::is_same_v<T, adm1032>) {
-			return m_adm1032;
+		else if constexpr (std::is_same_v<D, adm1032>) {
+			obj = &m_adm1032;
 		}
-		else if constexpr (std::is_same_v<T, conexant>) {
-			return m_conexant;
+		else if constexpr (std::is_same_v<D, conexant>) {
+			obj = &m_conexant;
 		}
-		else if constexpr (std::is_same_v<T, usb0>) {
-			return m_usb0;
+		else if constexpr (std::is_same_v<D, usb0>) {
+			obj = &m_usb0;
 		}
-		else if constexpr (std::is_same_v<T, nv2a>) {
-			return m_nv2a;
+		else if constexpr (std::is_same_v<D, nv2a>) {
+			obj = &m_nv2a;
 		}
-		else if constexpr (std::is_same_v<T, pmc>) {
-			return m_nv2a.get_pmc();
+		else if constexpr (std::is_same_v<D, pmc>) {
+			obj = &m_nv2a.get_pmc();
 		}
-		else if constexpr (std::is_same_v<T, pcrtc>) {
-			return m_nv2a.get_pcrtc();
+		else if constexpr (std::is_same_v<D, pcrtc>) {
+			obj = &m_nv2a.get_pcrtc();
 		}
-		else if constexpr (std::is_same_v<T, pramdac>) {
-			return m_nv2a.get_pramdac();
+		else if constexpr (std::is_same_v<D, pramdac>) {
+			obj = &m_nv2a.get_pramdac();
 		}
-		else if constexpr (std::is_same_v<T, ptimer>) {
-			return m_nv2a.get_ptimer();
+		else if constexpr (std::is_same_v<D, ptimer>) {
+			obj = &m_nv2a.get_ptimer();
 		}
-		else if constexpr (std::is_same_v<T, pfb>) {
-			return m_nv2a.get_pfb();
+		else if constexpr (std::is_same_v<D, pfb>) {
+			obj = &m_nv2a.get_pfb();
 		}
-		else if constexpr (std::is_same_v<T, pbus>) {
-			return m_nv2a.get_pbus();
+		else if constexpr (std::is_same_v<D, pbus>) {
+			obj = &m_nv2a.get_pbus();
 		}
-		else if constexpr (std::is_same_v<T, pramin>) {
-			return m_nv2a.get_pramin();
+		else if constexpr (std::is_same_v<D, pramin>) {
+			obj = &m_nv2a.get_pramin();
 		}
-		else if constexpr (std::is_same_v<T, pfifo>) {
-			return m_nv2a.get_pfifo();
+		else if constexpr (std::is_same_v<D, pfifo>) {
+			obj = &m_nv2a.get_pfifo();
 		}
-		else if constexpr (std::is_same_v<T, pvga>) {
-			return m_nv2a.get_pvga();
+		else if constexpr (std::is_same_v<D, pvga>) {
+			obj = &m_nv2a.get_pvga();
 		}
-		else if constexpr (std::is_same_v<T, pvideo>) {
-			return m_nv2a.get_pvideo();
+		else if constexpr (std::is_same_v<D, pvideo>) {
+			obj = &m_nv2a.get_pvideo();
 		}
-		else if constexpr (std::is_same_v<T, pgraph>) {
-			return m_nv2a.get_pgraph();
+		else if constexpr (std::is_same_v<D, pgraph>) {
+			obj = &m_nv2a.get_pgraph();
 		}
 		else {
 			throw std::logic_error("Attempt to access unknown device");
 		}
+
+		if constexpr (std::is_same_v<R, void>) {
+			std::invoke(f, obj, args...);
+		}
+		else {
+			return std::invoke(f, obj, args...);
+		}
 	}
-	template<typename T>
-	requires is_cpu_t<T>
-	T get()
+
+	cpu_t *get_cpu()
 	{
-		if constexpr (std::is_same_v<T, cpu_t *>) {
-			return m_cpu.get_lc86cpu();
-		}
-		else {
-			throw std::logic_error("Attempt to access unknown device");
-		}
+		return m_cpu.get_lc86cpu();
 	}
+
 	void raise_irq(uint8_t a)
 	{
 		std::unique_lock lock(pic::m_mtx);
 		m_pic[a > 7 ? 1 : 0].raise_irq(a & 7);
 	}
+
 	void lower_irq(uint8_t a)
 	{
 		std::unique_lock lock(pic::m_mtx);
 		m_pic[a > 7 ? 1 : 0].lower_irq(a & 7);
 	}
+
 	void apply_log_settings()
 	{
 		m_cpu.update_io_logging();

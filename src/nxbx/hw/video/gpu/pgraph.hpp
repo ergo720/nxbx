@@ -18,7 +18,6 @@
 
 
 class machine;
-class pmc;
 enum engine_enabled : int;
 
 class pgraph {
@@ -37,7 +36,6 @@ private:
 	template<bool is_write>
 	auto get_io_func(bool log, bool enabled, bool is_be);
 
-	friend class pmc;
 	machine *const m_machine;
 	// registers
 	uint32_t m_regs[NV_PGRAPH_SIZE / 4];

@@ -13,6 +13,7 @@ public:
 	eeprom(log_module module_name) : smbus_device(module_name) {}
 	bool init();
 	void deinit() override;
+	eeprom *get() { return this; }
 	uint8_t read_byte(uint8_t command) override;
 	void write_byte(uint8_t command, uint8_t value) override;
 	uint16_t read_word(uint8_t command) override;
