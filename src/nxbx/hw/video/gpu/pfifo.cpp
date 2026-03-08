@@ -128,7 +128,7 @@ pfifo::pusher()
 		uint32_t pb_entry = *(uint32_t *)pb_addr;
 		curr_pb_get += 4;
 
-		uint32_t mthd_cnt = REG_PFIFO(NV_PFIFO_CACHE1_DMA_STATE) & NV_PFIFO_CACHE1_DMA_STATE_METHOD_COUNT; // parameter count of method
+		uint32_t mthd_cnt = (REG_PFIFO(NV_PFIFO_CACHE1_DMA_STATE) & NV_PFIFO_CACHE1_DMA_STATE_METHOD_COUNT) >> 18; // parameter count of method
 		if (mthd_cnt) {
 			// A method is already being processed, so the following words must be its parameters
 
@@ -141,19 +141,18 @@ pfifo::pusher()
 			uint32_t mthd_subchan = dma_state & NV_PFIFO_CACHE1_DMA_STATE_SUBCHANNEL; // the bound subchannel
 
 			// Add the method and its parameter to cache1
-			uint32_t method_entry = mthd_type | mthd | mthd_subchan;
-			REG_PFIFO(NV_PFIFO_CACHE1_METHOD(cache1_put >> 2)) = method_entry;
+			REG_PFIFO(NV_PFIFO_CACHE1_METHOD(cache1_put >> 2)) = mthd_type | mthd | mthd_subchan;
 			REG_PFIFO(NV_PFIFO_CACHE1_DATA(cache1_put >> 2)) = pb_entry;
 
 			// Update dma state
 			if (mthd_type == 0) {
 				dma_state &= ~NV_PFIFO_CACHE1_DMA_STATE_METHOD;
-				dma_state |= ((mthd + 4) >> 2);
+				dma_state |= (mthd + 4); // increasing method: method increases by one for each parameter
 			}
 			mthd_cnt--;
 			dma_state &= ~NV_PFIFO_CACHE1_DMA_STATE_METHOD_COUNT;
 			dma_state |= (mthd_cnt << 18);
-			REG_PFIFO(NV_PFIFO_CACHE1_DMA_STATE) = dma_state;
+			REG_PFIFO(NV_PFIFO_CACHE1_DMA_STATE) = dma_state; // resave dma state with updated method and count
 			REG_PFIFO(NV_PFIFO_CACHE1_DMA_DCOUNT)++;
 
 			// TODO: this should now either call or notify the puller that there's a new entry in cache1
