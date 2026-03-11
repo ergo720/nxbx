@@ -1,13 +1,13 @@
-# Nxbx - XBE / XISO launcher
+# Nxbx - Original xbox emulator
 
-Nxbx is a software to start executing XBE (original xbox executable) programs or to launch XISO images (original xbox iso). To do this, it uses [lib86cpu](https://github.com/ergo720/lib86cpu),
+Nxbx is an original xbox emulator supporting both XBE (xbox executable) and XISO (xbox iso) file formats. To emulate the xbox, it uses [lib86cpu](https://github.com/ergo720/lib86cpu),
 a cpu emulation library, and [nboxkrnl](https://github.com/ergo720/nboxkrnl), a re-implementation of the kernel of the original xbox.\
 **NOTE: It doesn't run any games right now.**\
 The only supported architecture is x86-64.
 
 ## Building
 
-Cmake version 3.4.3 or higher is required.\
+Cmake version 3.25 or higher is required.\
 Visual Studio 2022 (Windows), Visual Studio Code (Linux, optional).
 
 **On Windows:**
