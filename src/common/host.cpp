@@ -15,14 +15,16 @@
 
 namespace Host
 {
-	void
-	fatal(log_module name, const char *msg, ...)
+	void Fatal(log_module name, const char *msg, ...)
 	{
-		std::va_list args;
-		va_start(args, msg);
-		logger<log_lv::highest, false>(name, msg, args);
-		va_end(args);
-		g_console->exit();
+		if (!g_shutdown_requested) {
+			g_shutdown_requested = true;
+			std::va_list args;
+			va_start(args, msg);
+			logger<log_lv::highest, false>(name, msg, args);
+			va_end(args);
+			g_console->exit();
+		}
 	}
 
 	std::expected<input_t, std::string>

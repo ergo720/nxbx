@@ -38,6 +38,7 @@ void console::deinit()
 	io::stop();
 	m_machine.deinit();
 	m_state = console_state::shut_down;
+	Host::g_shutdown_requested = false;
 	Host::SignalStop();
 }
 

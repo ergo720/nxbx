@@ -169,7 +169,6 @@ void pfifo::pusher(auto &err_handler)
 			REG_PFIFO(NV_PFIFO_CACHE1_DMA_DCOUNT)++;
 
 			// TODO: this should now either call or notify the puller that there's a new entry in cache1
-			m_jthr.request_stop();
 			nxbx_fatal("Puller not implemented");
 			break;
 		}

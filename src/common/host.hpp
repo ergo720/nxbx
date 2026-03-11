@@ -8,7 +8,7 @@
 #include <expected>
 #include "logger.hpp"
 
-#define nxbx_mod_fatal(mod, msg, ...) do { Host::fatal(log_module::mod, msg __VA_OPT__(,) __VA_ARGS__); } while(0)
+#define nxbx_mod_fatal(mod, msg, ...) do { Host::Fatal(log_module::mod, msg __VA_OPT__(,) __VA_ARGS__); } while(0)
 #define nxbx_fatal(msg, ...) nxbx_mod_fatal(MODULE_NAME, msg __VA_OPT__(,) __VA_ARGS__)
 
 
@@ -46,6 +46,9 @@ struct boot_params {
 
 namespace Host
 {
+	// Prevents multiple shutdown requests during a single emulation session
+	inline std::atomic_bool g_shutdown_requested = false;
+
 	//  Checks if the input file is known
 	std::expected<input_t, std::string> validate_input_file(std::string_view arg_str);
 
@@ -56,7 +59,7 @@ namespace Host
 	std::string SetupKernelPath(std::string kernel_path);
 
 	// Terminates the emulation
-	void fatal(log_module name, const char *msg, ...);
+	void Fatal(log_module name, const char *msg, ...);
 
 	// Requests shut down of the current machine
 	void RequestShutdown(bool allow_confirm, bool allow_save_to_state, bool default_save_to_state);
