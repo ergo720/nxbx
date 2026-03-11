@@ -6,6 +6,7 @@
 
 #include <unordered_map>
 #include <string>
+#include <atomic>
 
 #define NV2A_CLOCK_FREQ 233333324 // = 233 MHz
 #define NV2A_CRYSTAL_FREQ 16666666 // = 16 MHz

@@ -64,8 +64,8 @@ private:
 	// Counter value when it was stopped
 	uint64_t counter_when_stopped;
 	// registers
-	uint32_t int_status;
-	uint32_t int_enabled;
+	std::atomic_uint32_t m_int_status; // atomic because it's accessed by the fifo thread
+	std::atomic_uint32_t m_int_enabled; // atomic because it's accessed by the fifo thread
 	uint32_t multiplier, divider;
 	uint32_t alarm;
 	const std::unordered_map<uint32_t, const std::string> m_regs_info = {

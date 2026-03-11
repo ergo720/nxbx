@@ -33,4 +33,5 @@ private:
 	uint32_t ramin_to_ram_addr(uint32_t ramin_addr);
 	machine *const m_machine;
 	uint8_t *m_ram;
+	uint32_t m_ramsize;
 };

@@ -24,14 +24,14 @@ ptimer::counter_to_us()
 uint64_t
 ptimer::get_next_alarm_time(uint64_t now)
 {
-	if (((int_enabled & NV_PTIMER_INTR_EN_0_ALARM_ENABLED) | counter_active) == (NV_PTIMER_INTR_EN_0_ALARM_ENABLED | COUNTER_ON)) {
+	if (((m_int_enabled & NV_PTIMER_INTR_EN_0_ALARM_ENABLED) | counter_active) == (NV_PTIMER_INTR_EN_0_ALARM_ENABLED | COUNTER_ON)) {
 		uint64_t next_time, ptimer_period = counter_period;
 		if (int64_t(now - last_alarm_time) >= ((int64_t)ptimer_period + counter_bias)) {
 			counter_bias = 0;
 			last_alarm_time = now;
 			next_time = ptimer_period;
 
-			int_status |= NV_PTIMER_INTR_0_ALARM_PENDING;
+			m_int_status |= NV_PTIMER_INTR_0_ALARM_PENDING;
 			m_machine->invoke(&pmc::updateIrq);
 		}
 		else {
@@ -57,12 +57,12 @@ void ptimer::write32(uint32_t addr, const uint32_t value)
 	switch (addr)
 	{
 	case NV_PTIMER_INTR_0:
-		int_status &= ~value;
+		m_int_status &= ~value;
 		m_machine->invoke(&pmc::updateIrq);
 		break;
 
 	case NV_PTIMER_INTR_EN_0:
-		int_enabled = value;
+		m_int_enabled = value;
 		m_machine->invoke(&pmc::updateIrq);
 		break;
 
@@ -143,11 +143,11 @@ uint32_t ptimer::read32(uint32_t addr)
 	switch (addr)
 	{
 	case NV_PTIMER_INTR_0:
-		value = int_status;
+		value = m_int_status;
 		break;
 
 	case NV_PTIMER_INTR_EN_0:
-		value = int_enabled;
+		value = m_int_enabled;
 		break;
 
 	case NV_PTIMER_NUMERATOR:
@@ -241,8 +241,8 @@ void
 ptimer::reset()
 {
 	// Values dumped from a Retail 1.0 xbox
-	int_status = NV_PTIMER_INTR_0_ALARM_NOT_PENDING;
-	int_enabled = NV_PTIMER_INTR_EN_0_ALARM_DISABLED;
+	m_int_status = NV_PTIMER_INTR_0_ALARM_NOT_PENDING;
+	m_int_enabled = NV_PTIMER_INTR_EN_0_ALARM_DISABLED;
 	multiplier = 0x00001DCD;
 	divider = 0x0000DE86;
 	alarm = 0xFFFFFFE0;

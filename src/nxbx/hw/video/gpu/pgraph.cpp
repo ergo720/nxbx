@@ -20,12 +20,12 @@ void pgraph::write32(uint32_t addr, const uint32_t value)
 	switch (addr)
 	{
 	case NV_PGRAPH_INTR:
-		REG_PGRAPH(addr) &= ~value;
+		m_int_status &= ~value;
 		m_machine->invoke(&pmc::updateIrq);
 		break;
 
 	case NV_PGRAPH_INTR_EN:
-		REG_PGRAPH(addr) = value;
+		m_int_enabled = value;
 		m_machine->invoke(&pmc::updateIrq);
 		break;
 
@@ -41,7 +41,21 @@ uint32_t pgraph::read32(uint32_t addr)
 		return 0;
 	}
 
-	uint32_t value = REG_PGRAPH(addr);
+	uint32_t value;
+
+	switch (addr)
+	{
+	case NV_PGRAPH_INTR:
+		value = m_int_status;
+		break;
+
+	case NV_PGRAPH_INTR_EN:
+		value = m_int_enabled;
+		break;
+
+	default:
+		value = REG_PGRAPH(addr);
+	}
 
 	if constexpr (log) {
 		nv2a_log_read();
@@ -103,6 +117,8 @@ pgraph::update_io(bool is_update)
 void
 pgraph::reset()
 {
+	m_int_status = 0;
+	m_int_enabled = 0;
 	std::fill(std::begin(m_regs), std::end(m_regs), 0);
 }
 

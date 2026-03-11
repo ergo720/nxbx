@@ -38,6 +38,8 @@ private:
 
 	machine *const m_machine;
 	// registers
+	std::atomic_uint32_t m_int_status; // atomic because it's accessed by the fifo thread
+	std::atomic_uint32_t m_int_enabled; // atomic because it's accessed by the fifo thread
 	uint32_t m_regs[NV_PGRAPH_SIZE / 4];
 	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
 		{ NV_PGRAPH_INTR, "NV_PGRAPH_INTR" },

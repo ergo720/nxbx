@@ -37,7 +37,7 @@ uint32_t
 pramin::ramin_to_ram_addr(uint32_t ramin_addr)
 {
 	ramin_addr -= NV_PRAMIN_BASE;
-	return m_machine->invoke(&pfb::read32<false, on>, NV_PFB_CSTATUS) - (ramin_addr - (ramin_addr % RAMIN_UNIT_SIZE)) - RAMIN_UNIT_SIZE + (ramin_addr % RAMIN_UNIT_SIZE);
+	return m_ramsize - (ramin_addr - (ramin_addr % RAMIN_UNIT_SIZE)) - RAMIN_UNIT_SIZE + (ramin_addr % RAMIN_UNIT_SIZE);
 }
 
 void
@@ -118,6 +118,8 @@ pramin::init()
 		return false;
 	}
 
+	// Store ram size in this object. This way, we don't need to query NV_PFB_CSTATUS in ramin_to_ram_addr (which is accessed from the fifo thread from getDmaObj)
 	m_ram = get_ram_ptr(m_machine->get_cpu());
+	m_ramsize = m_machine->invoke(&cpu::getRamsize);
 	return true;
 }

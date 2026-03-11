@@ -26,7 +26,6 @@ void puser::write32(uint32_t addr, const uint32_t value)
 			switch (addr)
 			{
 			case NV_PUSER_DMA_PUT:
-				// The pb put pointer changed, so notify the pusher
 				m_machine->invoke(&pfifo::write32<false, on>, NV_PFIFO_CACHE1_DMA_PUT, value);
 				break;
 

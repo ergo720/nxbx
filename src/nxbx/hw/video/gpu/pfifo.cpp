@@ -18,31 +18,53 @@ void pfifo::write32(uint32_t addr, const uint32_t value)
 		log_write(addr, value);
 	}
 
+	std::unique_lock lock(m_fifo_mtx);
+
 	switch (addr)
 	{
 	case NV_PFIFO_INTR_0:
 		REG_PFIFO(addr) &= ~value;
+		lock.unlock();
 		m_machine->invoke(&pmc::updateIrq);
 		break;
 
 	case NV_PFIFO_INTR_EN_0:
 		REG_PFIFO(addr) = value;
+		lock.unlock();
 		m_machine->invoke(&pmc::updateIrq);
+		break;
+
+	case NV_PFIFO_CACHE1_PUSH0:
+		REG_PFIFO(addr) = value;
+		// pusher access to cache1 changed and possibly put != get, notify the pusher
+		lock.unlock();
+		m_fifo_has_work.test_and_set();
+		m_fifo_has_work.notify_one();
 		break;
 
 	case NV_PFIFO_CACHE1_DMA_PUSH:
 		// Mask out read-only bits
 		REG_PFIFO(addr) = (value & ~(NV_PFIFO_CACHE1_DMA_PUSH_STATE | NV_PFIFO_CACHE1_DMA_PUSH_BUFFER));
+		// pusher state changed and possibly put != get, notify the pusher
+		lock.unlock();
+		m_fifo_has_work.test_and_set();
+		m_fifo_has_work.notify_one();
 		break;
 
 	case NV_PFIFO_CACHE1_DMA_PUT:
 		REG_PFIFO(addr) = value;
-		pusher();
+		// dma pointer changed, notify the pusher
+		lock.unlock();
+		m_fifo_has_work.test_and_set();
+		m_fifo_has_work.notify_one();
 		break;
 
 	case NV_PFIFO_CACHE1_DMA_GET:
 		REG_PFIFO(addr) = value;
-		pusher();
+		// dma pointer changed, notify the pusher
+		lock.unlock();
+		m_fifo_has_work.test_and_set();
+		m_fifo_has_work.notify_one();
 		break;
 
 	case NV_PFIFO_CACHE1_STATUS:
@@ -62,7 +84,9 @@ uint32_t pfifo::read32(uint32_t addr)
 		return 0;
 	}
 
+	m_fifo_mtx.lock();
 	uint32_t value = REG_PFIFO(addr);
+	m_fifo_mtx.unlock();
 
 	if constexpr (log) {
 		log_read(addr, value);
@@ -90,25 +114,14 @@ uint8_t pfifo::read8(uint32_t addr)
 	return value;
 }
 
-void
-pfifo::pusher()
+void pfifo::pusher(auto &err_handler)
 {
-	if ((
-		((REG_PFIFO(NV_PFIFO_CACHE1_PUSH0) & NV_PFIFO_CACHE1_PUSH0_ACCESS) << 1) |
-		(REG_PFIFO(NV_PFIFO_CACHE1_DMA_PUSH) & (NV_PFIFO_CACHE1_DMA_PUSH_ACCESS | NV_PFIFO_CACHE1_DMA_PUSH_STATUS))
-		) ^
+	if ((((REG_PFIFO(NV_PFIFO_CACHE1_PUSH0) & NV_PFIFO_CACHE1_PUSH0_ACCESS) << 1) |
+		(REG_PFIFO(NV_PFIFO_CACHE1_DMA_PUSH) & (NV_PFIFO_CACHE1_DMA_PUSH_ACCESS | NV_PFIFO_CACHE1_DMA_PUSH_STATUS))) ^
 		(NV_PFIFO_CACHE1_DMA_PUSH_ACCESS | (NV_PFIFO_CACHE1_PUSH0_ACCESS << 1))) {
 		// Pusher is either disabled or suspended, so don't do anything
 		return;
 	}
-
-	const auto &err_handler = [this](const char *msg, uint32_t code) {
-		logger_en(warn, msg);
-		REG_PFIFO(NV_PFIFO_CACHE1_DMA_STATE) |= (code << 29); // set error code
-		REG_PFIFO(NV_PFIFO_CACHE1_DMA_PUSH) |= NV_PFIFO_CACHE1_DMA_PUSH_STATUS; // suspend pusher
-		REG_PFIFO(NV_PFIFO_INTR_0) |= NV_PFIFO_INTR_0_DMA_PUSHER; // raise pusher interrupt
-		m_machine->invoke(&pmc::updateIrq);
-		};
 
 	// We are running, so set the busy flag
 	REG_PFIFO(NV_PFIFO_CACHE1_DMA_PUSH) |= NV_PFIFO_CACHE1_DMA_PUSH_STATE;
@@ -156,6 +169,7 @@ pfifo::pusher()
 			REG_PFIFO(NV_PFIFO_CACHE1_DMA_DCOUNT)++;
 
 			// TODO: this should now either call or notify the puller that there's a new entry in cache1
+			m_jthr.request_stop();
 			nxbx_fatal("Puller not implemented");
 			break;
 		}
@@ -222,6 +236,34 @@ void
 pfifo::puller()
 {
 	// TODO
+}
+
+void pfifo::fifoHandler(std::stop_token stok)
+{
+	// This function is called in a separate thread, and acts as the pfifo pusher and puller
+
+	// This lambda is called when the pusher encounters an error
+	const auto &err_handler = [this](const char *msg, uint32_t code) {
+		logger_en(warn, msg);
+		REG_PFIFO(NV_PFIFO_CACHE1_DMA_STATE) |= (code << 29); // set error code
+		REG_PFIFO(NV_PFIFO_CACHE1_DMA_PUSH) |= NV_PFIFO_CACHE1_DMA_PUSH_STATUS; // suspend pusher
+		REG_PFIFO(NV_PFIFO_INTR_0) |= NV_PFIFO_INTR_0_DMA_PUSHER; // raise pusher interrupt
+		m_fifo_mtx.unlock();
+		m_machine->invoke(&pmc::updateIrq);
+		};
+
+	while (true) {
+		// Wait until there's some work to do
+		m_fifo_has_work.wait(false);
+		std::unique_lock lock(m_fifo_mtx);
+		m_fifo_has_work.clear();
+
+		if (stok.stop_requested()) [[unlikely]] {
+			return;
+		}
+
+		pusher(err_handler);
+	}
 }
 
 void
@@ -349,5 +391,16 @@ pfifo::init()
 
 	reset();
 	m_ram = get_ram_ptr(m_machine->get_cpu());
+	m_jthr = std::jthread(std::bind_front(&pfifo::fifoHandler, this));
 	return true;
+}
+
+void pfifo::deinit()
+{
+	if (m_jthr.joinable()) {
+		m_jthr.request_stop();
+		m_fifo_has_work.test_and_set();
+		m_fifo_has_work.notify_one();
+		m_jthr.join();
+	}
 }

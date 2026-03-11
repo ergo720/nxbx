@@ -20,12 +20,12 @@ void pcrtc::write32(uint32_t addr, const uint32_t value)
 	switch (addr)
 	{
 	case NV_PCRTC_INTR_0:
-		int_status &= ~value;
+		m_int_status &= ~value;
 		m_machine->invoke(&pmc::updateIrq);
 		break;
 
 	case NV_PCRTC_INTR_EN_0:
-		int_enabled = value;
+		m_int_enabled = value;
 		m_machine->invoke(&pmc::updateIrq);
 		break;
 
@@ -54,11 +54,11 @@ uint32_t pcrtc::read32(uint32_t addr)
 	switch (addr)
 	{
 	case NV_PCRTC_INTR_0:
-		value = int_status;
+		value = m_int_status;
 		break;
 
 	case NV_PCRTC_INTR_EN_0:
-		value = int_enabled;
+		value = m_int_enabled;
 		break;
 
 	case NV_PCRTC_START:
@@ -133,8 +133,8 @@ pcrtc::update_io(bool is_update)
 void
 pcrtc::reset()
 {
-	int_status = NV_PCRTC_INTR_0_VBLANK_NOT_PENDING;
-	int_enabled = NV_PCRTC_INTR_EN_0_VBLANK_DISABLED;
+	m_int_status = NV_PCRTC_INTR_0_VBLANK_NOT_PENDING;
+	m_int_enabled = NV_PCRTC_INTR_EN_0_VBLANK_DISABLED;
 	fb_addr = 0;
 	for (uint32_t &reg : unknown) {
 		reg = 0;

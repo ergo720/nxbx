@@ -5,6 +5,8 @@
 #pragma once
 
 #include <cstdint>
+#include <thread>
+#include <mutex>
 #include "nv2a_defs.hpp"
 
 #define NV_PFIFO 0x00002000
@@ -72,6 +74,7 @@ class pfifo {
 public:
 	pfifo(machine *machine) : m_machine(machine) {}
 	bool init();
+	void deinit();
 	void reset();
 	void update_io() { update_io(true); }
 	template<bool log, engine_enabled enabled>
@@ -87,14 +90,19 @@ private:
 	bool update_io(bool is_update);
 	template<bool is_write, typename T>
 	auto get_io_func(bool log, bool enabled, bool is_be);
-	void pusher();
+	void fifoHandler(std::stop_token stok);
+	void pusher(auto &err_handler);
 	void puller();
 
 	machine *const m_machine;
 	uint8_t *m_ram;
+	std::jthread m_jthr; // async fifo worker thread
+	std::atomic_flag m_fifo_has_work;
+	std::mutex m_fifo_mtx;
 	// registers
 	uint32_t m_regs[NV_PFIFO_SIZE / 4];
-	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+	const std::unordered_map<uint32_t, const std::string> m_regs_info =
+	{
 		{ NV_PFIFO_INTR_0, "NV_PFIFO_INTR_0" },
 		{ NV_PFIFO_INTR_EN_0, "NV_PFIFO_INTR_EN_0" },
 		{ NV_PFIFO_RAMHT, "NV_PFIFO_RAMHT" },

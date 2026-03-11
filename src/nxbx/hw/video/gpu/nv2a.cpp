@@ -48,6 +48,11 @@ nv2a::init()
 	return true;
 }
 
+void nv2a::deinit()
+{
+	m_pfifo.deinit();
+}
+
 uint64_t
 nv2a::get_next_update_time(uint64_t now)
 {

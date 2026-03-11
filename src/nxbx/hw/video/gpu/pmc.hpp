@@ -62,8 +62,8 @@ private:
 	machine *const m_machine;
 	// registers
 	uint32_t endianness;
-	uint32_t int_status;
-	uint32_t int_enabled;
+	std::atomic_uint32_t m_int_status; // atomic because it's accessed by the fifo thread
+	std::atomic_uint32_t m_int_enabled; // atomic because it's accessed by the fifo thread
 	uint32_t engine_enabled;
 	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
 		{ NV_PMC_BOOT_0, "NV_PMC_BOOT_0" },

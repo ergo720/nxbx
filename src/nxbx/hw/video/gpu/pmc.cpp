@@ -42,12 +42,12 @@ void pmc::write32(uint32_t addr, const uint32_t value)
 
 	case NV_PMC_INTR_0:
 		// Only NV_PMC_INTR_0_SOFTWARE is writable, the other bits are read-only
-		int_status = (int_status & ~(1 << NV_PMC_INTR_0_SOFTWARE)) | (value & (1 << NV_PMC_INTR_0_SOFTWARE));
+		m_int_status = (m_int_status & ~(1 << NV_PMC_INTR_0_SOFTWARE)) | (value & (1 << NV_PMC_INTR_0_SOFTWARE));
 		updateIrq();
 		break;
 
 	case NV_PMC_INTR_EN_0:
-		int_enabled = value;
+		m_int_enabled = value;
 		updateIrq();
 		break;
 
@@ -115,11 +115,11 @@ uint32_t pmc::read32(uint32_t addr)
 		break;
 
 	case NV_PMC_INTR_0:
-		value = int_status;
+		value = m_int_status;
 		break;
 
 	case NV_PMC_INTR_EN_0:
-		value = int_enabled;
+		value = m_int_enabled;
 		break;
 
 	case NV_PMC_ENABLE:
@@ -142,37 +142,37 @@ pmc::updateIrq()
 {
 	// Check for pending PCRTC interrupts
 	if (m_machine->invoke(&pcrtc::read32<false, on>, NV_PCRTC_INTR_0) & m_machine->invoke(&pcrtc::read32<false, on>, NV_PCRTC_INTR_EN_0)) {
-		int_status |= (1 << NV_PMC_INTR_0_PCRTC);
+		m_int_status |= (1 << NV_PMC_INTR_0_PCRTC);
 	}
 	else {
-		int_status &= ~(1 << NV_PMC_INTR_0_PCRTC);
+		m_int_status &= ~(1 << NV_PMC_INTR_0_PCRTC);
 	}
 
 	// Check for pending PTIMER interrupts
 	if (m_machine->invoke(&ptimer::read32<false, on>, NV_PTIMER_INTR_0) & m_machine->invoke(&ptimer::read32<false, on>, NV_PTIMER_INTR_EN_0)) {
-		int_status |= (1 << NV_PMC_INTR_0_PTIMER);
+		m_int_status |= (1 << NV_PMC_INTR_0_PTIMER);
 	}
 	else {
-		int_status &= ~(1 << NV_PMC_INTR_0_PTIMER);
+		m_int_status &= ~(1 << NV_PMC_INTR_0_PTIMER);
 	}
 
 	// Check for pending PFIFO interrupts
 	if (m_machine->invoke(&pfifo::read32<false, on>, NV_PFIFO_INTR_0) & m_machine->invoke(&pfifo::read32<false, on>, NV_PFIFO_INTR_EN_0)) {
-		int_status |= (1 << NV_PMC_INTR_0_PFIFO);
+		m_int_status |= (1 << NV_PMC_INTR_0_PFIFO);
 	}
 	else {
-		int_status &= ~(1 << NV_PMC_INTR_0_PFIFO);
+		m_int_status &= ~(1 << NV_PMC_INTR_0_PFIFO);
 	}
 
 	// Check for pending PGRAPH interrupts
 	if (m_machine->invoke(&pgraph::read32<false, on>, NV_PGRAPH_INTR) & m_machine->invoke(&pgraph::read32<false, on>, NV_PGRAPH_INTR_EN)) {
-		int_status |= (1 << NV_PMC_INTR_0_PGRAPH);
+		m_int_status |= (1 << NV_PMC_INTR_0_PGRAPH);
 	}
 	else {
-		int_status &= ~(1 << NV_PMC_INTR_0_PGRAPH);
+		m_int_status &= ~(1 << NV_PMC_INTR_0_PGRAPH);
 	}
 
-	switch (int_enabled)
+	switch (m_int_enabled)
 	{
 	default:
 	case NV_PMC_INTR_EN_0_INTA_DISABLED:
@@ -180,7 +180,7 @@ pmc::updateIrq()
 		break;
 
 	case NV_PMC_INTR_EN_0_INTA_HARDWARE:
-		if (int_status & ~(1 << NV_PMC_INTR_0_SOFTWARE)) {
+		if (m_int_status & ~(1 << NV_PMC_INTR_0_SOFTWARE)) {
 			m_machine->raise_irq(NV2A_IRQ_NUM);
 		}
 		else {
@@ -189,7 +189,7 @@ pmc::updateIrq()
 		break;
 
 	case NV_PMC_INTR_EN_0_INTA_SOFTWARE:
-		if (int_status & (1 << NV_PMC_INTR_0_SOFTWARE)) {
+		if (m_int_status & (1 << NV_PMC_INTR_0_SOFTWARE)) {
 			m_machine->raise_irq(NV2A_IRQ_NUM);
 		}
 		else {
@@ -243,8 +243,8 @@ pmc::reset()
 {
 	// Values dumped from a Retail 1.0 xbox
 	endianness = NV_PMC_BOOT_1_ENDIAN0_LITTLE | NV_PMC_BOOT_1_ENDIAN24_LITTLE;
-	int_status = NV_PMC_INTR_0_NOT_PENDING;
-	int_enabled = NV_PMC_INTR_EN_0_INTA_DISABLED;
+	m_int_status = NV_PMC_INTR_0_NOT_PENDING;
+	m_int_enabled = NV_PMC_INTR_EN_0_INTA_DISABLED;
 	engine_enabled = NV_PMC_ENABLE_PTIMER | NV_PMC_ENABLE_PFB | NV_PMC_ENABLE_PCRTC;
 }
 
