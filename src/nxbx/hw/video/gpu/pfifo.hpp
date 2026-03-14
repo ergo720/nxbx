@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <thread>
 #include <mutex>
+#include <coroutine>
 #include "nv2a_defs.hpp"
 
 #define NV_PFIFO 0x00002000
@@ -15,10 +16,23 @@
 #define REGS_PFIFO_idx(x) ((x - NV_PFIFO_BASE) >> 2)
 #define REG_PFIFO(r) (m_regs[REGS_PFIFO_idx(r)])
 
+// misc ramht definitions
+#define NV_RAMHT_INSTANCE 0xFFFF
+#define NV_RAMHT_ENGINE (3 << 16)
+#define NV_RAMHT_ENGINE_SW 0
+#define NV_RAMHT_ENGINE_GRAPHICS 1
+#define NV_RAMHT_ENGINE_DVD 2
+#define NV_RAMHT_CHID (0x1F << 24)
+#define NV_RAMHT_STATUS (1 << 31)
+#define NV_RAMHT_STATUS_INVALID 0
+#define NV_RAMHT_STATUS_VALID 1
+
 #define NV_PFIFO_INTR_0 (NV2A_REGISTER_BASE + 0x00002100) // Pending pfifo interrupts. Writing a 0 has no effect, and writing a 1 clears the interrupt
 #define NV_PFIFO_INTR_0_DMA_PUSHER (1 << 12)
 #define NV_PFIFO_INTR_EN_0 (NV2A_REGISTER_BASE + 0x00002140) // Enable/disable pfifo interrupts
 #define NV_PFIFO_RAMHT (NV2A_REGISTER_BASE + 0x00002210) // Contains the base address and size of ramht in ramin
+#define NV_PFIFO_RAMHT_BASE_ADDRESS (0x1F << 4) // offset of ramht from the base of ramin, in multiples of 4K
+#define NV_PFIFO_RAMHT_SIZE (3 << 16) // size of ramht, 0=4K,1=8K,2=16K,3=32K
 #define NV_PFIFO_RAMFC (NV2A_REGISTER_BASE + 0x00002214) // Contains the base address and size of ramfc in ramin
 #define NV_PFIFO_RAMRO (NV2A_REGISTER_BASE + 0x00002218) // Contains the base address and size of ramro in ramin
 #define NV_PFIFO_RUNOUT_STATUS (NV2A_REGISTER_BASE + 0x00002400) // Status of ramro in ramin
@@ -58,7 +72,12 @@
 #define NV_PFIFO_CACHE1_DMA_GET (NV2A_REGISTER_BASE + 0x00003244) // The back pointer of the active pb fifo
 #define NV_PFIFO_CACHE1_REF (NV2A_REGISTER_BASE + 0x00003248) // reference count of the active pb (set when the REF_CNT method is executed)
 #define NV_PFIFO_CACHE1_DMA_SUBROUTINE (NV2A_REGISTER_BASE + 0x0000324C)  // copy of NV_PFIFO_CACHE1_DMA_GET before the call + subroutine active flag
+#define NV_PFIFO_CACHE1_PULL0 (NV2A_REGISTER_BASE + 0x00003250)
+#define NV_PFIFO_CACHE1_PULL0_ACCESS (1 << 0) // Enable/disable puller access to cache1, enabled=1
+#define NV_PFIFO_CACHE1_PULL1 (NV2A_REGISTER_BASE + 0x00003254)
+#define NV_PFIFO_CACHE0_PULL1_ENGINE (3 << 0) // The bound engine for the current method
 #define NV_PFIFO_CACHE1_GET (NV2A_REGISTER_BASE + 0x00003270) // The back pointer of cache1
+#define NV_PFIFO_CACHE1_ENGINE (NV2A_REGISTER_BASE + 0x00003280) // The bound engine, one for each subchannel
 #define NV_PFIFO_CACHE1_DMA_DCOUNT (NV2A_REGISTER_BASE + 0x000032A0) // the number of parameters that have being processed for the current method
 #define NV_PFIFO_CACHE1_DMA_GET_JMP_SHADOW (NV2A_REGISTER_BASE + 0x000032A4) // copy of NV_PFIFO_CACHE1_DMA_GET before the jump
 #define NV_PFIFO_CACHE1_DMA_RSVD_SHADOW (NV2A_REGISTER_BASE + 0x000032A8) // copy of pb entry when new method is processed
@@ -70,7 +89,8 @@
 class machine;
 enum engine_enabled : int;
 
-class pfifo {
+class pfifo
+{
 public:
 	pfifo(machine *machine) : m_machine(machine) {}
 	bool init();
@@ -85,14 +105,41 @@ public:
 	void write32(uint32_t addr, const uint32_t value);
 
 private:
+	struct CoroFrame
+	{
+		struct promise_type
+		{
+			CoroFrame get_return_object()
+			{
+				return CoroFrame{ std::coroutine_handle<promise_type>::from_promise(*this) };
+			}
+			constexpr std::suspend_never initial_suspend() const noexcept { return {}; }
+			constexpr std::suspend_never final_suspend() const noexcept { return {}; }
+			constexpr void return_void() const noexcept {}
+			void unhandled_exception() { throw; } // rethrow the exception to terminate the fifo thread
+		};
+		explicit CoroFrame(std::coroutine_handle<promise_type> h) : m_handle(h) {}
+
+		std::coroutine_handle<promise_type> m_handle;
+	};
+	struct RamhtElement
+	{
+		uint32_t m_handle; // handle of the object
+		uint32_t m_instance; // addr of object inside ramin
+		uint32_t m_engine; // engine to which the object is bound
+		uint32_t m_chid; // channel to which the object is bound
+		uint32_t m_valid; // wheather or not the object is valid
+	};
+
 	void log_read(uint32_t addr, uint32_t value);
 	void log_write(uint32_t addr, uint32_t value);
 	bool update_io(bool is_update);
 	template<bool is_write, typename T>
 	auto get_io_func(bool log, bool enabled, bool is_be);
 	void fifoHandler(std::stop_token stok);
-	void pusher(auto &err_handler);
-	void puller();
+	CoroFrame pusher(const std::stop_token &stok);
+	void puller(std::coroutine_handle<CoroFrame::promise_type> coro_pusher);
+	RamhtElement ramhtSearch(uint32_t handle);
 
 	machine *const m_machine;
 	uint8_t *m_ram;
@@ -122,7 +169,10 @@ private:
 		{ NV_PFIFO_CACHE1_DMA_GET, "NV_PFIFO_CACHE1_DMA_GET" },
 		{ NV_PFIFO_CACHE1_REF, "NV_PFIFO_CACHE1_REF" },
 		{ NV_PFIFO_CACHE1_DMA_SUBROUTINE, "NV_PFIFO_CACHE1_DMA_SUBROUTINE" },
+		{ NV_PFIFO_CACHE1_PULL0, "NV_PFIFO_CACHE1_PULL0" },
+		{ NV_PFIFO_CACHE1_PULL1, "NV_PFIFO_CACHE1_PULL1" },
 		{ NV_PFIFO_CACHE1_GET, "NV_PFIFO_CACHE1_GET" },
+		{ NV_PFIFO_CACHE1_ENGINE, "NV_PFIFO_CACHE1_ENGINE" },
 		{ NV_PFIFO_CACHE1_DMA_DCOUNT, "NV_PFIFO_CACHE1_DMA_DCOUNT" },
 		{ NV_PFIFO_CACHE1_DMA_GET_JMP_SHADOW, "NV_PFIFO_CACHE1_DMA_GET_JMP_SHADOW" },
 		{ NV_PFIFO_CACHE1_DMA_RSVD_SHADOW, "NV_PFIFO_CACHE1_DMA_RSVD_SHADOW" },

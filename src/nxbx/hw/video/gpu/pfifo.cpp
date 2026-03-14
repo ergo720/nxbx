@@ -4,6 +4,8 @@
 
 #include "machine.hpp"
 #include <functional>
+#include <cassert>
+#include <bit>
 
 #define MODULE_NAME pfifo
 
@@ -34,9 +36,11 @@ void pfifo::write32(uint32_t addr, const uint32_t value)
 		m_machine->invoke(&pmc::updateIrq);
 		break;
 
-	case NV_PFIFO_CACHE1_PUSH0:
+	case NV_PFIFO_CACHE1_PUSH0: // pusher access to cache1 changed and possibly put != get, notify the pusher
+	case NV_PFIFO_CACHE1_DMA_PUT: // dma pointer changed, notify the pusher
+	case NV_PFIFO_CACHE1_DMA_GET: // dma pointer changed, notify the pusher
+	case NV_PFIFO_CACHE1_PULL0: // puller access to cache1 changed and possibly put != get, notify the pusher
 		REG_PFIFO(addr) = value;
-		// pusher access to cache1 changed and possibly put != get, notify the pusher
 		lock.unlock();
 		m_fifo_has_work.test_and_set();
 		m_fifo_has_work.notify_one();
@@ -46,22 +50,6 @@ void pfifo::write32(uint32_t addr, const uint32_t value)
 		// Mask out read-only bits
 		REG_PFIFO(addr) = (value & ~(NV_PFIFO_CACHE1_DMA_PUSH_STATE | NV_PFIFO_CACHE1_DMA_PUSH_BUFFER));
 		// pusher state changed and possibly put != get, notify the pusher
-		lock.unlock();
-		m_fifo_has_work.test_and_set();
-		m_fifo_has_work.notify_one();
-		break;
-
-	case NV_PFIFO_CACHE1_DMA_PUT:
-		REG_PFIFO(addr) = value;
-		// dma pointer changed, notify the pusher
-		lock.unlock();
-		m_fifo_has_work.test_and_set();
-		m_fifo_has_work.notify_one();
-		break;
-
-	case NV_PFIFO_CACHE1_DMA_GET:
-		REG_PFIFO(addr) = value;
-		// dma pointer changed, notify the pusher
 		lock.unlock();
 		m_fifo_has_work.test_and_set();
 		m_fifo_has_work.notify_one();
@@ -114,155 +102,316 @@ uint8_t pfifo::read8(uint32_t addr)
 	return value;
 }
 
-void pfifo::pusher(auto &err_handler)
+pfifo::CoroFrame pfifo::pusher(const std::stop_token &stok)
 {
-	if ((((REG_PFIFO(NV_PFIFO_CACHE1_PUSH0) & NV_PFIFO_CACHE1_PUSH0_ACCESS) << 1) |
-		(REG_PFIFO(NV_PFIFO_CACHE1_DMA_PUSH) & (NV_PFIFO_CACHE1_DMA_PUSH_ACCESS | NV_PFIFO_CACHE1_DMA_PUSH_STATUS))) ^
-		(NV_PFIFO_CACHE1_DMA_PUSH_ACCESS | (NV_PFIFO_CACHE1_PUSH0_ACCESS << 1))) {
-		// Pusher is either disabled or suspended, so don't do anything
-		return;
-	}
+	co_await std::suspend_always(); // switch to caller (this only happens at startup)
 
-	// We are running, so set the busy flag
-	REG_PFIFO(NV_PFIFO_CACHE1_DMA_PUSH) |= NV_PFIFO_CACHE1_DMA_PUSH_STATE;
+	m_fifo_mtx.lock();
 
-	uint32_t curr_pb_get = REG_PFIFO(NV_PFIFO_CACHE1_DMA_GET) & ~3;
-	uint32_t curr_pb_put = REG_PFIFO(NV_PFIFO_CACHE1_DMA_PUT) & ~3;
-	// Find the address of the new pb entries from the pb object
-	DmaObj pb_obj = m_machine->invoke(&nv2a::getDmaObj, (REG_PFIFO(NV_PFIFO_CACHE1_DMA_INSTANCE) & NV_PFIFO_CACHE1_DMA_INSTANCE_ADDRESS) << 4);
+	// These two are used when the pusher encounters an error
+	std::string err_msg("");
+	uint32_t err_code = 0;
 
-	// Process all entries until the fifo is empty
-	while (curr_pb_get != curr_pb_put) {
-		if (curr_pb_get >= pb_obj.limit) {
-			err_handler("Pusher error: curr_pb_get >= pb_obj.limit", NV_PFIFO_CACHE1_DMA_STATE_ERROR_PROTECTION); // set mem fault error
-			break;
+	while (true) {
+		// Wait until there's some work to do
+		m_fifo_mtx.unlock();
+		m_fifo_has_work.wait(false);
+		m_fifo_mtx.lock();
+		m_fifo_has_work.clear();
+
+		if (stok.stop_requested()) [[unlikely]] {
+			m_fifo_mtx.unlock();
+			throw std::exception();
 		}
-		uint8_t *pb_addr = m_ram + pb_obj.target_addr + curr_pb_get; // ram host base addr + pb base addr + pb offset
-		uint32_t pb_entry = *(uint32_t *)pb_addr;
-		curr_pb_get += 4;
 
-		uint32_t mthd_cnt = (REG_PFIFO(NV_PFIFO_CACHE1_DMA_STATE) & NV_PFIFO_CACHE1_DMA_STATE_METHOD_COUNT) >> 18; // parameter count of method
-		if (mthd_cnt) {
-			// A method is already being processed, so the following words must be its parameters
-
-			REG_PFIFO(NV_PFIFO_CACHE1_DMA_DATA_SHADOW) = pb_entry; // save in shadow reg the current entry
-
-			uint32_t cache1_put = REG_PFIFO(NV_PFIFO_CACHE1_PUT) & 0x1FC;
-			uint32_t dma_state = REG_PFIFO(NV_PFIFO_CACHE1_DMA_STATE);
-			uint32_t mthd_type = dma_state & NV_PFIFO_CACHE1_DMA_STATE_METHOD_TYPE; // method type
-			uint32_t mthd = dma_state & NV_PFIFO_CACHE1_DMA_STATE_METHOD; // the actual method specified
-			uint32_t mthd_subchan = dma_state & NV_PFIFO_CACHE1_DMA_STATE_SUBCHANNEL; // the bound subchannel
-
-			// Add the method and its parameter to cache1
-			REG_PFIFO(NV_PFIFO_CACHE1_METHOD(cache1_put >> 2)) = mthd_type | mthd | mthd_subchan;
-			REG_PFIFO(NV_PFIFO_CACHE1_DATA(cache1_put >> 2)) = pb_entry;
-
-			// Update dma state
-			if (mthd_type == 0) {
-				dma_state &= ~NV_PFIFO_CACHE1_DMA_STATE_METHOD;
-				dma_state |= (mthd + 4); // increasing method: method increases by one for each parameter
-			}
-			mthd_cnt--;
-			dma_state &= ~NV_PFIFO_CACHE1_DMA_STATE_METHOD_COUNT;
-			dma_state |= (mthd_cnt << 18);
-			REG_PFIFO(NV_PFIFO_CACHE1_DMA_STATE) = dma_state; // resave dma state with updated method and count
-			REG_PFIFO(NV_PFIFO_CACHE1_DMA_DCOUNT)++;
-
-			// TODO: this should now either call or notify the puller that there's a new entry in cache1
-			nxbx_fatal("Puller not implemented");
-			break;
+		if ((((REG_PFIFO(NV_PFIFO_CACHE1_PUSH0) & NV_PFIFO_CACHE1_PUSH0_ACCESS) << 1) |
+			(REG_PFIFO(NV_PFIFO_CACHE1_DMA_PUSH) & (NV_PFIFO_CACHE1_DMA_PUSH_ACCESS | NV_PFIFO_CACHE1_DMA_PUSH_STATUS))) ^
+			(NV_PFIFO_CACHE1_DMA_PUSH_ACCESS | (NV_PFIFO_CACHE1_PUSH0_ACCESS << 1))) {
+			// Pusher is either disabled or suspended, so switch to puller since there might still be entries in cache1
+			co_await std::suspend_always();
+			continue;
 		}
-		else {
-			// No methods is currently active, so this must be a new one
-			REG_PFIFO(NV_PFIFO_CACHE1_DMA_RSVD_SHADOW) = pb_entry; // save in shadow reg the current entry
 
-			if ((pb_entry & 0xE0000003) == 0x20000000) {
-				// old jump (nv4+) -> save current pb get addr and jump to the specified addr
-				// 001JJJJJJJJJJJJJJJJJJJJJJJJJJJ00 -> J: jump addr
-				REG_PFIFO(NV_PFIFO_CACHE1_DMA_GET_JMP_SHADOW) = curr_pb_get;
-				curr_pb_get = pb_entry & 0x1FFFFFFF;
+		// We are running, so set the busy flag
+		REG_PFIFO(NV_PFIFO_CACHE1_DMA_PUSH) |= NV_PFIFO_CACHE1_DMA_PUSH_STATE;
+
+		uint32_t curr_pb_get = REG_PFIFO(NV_PFIFO_CACHE1_DMA_GET) & ~3;
+		uint32_t curr_pb_put = REG_PFIFO(NV_PFIFO_CACHE1_DMA_PUT) & ~3;
+		// Find the address of the new pb entries from the pb object
+		DmaObj pb_obj = m_machine->invoke(&nv2a::getDmaObj, (REG_PFIFO(NV_PFIFO_CACHE1_DMA_INSTANCE) & NV_PFIFO_CACHE1_DMA_INSTANCE_ADDRESS) << 4);
+
+		// Process all entries until the fifo is empty
+		while (curr_pb_get != curr_pb_put) {
+			if (curr_pb_get >= pb_obj.limit) {
+				err_msg = "Pusher error: curr_pb_get >= pb_obj.limit";
+				err_code = NV_PFIFO_CACHE1_DMA_STATE_ERROR_PROTECTION; // set mem fault error
+				goto pusher_error;
 			}
-			else if ((pb_entry & 3) == 1) {
-				// jump (nv1a+) -> same as old jump, but with a different method encoding
-				// JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ01 -> J: jump addr
-				REG_PFIFO(NV_PFIFO_CACHE1_DMA_GET_JMP_SHADOW) = curr_pb_get;
-				curr_pb_get = pb_entry & 0xFFFFFFFC;
-			}
-			else if ((pb_entry & 3) == 2) {
-				// call (nv1a+) -> save current pb get addr and calls the routine at the specified addr
-				// JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ10 -> J: call addr
-				if (REG_PFIFO(NV_PFIFO_CACHE1_DMA_SUBROUTINE) & 1) {
-					err_handler("Pusher error: call command while another subroutine is already active", NV_PFIFO_CACHE1_DMA_STATE_ERROR_CALL); // set call error
-					break;
+			uint8_t *pb_addr = m_ram + pb_obj.target_addr + curr_pb_get; // ram host base addr + pb base addr + pb offset
+			uint32_t pb_entry = *(uint32_t *)pb_addr;
+			curr_pb_get += 4;
+
+			uint32_t mthd_cnt = (REG_PFIFO(NV_PFIFO_CACHE1_DMA_STATE) & NV_PFIFO_CACHE1_DMA_STATE_METHOD_COUNT) >> 18; // parameter count of method
+			if (mthd_cnt) {
+				// A method is already being processed, so the following words must be its parameters
+
+				REG_PFIFO(NV_PFIFO_CACHE1_DMA_DATA_SHADOW) = pb_entry; // save in shadow reg the current entry
+
+				uint32_t cache1_put = REG_PFIFO(NV_PFIFO_CACHE1_PUT) & 0x1FC;
+				uint32_t dma_state = REG_PFIFO(NV_PFIFO_CACHE1_DMA_STATE);
+				uint32_t mthd_type = dma_state & NV_PFIFO_CACHE1_DMA_STATE_METHOD_TYPE; // method type
+				uint32_t mthd = dma_state & NV_PFIFO_CACHE1_DMA_STATE_METHOD; // the actual method specified
+				uint32_t mthd_subchan = dma_state & NV_PFIFO_CACHE1_DMA_STATE_SUBCHANNEL; // the bound subchannel
+
+				// Add the method and its parameter to cache1
+				REG_PFIFO(NV_PFIFO_CACHE1_METHOD(cache1_put >> 2)) = mthd_type | mthd | mthd_subchan;
+				REG_PFIFO(NV_PFIFO_CACHE1_DATA(cache1_put >> 2)) = pb_entry;
+
+				uint32_t cache1_status = REG_PFIFO(NV_PFIFO_CACHE1_STATUS);
+				REG_PFIFO(NV_PFIFO_CACHE1_PUT) = (cache1_put + 4) & 0x1FC;
+				if (REG_PFIFO(NV_PFIFO_CACHE1_PUT) == REG_PFIFO(NV_PFIFO_CACHE1_GET)) {
+					cache1_status |= NV_PFIFO_CACHE1_STATUS_HIGH_MARK; // cache1 full
 				}
-				REG_PFIFO(NV_PFIFO_CACHE1_DMA_SUBROUTINE) = curr_pb_get | 1;
-				curr_pb_get = pb_entry & 0xFFFFFFFC;
-			}
-			else if (pb_entry == 0x00020000) {
-				// return (nv1a+) -> restore pb get addr from subroutine return addr saved with a previous call
-				// 00000000000000100000000000000000
-				if ((REG_PFIFO(NV_PFIFO_CACHE1_DMA_SUBROUTINE) & 1) == 0) {
-					err_handler("Pusher error: return command while subroutine is not active", NV_PFIFO_CACHE1_DMA_STATE_ERROR_RETURN); // set return error
-					break;
+				if (cache1_status & NV_PFIFO_CACHE1_STATUS_LOW_MARK) {
+					cache1_status &= ~NV_PFIFO_CACHE1_STATUS_LOW_MARK; // cache1 no longer empty
 				}
-				curr_pb_get = REG_PFIFO(NV_PFIFO_CACHE1_DMA_SUBROUTINE) & ~3;
-				REG_PFIFO(NV_PFIFO_CACHE1_DMA_SUBROUTINE) = 0;
-			}
-			else if (uint32_t value = pb_entry & 0xE0030003; (value == 0) // increasing methods
-				|| (value == 0x40000000)) { // non-increasing methods
-				// Specify an new method
-				// 00/10CCCCCCCCCCC00SSSMMMMMMMMMMM00 -> C: method count, S: subchannel, M: method
-				uint32_t mthd_state = value == 0 ? 0 : 1;
-				mthd_state |= ((pb_entry & NV_PFIFO_CACHE1_DMA_STATE_METHOD) | (pb_entry & NV_PFIFO_CACHE1_DMA_STATE_SUBCHANNEL)
-					| (pb_entry & NV_PFIFO_CACHE1_DMA_STATE_METHOD_COUNT));
-				REG_PFIFO(NV_PFIFO_CACHE1_DMA_STATE) = mthd_state;
-				REG_PFIFO(NV_PFIFO_CACHE1_DMA_DCOUNT) = 0;
+				REG_PFIFO(NV_PFIFO_CACHE1_STATUS) = cache1_status;
+
+				// Update dma state
+				if (mthd_type == 0) {
+					dma_state &= ~NV_PFIFO_CACHE1_DMA_STATE_METHOD;
+					dma_state |= (mthd + 4); // increasing method: method increases by one for each parameter
+				}
+				mthd_cnt--;
+				dma_state &= ~NV_PFIFO_CACHE1_DMA_STATE_METHOD_COUNT;
+				dma_state |= (mthd_cnt << 18);
+				REG_PFIFO(NV_PFIFO_CACHE1_DMA_STATE) = dma_state; // resave dma state with updated method and count
+				REG_PFIFO(NV_PFIFO_CACHE1_DMA_DCOUNT)++;
+
+				REG_PFIFO(NV_PFIFO_CACHE1_DMA_GET) = curr_pb_get; // write back updated dma get pointer
+
+				co_await std::suspend_always(); // switch to puller
 			}
 			else {
-				err_handler("Pusher error: encountered unrecognized command", NV_PFIFO_CACHE1_DMA_STATE_ERROR_RESERVED_CMD); // set invalid command error
-				break;
+				// No methods is currently active, so this must be a new one
+				REG_PFIFO(NV_PFIFO_CACHE1_DMA_RSVD_SHADOW) = pb_entry; // save in shadow reg the current entry
+
+				if ((pb_entry & 0xE0000003) == 0x20000000) {
+					// old jump (nv4+) -> save current pb get addr and jump to the specified addr
+					// 001JJJJJJJJJJJJJJJJJJJJJJJJJJJ00 -> J: jump addr
+					REG_PFIFO(NV_PFIFO_CACHE1_DMA_GET_JMP_SHADOW) = curr_pb_get;
+					curr_pb_get = pb_entry & 0x1FFFFFFF;
+				}
+				else if ((pb_entry & 3) == 1) {
+					// jump (nv1a+) -> same as old jump, but with a different method encoding
+					// JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ01 -> J: jump addr
+					REG_PFIFO(NV_PFIFO_CACHE1_DMA_GET_JMP_SHADOW) = curr_pb_get;
+					curr_pb_get = pb_entry & 0xFFFFFFFC;
+				}
+				else if ((pb_entry & 3) == 2) {
+					// call (nv1a+) -> save current pb get addr and calls the routine at the specified addr
+					// JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ10 -> J: call addr
+					if (REG_PFIFO(NV_PFIFO_CACHE1_DMA_SUBROUTINE) & 1) {
+						err_msg = "Pusher error: call command while another subroutine is already active";
+						err_code = NV_PFIFO_CACHE1_DMA_STATE_ERROR_CALL; // set call error
+						goto pusher_error;
+					}
+					REG_PFIFO(NV_PFIFO_CACHE1_DMA_SUBROUTINE) = curr_pb_get | 1;
+					curr_pb_get = pb_entry & 0xFFFFFFFC;
+				}
+				else if (pb_entry == 0x00020000) {
+					// return (nv1a+) -> restore pb get addr from subroutine return addr saved with a previous call
+					// 00000000000000100000000000000000
+					if ((REG_PFIFO(NV_PFIFO_CACHE1_DMA_SUBROUTINE) & 1) == 0) {
+						err_msg = "Pusher error: return command while subroutine is not active";
+						err_code = NV_PFIFO_CACHE1_DMA_STATE_ERROR_RETURN; // set return error
+						goto pusher_error;
+					}
+					curr_pb_get = REG_PFIFO(NV_PFIFO_CACHE1_DMA_SUBROUTINE) & ~3;
+					REG_PFIFO(NV_PFIFO_CACHE1_DMA_SUBROUTINE) = 0;
+				}
+				else if (uint32_t value = pb_entry & 0xE0030003; (value == 0) // increasing methods
+					|| (value == 0x40000000)) { // non-increasing methods
+					// Specify an new method
+					// 00/10CCCCCCCCCCC00SSSMMMMMMMMMMM00 -> C: method count, S: subchannel, M: method
+					uint32_t mthd_state = value == 0 ? 0 : 1;
+					mthd_state |= ((pb_entry & NV_PFIFO_CACHE1_DMA_STATE_METHOD) | (pb_entry & NV_PFIFO_CACHE1_DMA_STATE_SUBCHANNEL)
+						| (pb_entry & NV_PFIFO_CACHE1_DMA_STATE_METHOD_COUNT));
+					REG_PFIFO(NV_PFIFO_CACHE1_DMA_STATE) = mthd_state;
+					REG_PFIFO(NV_PFIFO_CACHE1_DMA_DCOUNT) = 0;
+				}
+				else {
+					std::array<char, 9> pb_entry_buff{};
+					err_msg = "Pusher error: encountered unrecognized command, pb_entry=0x";
+					[[maybe_unused]] const auto &ret = std::to_chars(pb_entry_buff.data(), pb_entry_buff.data() + pb_entry_buff.size(), pb_entry, 16);
+					assert(ret.ec == std::errc());
+					err_msg += pb_entry_buff.data();
+					err_code = NV_PFIFO_CACHE1_DMA_STATE_ERROR_RESERVED_CMD; // set invalid command error
+					goto pusher_error;
+				}
+
+				REG_PFIFO(NV_PFIFO_CACHE1_DMA_GET) = curr_pb_get; // write back updated dma get pointer
 			}
+		}
+
+		// We are done with processing, so clear the busy flag
+		REG_PFIFO(NV_PFIFO_CACHE1_DMA_PUSH) &= ~NV_PFIFO_CACHE1_DMA_PUSH_STATE;
+		continue;
+
+	pusher_error:
+		assert((err_msg != "") && err_code);
+		logger_en(warn, err_msg.c_str());
+		REG_PFIFO(NV_PFIFO_CACHE1_DMA_STATE) |= (err_code << 29); // set error code
+		REG_PFIFO(NV_PFIFO_CACHE1_DMA_PUSH) &= ~NV_PFIFO_CACHE1_DMA_PUSH_STATE; // no longer busy
+		REG_PFIFO(NV_PFIFO_CACHE1_DMA_PUSH) |= NV_PFIFO_CACHE1_DMA_PUSH_STATUS; // suspend pusher
+		REG_PFIFO(NV_PFIFO_INTR_0) |= NV_PFIFO_INTR_0_DMA_PUSHER; // raise pusher interrupt
+		m_fifo_mtx.unlock();
+		m_machine->invoke(&pmc::updateIrq);
+	}
+}
+
+void pfifo::puller(std::coroutine_handle<CoroFrame::promise_type> coro)
+{
+	coro(); // switch to pusher (this only happens at startup)
+
+	while (true) {
+		uint32_t cache1_status = REG_PFIFO(NV_PFIFO_CACHE1_STATUS);
+
+		if ((REG_PFIFO(NV_PFIFO_CACHE1_PULL0) & NV_PFIFO_CACHE1_PULL0_ACCESS) == 0) {
+			// Puller access to cache1 is disabled, switch back to the pusher and push new entries if cache1 is not full
+			if (cache1_status & NV_PFIFO_CACHE1_STATUS_HIGH_MARK) {
+				// Cache1 is full, so we must wait here
+				assert(m_fifo_has_work.test() == false);
+				m_fifo_mtx.unlock();
+				m_fifo_has_work.wait(false);
+				m_fifo_mtx.lock();
+				m_fifo_has_work.clear();
+			}
+			else {
+				coro(); // switch to pusher
+			}
+			continue;
+		}
+
+		if (cache1_status & NV_PFIFO_CACHE1_STATUS_LOW_MARK) {
+			// Puller has processed all entries, go back to pusher and wait
+			coro();
+			continue;
+		}
+
+		uint32_t cache1_get = REG_PFIFO(NV_PFIFO_CACHE1_GET);
+		REG_PFIFO(NV_PFIFO_CACHE1_GET) = (cache1_get + 4) & 0x1FC;
+		if (REG_PFIFO(NV_PFIFO_CACHE1_GET) == REG_PFIFO(NV_PFIFO_CACHE1_PUT)) {
+			cache1_status |= NV_PFIFO_CACHE1_STATUS_LOW_MARK; // cache1 empty again
+		}
+		if (cache1_status & NV_PFIFO_CACHE1_STATUS_HIGH_MARK) {
+			cache1_status &= ~NV_PFIFO_CACHE1_STATUS_HIGH_MARK; // cache1 no longer full
+		}
+		REG_PFIFO(NV_PFIFO_CACHE1_STATUS) = cache1_status;
+
+		uint32_t mthd_entry = REG_PFIFO(NV_PFIFO_CACHE1_METHOD(cache1_get >> 2));
+		uint32_t param = REG_PFIFO(NV_PFIFO_CACHE1_DATA(cache1_get >> 2));
+		uint32_t mthd = mthd_entry & NV_PFIFO_CACHE1_DMA_STATE_METHOD; // the actual method specified
+		uint32_t mthd_subchan = (mthd_entry & NV_PFIFO_CACHE1_DMA_STATE_SUBCHANNEL) >> 13; // the bound subchannel
+
+		if (mthd == 0) {
+			// Method zero binds an engine object to a subchannel, and the handle to lookup is the parameter of the method
+
+			RamhtElement elem = ramhtSearch(param);
+			assert(elem.m_valid == NV_RAMHT_STATUS_VALID); // should always be valid
+			assert(elem.m_chid == (REG_PFIFO(NV_PFIFO_CACHE1_PUSH1) & NV_PFIFO_CACHE1_PUSH1_CHID)); // should always be the case on xbox
+			assert(elem.m_engine == NV_RAMHT_ENGINE_GRAPHICS); // should always be the case on xbox
+
+			// Bind the found engine to subchannel
+			(REG_PFIFO(NV_PFIFO_CACHE1_ENGINE) &= ~(3 << (mthd_subchan << 2))) |= (elem.m_engine << (mthd_subchan << 2));
+			(REG_PFIFO(NV_PFIFO_CACHE1_PULL1) &= ~NV_PFIFO_CACHE0_PULL1_ENGINE) |= elem.m_engine;
+
+			// TODO: send the method to pgraph
+			nxbx_fatal("Method 0x00000000, subchannel %" PRIu32 ", parameter 0x%08" PRIX32 ": submission to pgraph not implemented", mthd_subchan, param);
+			goto unimplemented_error;
+		}
+		else if (mthd >= 0x100) {
+			// Methods >= 0x100 are sent to the currently bound engine
+
+			if ((mthd >= 0x180) && (mthd < 0x200)) {
+				// Methods in the range [0x180-0x1fc] require a handle lookup in ramht, which is then sent to the bound engine as parameter
+
+				RamhtElement elem = ramhtSearch(param);
+				assert(elem.m_valid == NV_RAMHT_STATUS_VALID); // should always be valid
+				assert(elem.m_chid == (REG_PFIFO(NV_PFIFO_CACHE1_PUSH1) & NV_PFIFO_CACHE1_PUSH1_CHID)); // should always be the case on xbox
+				param = elem.m_instance;
+			}
+
+			uint32_t bound_engine = (REG_PFIFO(NV_PFIFO_CACHE1_ENGINE) & (3 << (mthd_subchan << 2))) >> (mthd_subchan << 2);
+			assert(bound_engine == NV_RAMHT_ENGINE_GRAPHICS); // should always be the case on xbox
+			(REG_PFIFO(NV_PFIFO_CACHE1_PULL1) &= ~NV_PFIFO_CACHE0_PULL1_ENGINE) |= bound_engine;
+
+			// TODO: send the method to pgraph
+			nxbx_fatal("Method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32 ": submission to pgraph not implemented", mthd, mthd_subchan, param);
+			goto unimplemented_error;
+		}
+		else {
+			// TODO: methods executed directly by the puller itself
+			nxbx_fatal("Method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32 " not implemented", mthd, mthd_subchan, param);
+			goto unimplemented_error;
 		}
 	}
 
-	REG_PFIFO(NV_PFIFO_CACHE1_DMA_GET) = curr_pb_get;
-
-	// We are done with processing, so clear the busy flag
-	REG_PFIFO(NV_PFIFO_CACHE1_DMA_PUSH) &= ~NV_PFIFO_CACHE1_DMA_PUSH_STATE;
-}
-
-void
-pfifo::puller()
-{
-	// TODO
+unimplemented_error:
+	m_fifo_mtx.unlock();
+	throw std::exception();
 }
 
 void pfifo::fifoHandler(std::stop_token stok)
 {
 	// This function is called in a separate thread, and acts as the pfifo pusher and puller
 
-	// This lambda is called when the pusher encounters an error
-	const auto &err_handler = [this](const char *msg, uint32_t code) {
-		logger_en(warn, msg);
-		REG_PFIFO(NV_PFIFO_CACHE1_DMA_STATE) |= (code << 29); // set error code
-		REG_PFIFO(NV_PFIFO_CACHE1_DMA_PUSH) |= NV_PFIFO_CACHE1_DMA_PUSH_STATUS; // suspend pusher
-		REG_PFIFO(NV_PFIFO_INTR_0) |= NV_PFIFO_INTR_0_DMA_PUSHER; // raise pusher interrupt
-		m_fifo_mtx.unlock();
-		m_machine->invoke(&pmc::updateIrq);
-		};
+	std::coroutine_handle<CoroFrame::promise_type> coro;
 
-	while (true) {
-		// Wait until there's some work to do
-		m_fifo_has_work.wait(false);
-		std::unique_lock lock(m_fifo_mtx);
-		m_fifo_has_work.clear();
-
-		if (stok.stop_requested()) [[unlikely]] {
-			return;
-		}
-
-		pusher(err_handler);
+	try {
+		coro = pusher(stok).m_handle; // grab coro handle
+		puller(coro);
 	}
+	catch (std::exception e) {
+		// Just fallthrough
+	}
+
+	coro.destroy();
+}
+
+pfifo::RamhtElement pfifo::ramhtSearch(uint32_t handle)
+{
+	// An object is referenced by a user defined 32 bit handle. The hw looks up objects in a hash table in the instance memory (ramin)
+	// An entry in the table consists of two DWORDs. The first is a handle, and the second is a context the describes the object
+	// The context DWORD is as follows:
+	// 15: 0  instance_addr >> 4
+	// 17:16  engine (0=sw,1=graphics,2=dvd)
+	// 28:24  channel id
+	// 31	  valid (1=ok,0=bad)
+
+	uint32_t ramht_size = 1 << (((REG_PFIFO(NV_PFIFO_RAMHT) & NV_PFIFO_RAMHT_SIZE) >> 16) + 12);
+	uint32_t curr_chan_id = REG_PFIFO(NV_PFIFO_CACHE1_PUSH1) & NV_PFIFO_CACHE1_PUSH1_CHID;
+	uint32_t ramht_bits = std::countr_zero(ramht_size) - 1;
+	uint32_t hash = 0;
+
+	// Same algorithm as used in nouveau
+	while (handle) {
+		hash ^= (handle & ((1 << ramht_bits) - 1));
+		handle >>= ramht_bits;
+	}
+	hash ^= curr_chan_id << (ramht_bits - 4);
+
+	uint32_t ramht_addr = (REG_PFIFO(NV_PFIFO_RAMHT) & NV_PFIFO_RAMHT_BASE_ADDRESS) << 8;
+	uint32_t entry_handle = m_machine->invoke(&pramin::read<uint32_t>, NV_PRAMIN_BASE + ramht_addr + hash * 8);
+	uint32_t entry_ctx = m_machine->invoke(&pramin::read<uint32_t>, NV_PRAMIN_BASE + ramht_addr + 4 + hash * 8);
+
+	return RamhtElement{
+		.m_handle = entry_handle,
+		.m_instance = (entry_ctx & NV_RAMHT_INSTANCE) << 4,
+		.m_engine = (entry_ctx & NV_RAMHT_ENGINE) >> 16,
+		.m_chid = (entry_ctx & NV_RAMHT_CHID) >> 24,
+		.m_valid = (entry_ctx & NV_RAMHT_STATUS) >> 31,
+	};
 }
 
 void
