@@ -112,10 +112,11 @@ pfb::reset()
 bool
 pfb::init()
 {
+	reset();
+
 	if (!update_io(false)) {
 		return false;
 	}
 
-	reset();
 	return true;
 }

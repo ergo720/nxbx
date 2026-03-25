@@ -128,7 +128,7 @@ private:
 		uint32_t m_instance; // addr of object inside ramin
 		uint32_t m_engine; // engine to which the object is bound
 		uint32_t m_chid; // channel to which the object is bound
-		uint32_t m_valid; // wheather or not the object is valid
+		uint32_t m_valid; // whether or not the object is valid
 	};
 
 	void log_read(uint32_t addr, uint32_t value);
@@ -138,13 +138,14 @@ private:
 	auto get_io_func(bool log, bool enabled, bool is_be);
 	void fifoHandler(std::stop_token stok);
 	CoroFrame pusher(const std::stop_token &stok);
-	void puller(std::coroutine_handle<CoroFrame::promise_type> coro_pusher);
+	void puller(const std::stop_token &stok, std::coroutine_handle<CoroFrame::promise_type> coro_pusher);
 	RamhtElement ramhtSearch(uint32_t handle);
 
 	machine *const m_machine;
 	uint8_t *m_ram;
 	std::jthread m_jthr; // async fifo worker thread
 	std::atomic_flag m_fifo_has_work;
+	std::atomic_bool m_is_enabled;
 	std::mutex m_fifo_mtx;
 	// registers
 	uint32_t m_regs[NV_PFIFO_SIZE / 4];

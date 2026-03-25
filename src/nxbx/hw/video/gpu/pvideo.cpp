@@ -174,11 +174,12 @@ pvideo::reset()
 bool
 pvideo::init()
 {
+	reset();
+
 	if (!update_io(false)) {
 		return false;
 	}
 
-	reset();
 	return true;
 }
 

@@ -144,10 +144,11 @@ pcrtc::reset()
 bool
 pcrtc::init()
 {
+	reset();
+
 	if (!update_io(false)) {
 		return false;
 	}
 
-	reset();
 	return true;
 }

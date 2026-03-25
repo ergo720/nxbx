@@ -87,6 +87,7 @@ set(HEADERS
  "${NXBX_ROOT_DIR}/src/common/logger.hpp"
  "${NXBX_ROOT_DIR}/src/common/host.hpp"
  "${NXBX_ROOT_DIR}/src/common/settings.hpp"
+ "${NXBX_ROOT_DIR}/src/common/spsc-queue.hpp"
  "${NXBX_ROOT_DIR}/src/common/util.hpp"
  "${NXBX_ROOT_DIR}/src/nxbx/console.hpp"
  "${NXBX_ROOT_DIR}/src/nxbx/io.hpp"

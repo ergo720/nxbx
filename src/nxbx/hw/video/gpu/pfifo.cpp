@@ -191,6 +191,11 @@ pfifo::CoroFrame pfifo::pusher(const std::stop_token &stok)
 				REG_PFIFO(NV_PFIFO_CACHE1_DMA_GET) = curr_pb_get; // write back updated dma get pointer
 
 				co_await std::suspend_always(); // switch to puller
+
+				if (m_is_enabled == false) {
+					// This happens when this engine is disabled while we were in the middle of processing methods
+					break;
+				}
 			}
 			else {
 				// No methods is currently active, so this must be a new one
@@ -270,7 +275,7 @@ pfifo::CoroFrame pfifo::pusher(const std::stop_token &stok)
 	}
 }
 
-void pfifo::puller(std::coroutine_handle<CoroFrame::promise_type> coro)
+void pfifo::puller(const std::stop_token &stok, std::coroutine_handle<CoroFrame::promise_type> coro)
 {
 	coro(); // switch to pusher (this only happens at startup)
 
@@ -326,9 +331,10 @@ void pfifo::puller(std::coroutine_handle<CoroFrame::promise_type> coro)
 			(REG_PFIFO(NV_PFIFO_CACHE1_ENGINE) &= ~(3 << (mthd_subchan << 2))) |= (elem.m_engine << (mthd_subchan << 2));
 			(REG_PFIFO(NV_PFIFO_CACHE1_PULL1) &= ~NV_PFIFO_CACHE0_PULL1_ENGINE) |= elem.m_engine;
 
-			// TODO: send the method to pgraph
-			nxbx_fatal("Method 0x00000000, subchannel %" PRIu32 ", parameter 0x%08" PRIX32 ": submission to pgraph not implemented", mthd_subchan, param);
-			goto unimplemented_error;
+			// Release the lock since submit_method will block if the pgraph queue is full
+			m_fifo_mtx.unlock();
+			m_machine->invoke(&pgraph::submitMethod<true>, 0, elem.m_instance, mthd_subchan, elem.m_chid);
+			m_fifo_mtx.lock();
 		}
 		else if (mthd >= 0x100) {
 			// Methods >= 0x100 are sent to the currently bound engine
@@ -346,14 +352,19 @@ void pfifo::puller(std::coroutine_handle<CoroFrame::promise_type> coro)
 			assert(bound_engine == NV_RAMHT_ENGINE_GRAPHICS); // should always be the case on xbox
 			(REG_PFIFO(NV_PFIFO_CACHE1_PULL1) &= ~NV_PFIFO_CACHE0_PULL1_ENGINE) |= bound_engine;
 
-			// TODO: send the method to pgraph
-			nxbx_fatal("Method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32 ": submission to pgraph not implemented", mthd, mthd_subchan, param);
-			goto unimplemented_error;
+			// Release the lock since submit_method will block if the pgraph queue is full
+			m_fifo_mtx.unlock();
+			m_machine->invoke(&pgraph::submitMethod<false>, mthd, param, mthd_subchan, 0);
+			m_fifo_mtx.lock();
 		}
 		else {
 			// TODO: methods executed directly by the puller itself
 			nxbx_fatal("Method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32 " not implemented", mthd, mthd_subchan, param);
 			goto unimplemented_error;
+		}
+
+		if (stok.stop_requested()) [[unlikely]] {
+			break;
 		}
 	}
 
@@ -370,7 +381,7 @@ void pfifo::fifoHandler(std::stop_token stok)
 
 	try {
 		coro = pusher(stok).m_handle; // grab coro handle
-		puller(coro);
+		puller(stok, coro);
 	}
 	catch (std::exception e) {
 		// Just fallthrough
@@ -502,13 +513,13 @@ bool
 pfifo::update_io(bool is_update)
 {
 	bool log = module_enabled();
-	bool enabled = m_machine->invoke(&pmc::read32<false>, NV_PMC_ENABLE) & NV_PMC_ENABLE_PFIFO;
+	m_is_enabled = m_machine->invoke(&pmc::read32<false>, NV_PMC_ENABLE) & NV_PMC_ENABLE_PFIFO;
 	bool is_be = m_machine->invoke(&pmc::read32<false>, NV_PMC_BOOT_1) & NV_PMC_BOOT_1_ENDIAN24_BIG;
 	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), NV_PFIFO_BASE, NV_PFIFO_SIZE, false,
 		{
-			.fnr8 = get_io_func<false, uint8_t>(log, enabled, is_be),
-			.fnr32 = get_io_func<false, uint32_t>(log, enabled, is_be),
-			.fnw32 = get_io_func<true, uint32_t>(log, enabled, is_be)
+			.fnr8 = get_io_func<false, uint8_t>(log, m_is_enabled, is_be),
+			.fnr32 = get_io_func<false, uint32_t>(log, m_is_enabled, is_be),
+			.fnw32 = get_io_func<true, uint32_t>(log, m_is_enabled, is_be)
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update mmio region");
@@ -533,11 +544,12 @@ pfifo::reset()
 bool
 pfifo::init()
 {
+	reset();
+
 	if (!update_io(false)) {
 		return false;
 	}
 
-	reset();
 	m_ram = get_ram_ptr(m_machine->get_cpu());
 	m_jthr = std::jthread(std::bind_front(&pfifo::fifoHandler, this));
 	return true;
@@ -547,6 +559,7 @@ void pfifo::deinit()
 {
 	if (m_jthr.joinable()) {
 		m_jthr.request_stop();
+		m_machine->invoke(&pgraph::drainInputQueue);
 		m_fifo_has_work.test_and_set();
 		m_fifo_has_work.notify_one();
 		m_jthr.join();

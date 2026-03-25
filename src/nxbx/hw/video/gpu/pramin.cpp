@@ -114,12 +114,13 @@ pramin::init()
 	----------vram
 	*/
 
+	// Store ram size in this object. This way, we don't need to query NV_PFB_CSTATUS in ramin_to_ram_addr (which is accessed from the fifo thread from getDmaObj)
+	m_ram = get_ram_ptr(m_machine->get_cpu());
+	m_ramsize = m_machine->invoke(&cpu::getRamsize);
+
 	if (!update_io(false)) {
 		return false;
 	}
 
-	// Store ram size in this object. This way, we don't need to query NV_PFB_CSTATUS in ramin_to_ram_addr (which is accessed from the fifo thread from getDmaObj)
-	m_ram = get_ram_ptr(m_machine->get_cpu());
-	m_ramsize = m_machine->invoke(&cpu::getRamsize);
 	return true;
 }

@@ -5,7 +5,12 @@
 #pragma once
 
 #include <cstdint>
+#include <thread>
 #include "nv2a_defs.hpp"
+#ifdef _WIN32
+#undef max
+#endif
+#include "spsc-queue.hpp"
 
 #define NV_PGRAPH 0x00400000
 #define NV_PGRAPH_BASE (NV2A_REGISTER_BASE + NV_PGRAPH)
@@ -13,36 +18,97 @@
 #define REGS_PGRAPH_idx(x) ((x - NV_PGRAPH_BASE) >> 2)
 #define REG_PGRAPH(r) (m_regs[REGS_PGRAPH_idx(r)])
 
+#define NV_PGRAPH_DEBUG_3 (NV2A_REGISTER_BASE + 0x0040008C) // debug flags 3
+#define NV_PGRAPH_DEBUG_3_HW_CONTEXT_SWITCH (1 << 2) // hw context switch, enabled=1
 #define NV_PGRAPH_INTR (NV2A_REGISTER_BASE + 0x00400100) // Pending pgraph interrupts. Writing a 0 has no effect, and writing a 1 clears the interrupt
+#define NV_PGRAPH_INTR_CONTEXT_SWITCH (1 << 12)
 #define NV_PGRAPH_INTR_EN (NV2A_REGISTER_BASE + 0x00400140) // Enable/disable pgraph interrupts
+#define NV_PGRAPH_CTX_CONTROL (NV2A_REGISTER_BASE + 0x00400144) // misc channel state
+#define NV_PGRAPH_CTX_CONTROL_CHID (1 << 16) // valid channel=1
+#define NV_PGRAPH_CTX_USER (NV2A_REGISTER_BASE + 0x00400148) // 3d channel state
+#define NV_PGRAPH_CTX_USER_CHID (0x1F << 24) // channel in use
+#define NV_PGRAPH_TRAPPED_ADDR (NV2A_REGISTER_BASE + 0x00400704) // info on the exception that was triggered
+#define NV_PGRAPH_TRAPPED_ADDR_MTHD 0x1FFC // method that faulted
+#define NV_PGRAPH_TRAPPED_ADDR_SUBCH (7 << 16) // subchannel that faulted
+#define NV_PGRAPH_TRAPPED_ADDR_CHID (0x1F << 20) // channel that faulted
+#define NV_PGRAPH_FIFO (NV2A_REGISTER_BASE + 0x00400720) // Enable/disable pfifo access to pgraph
+#define NV_PGRAPH_FIFO_ACCESS (1 << 0) // enabled=1
+#define NV_PGRAPH_CHANNEL_CTX_POINTER (NV2A_REGISTER_BASE + 0x00400784) // address of graphics context
+#define NV_PGRAPH_CHANNEL_CTX_POINTER_INST 0xFFFF // actual address is NV_PRAMIN_BASE + (value << 4)
+#define NV_PGRAPH_CHANNEL_CTX_TRIGGER (NV2A_REGISTER_BASE + 0x00400788) // triggers graphics context (un)loading
+#define NV_PGRAPH_CHANNEL_CTX_TRIGGER_READ_IN (1 << 0) // load context
+#define NV_PGRAPH_CHANNEL_CTX_TRIGGER_WRITE_OUT (1 << 1) // unload context
+
+// Macros used in InputQueueEntry for ctx switches
+#define CTX_SWITCH_CHID 0x1F // target channel
+#define CTX_SWITCH_STATUS (1 << 31) // switch requested=1
 
 
 class machine;
 enum engine_enabled : int;
 
-class pgraph {
+class pgraph
+{
 public:
 	pgraph(machine *machine) : m_machine(machine) {}
 	bool init();
+	void deinit();
 	void reset();
 	void update_io() { update_io(true); }
 	template<bool log, engine_enabled enabled>
 	uint32_t read32(uint32_t addr);
 	template<bool log, engine_enabled enabled>
 	void write32(uint32_t addr, const uint32_t value);
+	void drainInputQueue();
+	template<bool is_mthd_zero>
+	void submitMethod(uint32_t mthd, uint32_t param, uint32_t subchan, uint32_t chid)
+	{
+		// called from the fifo thread
+		uint32_t ctx_switch = 0;
+		if constexpr (is_mthd_zero) {
+			ctx_switch = chid | CTX_SWITCH_STATUS;
+		}
+		submitMethod(mthd, param, subchan, ctx_switch);
+	}
 
 private:
+	struct InputQueueEntry
+	{
+		uint32_t m_mthd;
+		uint32_t m_param;
+		uint32_t m_subchan;
+		uint32_t m_ctx_switch;
+	};
+
 	bool update_io(bool is_update);
 	template<bool is_write>
 	auto get_io_func(bool log, bool enabled, bool is_be);
+	void graphHandler(std::stop_token stok);
+	void submitMethod(uint32_t mthd, uint32_t param, uint32_t subchan, uint32_t ctx_switch);
 
 	machine *const m_machine;
+	std::jthread m_jthr; // async graphics worker thread
+	std::atomic_flag m_graph_has_work;
+	std::atomic_flag m_ctx_switch_trig;
+	std::atomic_bool m_is_enabled;
+	std::mutex m_graph_mtx;
+	//std::unique_ptr<dro::SPSCQueue<InputQueueEntry>> m_input_queue;
+	dro::SPSCQueue<InputQueueEntry> m_input_queue{256};
+	// atomic registers
+	std::atomic_uint32_t m_int_status;
+	std::atomic_uint32_t m_int_enabled;
+	std::atomic_uint32_t m_fifo_access;
 	// registers
-	std::atomic_uint32_t m_int_status; // atomic because it's accessed by the fifo thread
-	std::atomic_uint32_t m_int_enabled; // atomic because it's accessed by the fifo thread
 	uint32_t m_regs[NV_PGRAPH_SIZE / 4];
 	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+		{ NV_PGRAPH_DEBUG_3, "NV_PGRAPH_DEBUG_3" },
 		{ NV_PGRAPH_INTR, "NV_PGRAPH_INTR" },
 		{ NV_PGRAPH_INTR_EN, "NV_PGRAPH_INTR_EN" },
+		{ NV_PGRAPH_CTX_CONTROL, "NV_PGRAPH_CTX_CONTROL" },
+		{ NV_PGRAPH_CTX_USER, "NV_PGRAPH_CTX_USER" },
+		{ NV_PGRAPH_TRAPPED_ADDR, "NV_PGRAPH_TRAPPED_ADDR"},
+		{ NV_PGRAPH_FIFO, "NV_PGRAPH_FIFO" },
+		{ NV_PGRAPH_CHANNEL_CTX_POINTER, "NV_PGRAPH_CHANNEL_CTX_POINTER" },
+		{ NV_PGRAPH_CHANNEL_CTX_TRIGGER, "NV_PGRAPH_CHANNEL_CTX_TRIGGER" },
 	};
 };

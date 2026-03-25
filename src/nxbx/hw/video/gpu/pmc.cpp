@@ -176,7 +176,7 @@ pmc::updateIrq()
 	{
 	default:
 	case NV_PMC_INTR_EN_0_INTA_DISABLED:
-		// Don't do anything
+		m_machine->lower_irq(NV2A_IRQ_NUM);
 		break;
 
 	case NV_PMC_INTR_EN_0_INTA_HARDWARE:
@@ -251,10 +251,11 @@ pmc::reset()
 bool
 pmc::init()
 {
+	reset();
+
 	if (!update_io(false)) {
 		return false;
 	}
 
-	reset();
 	return true;
 }

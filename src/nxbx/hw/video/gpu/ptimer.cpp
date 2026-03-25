@@ -256,10 +256,11 @@ ptimer::reset()
 bool
 ptimer::init()
 {
+	reset();
+
 	if (!update_io(false)) {
 		return false;
 	}
 
-	reset();
 	return true;
 }

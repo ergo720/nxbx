@@ -246,11 +246,12 @@ pbus::reset()
 bool
 pbus::init()
 {
+	pci_init();
+	reset();
+
 	if (!update_io(false)) {
 		return false;
 	}
 
-	pci_init();
-	reset();
 	return true;
 }

@@ -155,10 +155,11 @@ pramdac::reset()
 bool
 pramdac::init()
 {
+	reset();
+
 	if (!update_io(false)) {
 		return false;
 	}
 
-	reset();
 	return true;
 }
