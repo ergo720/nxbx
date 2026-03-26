@@ -51,7 +51,6 @@ nv2a::init()
 void nv2a::deinit()
 {
 	m_pfifo.deinit();
-	m_pgraph.deinit();
 }
 
 uint64_t

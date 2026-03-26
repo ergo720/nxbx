@@ -291,6 +291,10 @@ void pfifo::puller(const std::stop_token &stok, std::coroutine_handle<CoroFrame:
 				m_fifo_has_work.wait(false);
 				m_fifo_mtx.lock();
 				m_fifo_has_work.clear();
+
+				if (stok.stop_requested()) [[unlikely]] {
+					break;
+				}
 			}
 			else {
 				coro(); // switch to pusher
@@ -331,7 +335,7 @@ void pfifo::puller(const std::stop_token &stok, std::coroutine_handle<CoroFrame:
 			(REG_PFIFO(NV_PFIFO_CACHE1_ENGINE) &= ~(3 << (mthd_subchan << 2))) |= (elem.m_engine << (mthd_subchan << 2));
 			(REG_PFIFO(NV_PFIFO_CACHE1_PULL1) &= ~NV_PFIFO_CACHE0_PULL1_ENGINE) |= elem.m_engine;
 
-			// Release the lock since submit_method will block if the pgraph queue is full
+			// Release the lock since submitMethod will block if the pgraph queue is full
 			m_fifo_mtx.unlock();
 			m_machine->invoke(&pgraph::submitMethod<true>, 0, elem.m_instance, mthd_subchan, elem.m_chid);
 			m_fifo_mtx.lock();
@@ -352,7 +356,7 @@ void pfifo::puller(const std::stop_token &stok, std::coroutine_handle<CoroFrame:
 			assert(bound_engine == NV_RAMHT_ENGINE_GRAPHICS); // should always be the case on xbox
 			(REG_PFIFO(NV_PFIFO_CACHE1_PULL1) &= ~NV_PFIFO_CACHE0_PULL1_ENGINE) |= bound_engine;
 
-			// Release the lock since submit_method will block if the pgraph queue is full
+			// Release the lock since submitMethod will block if the pgraph queue is full
 			m_fifo_mtx.unlock();
 			m_machine->invoke(&pgraph::submitMethod<false>, mthd, param, mthd_subchan, 0);
 			m_fifo_mtx.lock();
@@ -360,7 +364,7 @@ void pfifo::puller(const std::stop_token &stok, std::coroutine_handle<CoroFrame:
 		else {
 			// TODO: methods executed directly by the puller itself
 			nxbx_fatal("Method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32 " not implemented", mthd, mthd_subchan, param);
-			goto unimplemented_error;
+			break;
 		}
 
 		if (stok.stop_requested()) [[unlikely]] {
@@ -368,9 +372,12 @@ void pfifo::puller(const std::stop_token &stok, std::coroutine_handle<CoroFrame:
 		}
 	}
 
-unimplemented_error:
 	m_fifo_mtx.unlock();
-	throw std::exception();
+	while (true) {
+		if (stok.stop_requested()) { // sync with pfifo::deinit
+			throw std::exception();
+		}
+	}
 }
 
 void pfifo::fifoHandler(std::stop_token stok)
@@ -557,11 +564,10 @@ pfifo::init()
 
 void pfifo::deinit()
 {
-	if (m_jthr.joinable()) {
-		m_jthr.request_stop();
-		m_machine->invoke(&pgraph::drainInputQueue);
-		m_fifo_has_work.test_and_set();
-		m_fifo_has_work.notify_one();
-		m_jthr.join();
-	}
+	assert(m_jthr.joinable());
+	m_jthr.request_stop();
+	m_machine->invoke(&pgraph::deinit);
+	m_fifo_has_work.test_and_set();
+	m_fifo_has_work.notify_one();
+	m_jthr.join();
 }

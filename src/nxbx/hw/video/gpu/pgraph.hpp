@@ -59,7 +59,6 @@ public:
 	uint32_t read32(uint32_t addr);
 	template<bool log, engine_enabled enabled>
 	void write32(uint32_t addr, const uint32_t value);
-	void drainInputQueue();
 	template<bool is_mthd_zero>
 	void submitMethod(uint32_t mthd, uint32_t param, uint32_t subchan, uint32_t chid)
 	{
@@ -92,7 +91,6 @@ private:
 	std::atomic_flag m_ctx_switch_trig;
 	std::atomic_bool m_is_enabled;
 	std::mutex m_graph_mtx;
-	//std::unique_ptr<dro::SPSCQueue<InputQueueEntry>> m_input_queue;
 	dro::SPSCQueue<InputQueueEntry> m_input_queue{256};
 	// atomic registers
 	std::atomic_uint32_t m_int_status;

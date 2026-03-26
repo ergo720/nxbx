@@ -111,14 +111,6 @@ void pgraph::submitMethod(uint32_t mthd, uint32_t param, uint32_t subchan, uint3
 	m_graph_has_work.notify_one();
 }
 
-void pgraph::drainInputQueue()
-{
-	while (!m_input_queue.empty()) {
-		InputQueueEntry elem;
-		m_input_queue.pop(elem);
-	}
-}
-
 void pgraph::graphHandler(std::stop_token stok)
 {
 	while (true) {
@@ -128,7 +120,7 @@ void pgraph::graphHandler(std::stop_token stok)
 		m_graph_has_work.clear();
 
 		if (stok.stop_requested()) [[unlikely]] {
-			return;
+			break;
 		}
 
 		if ((m_fifo_access & NV_PGRAPH_FIFO_ACCESS) == 0) {
@@ -155,7 +147,7 @@ void pgraph::graphHandler(std::stop_token stok)
 				if (REG_PGRAPH(NV_PGRAPH_DEBUG_3) & NV_PGRAPH_DEBUG_3_HW_CONTEXT_SWITCH) [[unlikely]] {
 					// Should never happen on xbox
 					nxbx_fatal("Hw context switch not implemented");
-					return;
+					break;
 				}
 				SET_REG(NV_PGRAPH_TRAPPED_ADDR, NV_PGRAPH_TRAPPED_ADDR_CHID, target_chid << 20); // write channel exception data
 				m_int_status |= NV_PGRAPH_INTR_CONTEXT_SWITCH; // raise graph interrupt
@@ -166,13 +158,25 @@ void pgraph::graphHandler(std::stop_token stok)
 				lock.lock();
 
 				if (stok.stop_requested()) [[unlikely]] {
-					return;
+					break;
 				}
 			}
 		}
 
+		// TODO: implement methos handling
 		nxbx_fatal("Method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32 " not implemented", elem.m_mthd, elem.m_subchan, elem.m_param);
-		return;
+		break;
+	}
+
+	// NOTE: it's safe to drain the queue only from the consumer thread
+	while (true) {
+		while (!m_input_queue.empty()) {
+			InputQueueEntry elem;
+			m_input_queue.pop(elem);
+		}
+		if (stok.stop_requested()) { // sync with pgraph::deinit
+			return;
+		}
 	}
 }
 
@@ -249,12 +253,11 @@ bool pgraph::init()
 
 void pgraph::deinit()
 {
-	if (m_jthr.joinable()) {
-		m_jthr.request_stop();
-		m_ctx_switch_trig.clear();
-		m_ctx_switch_trig.notify_one();
-		m_graph_has_work.test_and_set();
-		m_graph_has_work.notify_one();
-		m_jthr.join();
-	}
+	assert(m_jthr.joinable());
+	m_jthr.request_stop();
+	m_ctx_switch_trig.clear();
+	m_ctx_switch_trig.notify_one();
+	m_graph_has_work.test_and_set();
+	m_graph_has_work.notify_one();
+	m_jthr.join();
 }
