@@ -557,7 +557,7 @@ pfifo::Impl::logRead(uint32_t addr, uint32_t value)
 				is_data ? (addr - NV_PFIFO_CACHE1_DATA(0)) >> 3 : (addr - NV_PFIFO_CACHE1_METHOD(0)) >> 3, addr, value);
 		}
 		else {
-			logger<log_lv::debug, log_module::pfifo, false>("Read at UNKNOWN + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PFIFO_BASE, addr, value);
+			logger<log_lv::debug, log_module::pfifo, false>("Read at UNKNOWN (0x%08X) of value 0x%08X", addr, value);
 		}
 	}
 }
@@ -576,7 +576,7 @@ pfifo::Impl::logWrite(uint32_t addr, uint32_t value)
 				is_data ? (addr - NV_PFIFO_CACHE1_DATA(0)) >> 3 : (addr - NV_PFIFO_CACHE1_METHOD(0)) >> 3, addr, value);
 		}
 		else {
-			logger<log_lv::debug, log_module::pfifo, false>("Write at UNKNOWN + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PFIFO_BASE, addr, value);
+			logger<log_lv::debug, log_module::pfifo, false>("Write at UNKNOWN (0x%08X) of value 0x%08X", addr, value);
 		}
 	}
 }
