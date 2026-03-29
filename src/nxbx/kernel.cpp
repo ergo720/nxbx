@@ -15,24 +15,9 @@
 #define MODULE_NAME kernel
 
 
-namespace kernel {
+namespace kernel
+{
 	static uint64_t s_lost_clock_increment, s_last_us, s_curr_us;
-	static const std::unordered_map<uint32_t, const std::string> s_regs_info = {
-		{ DBG_STR, "DBG_STR" },
-		{ MACHINE_TYPE, "MACHINE_TYPE" },
-		{ ABORT, "ABORT" },
-		{ CLOCK_INCREMENT_LOW, "CLOCK_INCREMENT_LOW"},
-		{ CLOCK_INCREMENT_HIGH, "CLOCK_INCREMENT_HIGH"},
-		{ BOOT_TIME_MS, "BOOT_TIME_MS"},
-		{ IO_START, "IO_START" },
-		{ IO_RETRY, "IO_RETRY" },
-		{ IO_QUERY, "IO_QUERY" },
-		{ IO_CHECK_ENQUEUE, "IO_CHECK_ENQUEUE" },
-		{ XE_DVD_XBE_LENGTH, "XE_DVD_XBE_LENGTH" },
-		{ XE_DVD_XBE_ADDR, "XE_DVD_XBE_ADDR" },
-		{ ACPI_TIME_LOW, "ACPI_TIME_LOW" },
-		{ ACPI_TIME_HIGH, "ACPI_TIME_HIGH" },
-	};
 
 	static uint64_t
 	calculate_clock_increment()
@@ -49,7 +34,6 @@ namespace kernel {
 		return actual_clock_increment;
 	}
 
-	template<bool log>
 	uint32_t read32(uint32_t addr, void *opaque)
 	{
 		static uint64_t s_acpi_time, s_curr_clock_increment;
@@ -94,20 +78,11 @@ namespace kernel {
 			break;
 		}
 
-		if constexpr (log) {
-			log_read<log_module::kernel, false, 0>(s_regs_info, addr, value);
-		}
-
 		return value;
 	}
 
-	template<bool log>
 	void write32(uint32_t addr, const uint32_t value, void *opaque)
 	{
-		if constexpr (log) {
-			log_write<log_module::kernel, false, 0>(s_regs_info, addr, value);
-		}
-
 		switch (addr)
 		{
 		case DBG_STR: {
@@ -140,9 +115,4 @@ namespace kernel {
 			break;
 		}
 	}
-
-	template uint32_t read32<true>(uint32_t addr, void *opaque);
-	template uint32_t read32<false>(uint32_t addr, void *opaque);
-	template void write32<true>(uint32_t addr, const uint32_t value, void *opaque);
-	template void write32<false>(uint32_t addr, const uint32_t value, void *opaque);
 }

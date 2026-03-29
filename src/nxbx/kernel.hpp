@@ -34,8 +34,6 @@ namespace kernel {
 	};
 	constexpr inline size_t IO_SIZE = IO_END - IO_BASE;
 
-	template<bool log = false>
 	uint32_t read32(uint32_t addr, void *opaque);
-	template<bool log = false>
 	void write32(uint32_t addr, const uint32_t value, void *opaque);
 }
