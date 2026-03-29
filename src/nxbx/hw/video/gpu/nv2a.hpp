@@ -1,25 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2024 ergo720
 
 #pragma once
 
-#include "pbus.hpp"
-#include "pfb.hpp"
-#include "pmc.hpp"
-#include "pcrtc.hpp"
-#include "pramdac.hpp"
-#include "ptimer.hpp"
-#include "pramin.hpp"
-#include "pfifo.hpp"
-#include "pvga.hpp"
-#include "pvideo.hpp"
-#include "puser.hpp"
-#include "pgraph.hpp"
 #include "cpu.hpp"
 #include <bit>
-#include <unordered_map>
-#include <string>
+#include <memory>
 
 
 struct DmaObj {
@@ -38,41 +24,45 @@ enum engine_endian : int {
 	big = 1
 };
 
-class nv2a {
+class pmc;
+class pramdac;
+class pbus;
+class pfb;
+class pcrtc;
+class ptimer;
+class pramin;
+class pfifo;
+class pvga;
+class pvideo;
+class puser;
+class pgraph;
+
+class nv2a
+{
 public:
-	nv2a(machine *machine) : m_pmc(machine), m_pcrtc(machine), m_pramdac(machine), m_ptimer(machine),
-		m_pfb(machine), m_pbus(machine), m_pramin(machine), m_pfifo(machine), m_pvga(machine), m_pvideo(machine),
-		m_puser(machine), m_pgraph(machine) {}
-	bool init();
+	nv2a();
+	~nv2a();
+	bool init(machine *machine);
 	void deinit();
-	uint64_t get_next_update_time(uint64_t now);
-	pmc &get_pmc() { return m_pmc; }
-	pcrtc &get_pcrtc() { return m_pcrtc; }
-	pramdac &get_pramdac() { return m_pramdac; }
-	ptimer &get_ptimer() { return m_ptimer; }
-	pfb &get_pfb() { return m_pfb; }
-	pbus &get_pbus() { return m_pbus; }
-	pramin &get_pramin() { return m_pramin; }
-	pfifo &get_pfifo() { return m_pfifo; }
-	pvga &get_pvga() { return m_pvga; }
-	pvideo &get_pvideo() { return m_pvideo; }
-	pgraph &get_pgraph() { return m_pgraph; }
-	void apply_log_settings();
+	uint64_t getNextUpdateTime(uint64_t now);
+	pmc *getPmc();
+	pcrtc *getPcrtc();
+	pramdac *getPramdac();
+	ptimer *getPtimer();
+	pfb *getPfb();
+	pbus *getPbus();
+	pramin *getPramin();
+	puser *getPuser();
+	pfifo *getPfifo();
+	pvga *getPvga();
+	pvideo *getPvideo();
+	pgraph *getPgraph();
+	void updateIoLogging();
 	DmaObj getDmaObj(uint32_t addr);
 
 private:
-	pmc m_pmc;
-	pcrtc m_pcrtc;
-	pramdac m_pramdac;
-	ptimer m_ptimer;
-	pfb m_pfb;
-	pbus m_pbus;
-	pramin m_pramin;
-	pfifo m_pfifo;
-	pvga m_pvga;
-	pvideo m_pvideo;
-	puser m_puser;
-	pgraph m_pgraph;
+	class Impl;
+	std::unique_ptr<Impl> m_impl;
 };
 
 #define nv2a_log_read() log_read<log_module::MODULE_NAME, false, 3>(m_regs_info, addr, value);

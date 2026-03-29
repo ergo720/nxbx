@@ -1,14 +1,68 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2024 ergo720
 
-#include "machine.hpp"
+#include "lib86cpu.h"
+#include "pmc.hpp"
+#include "pvideo.hpp"
+// Must be included last because of the template functions nv2a_read/write, which require a complete definition for the engine objects
+#include "nv2a.hpp"
+#include <cinttypes>
 
 #define MODULE_NAME pvideo
 
 
+/** Private device implementation **/
+class pvideo::Impl
+{
+public:
+	bool init(cpu *cpu, nv2a *gpu);
+	void reset();
+	void updateIo() { updateIo(true); }
+	template<bool log, engine_enabled enabled>
+	uint32_t read32(uint32_t addr);
+	template<bool log, engine_enabled enabled>
+	void write32(uint32_t addr, const uint32_t value);
+
+private:
+	bool updateIo(bool is_update);
+	template<bool is_write>
+	auto getIoFunc(bool log, bool enabled, bool is_be);
+
+	// connected devices
+	pmc *m_pmc;
+	cpu_t *m_lc86cpu;
+	// registers
+	uint32_t debug[11];
+	uint32_t m_regs[24];
+	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+		{ NV_PVIDEO_DEBUG_0, "NV_PVIDEO_DEBUG_0" },
+		{ NV_PVIDEO_DEBUG_1, "NV_PVIDEO_DEBUG_1" },
+		{ NV_PVIDEO_DEBUG_2, "NV_PVIDEO_DEBUG_2" },
+		{ NV_PVIDEO_DEBUG_3, "NV_PVIDEO_DEBUG_3" },
+		{ NV_PVIDEO_DEBUG_4, "NV_PVIDEO_DEBUG_4" },
+		{ NV_PVIDEO_DEBUG_5, "NV_PVIDEO_DEBUG_5" },
+		{ NV_PVIDEO_DEBUG_6, "NV_PVIDEO_DEBUG_6" },
+		{ NV_PVIDEO_DEBUG_7, "NV_PVIDEO_DEBUG_7" },
+		{ NV_PVIDEO_DEBUG_8, "NV_PVIDEO_DEBUG_8" },
+		{ NV_PVIDEO_DEBUG_9, "NV_PVIDEO_DEBUG_9" },
+		{ NV_PVIDEO_DEBUG_10, "NV_PVIDEO_DEBUG_10" },
+		{ NV_PVIDEO_LUMINANCE(0), "NV_PVIDEO_LUMINANCE(0)" },
+		{ NV_PVIDEO_LUMINANCE(1), "NV_PVIDEO_LUMINANCE(1)" },
+		{ NV_PVIDEO_CHROMINANCE(0),"NV_PVIDEO_CHROMINANCE(0)" },
+		{ NV_PVIDEO_CHROMINANCE(1), "NV_PVIDEO_CHROMINANCE(1)" },
+		{ NV_PVIDEO_SIZE_IN(0), "NV_PVIDEO_SIZE_IN(0)" },
+		{ NV_PVIDEO_SIZE_IN(1), "NV_PVIDEO_SIZE_IN(1)" },
+		{ NV_PVIDEO_POINT_IN(0), "NV_PVIDEO_POINT_IN(0)" },
+		{ NV_PVIDEO_POINT_IN(1), "NV_PVIDEO_POINT_IN(1)" },
+		{ NV_PVIDEO_DS_DX(0), "NV_PVIDEO_DS_DX(0)" },
+		{ NV_PVIDEO_DS_DX(1), "NV_PVIDEO_DS_DX(1)" },
+		{ NV_PVIDEO_DT_DY(0), "NV_PVIDEO_DT_DY(0)" },
+		{ NV_PVIDEO_DT_DY(1), "NV_PVIDEO_DT_DY(1)" },
+	};
+};
+
 template<bool log, engine_enabled enabled>
-void pvideo::write32(uint32_t addr, const uint32_t value)
+void pvideo::Impl::write32(uint32_t addr, const uint32_t value)
 {
 	if constexpr (!enabled) {
 		return;
@@ -54,7 +108,7 @@ void pvideo::write32(uint32_t addr, const uint32_t value)
 }
 
 template<bool log, engine_enabled enabled>
-uint32_t pvideo::read32(uint32_t addr)
+uint32_t pvideo::Impl::read32(uint32_t addr)
 {
 	if constexpr (!enabled) {
 		return 0;
@@ -105,46 +159,46 @@ uint32_t pvideo::read32(uint32_t addr)
 }
 
 template<bool is_write>
-auto pvideo::get_io_func(bool log, bool enabled, bool is_be)
+auto pvideo::Impl::getIoFunc(bool log, bool enabled, bool is_be)
 {
 	if constexpr (is_write) {
 		if (enabled) {
 			if (log) {
-				return is_be ? nv2a_write<pvideo, uint32_t, &pvideo::write32<true, on>, big> : nv2a_write<pvideo, uint32_t, &pvideo::write32<true, on>, le>;
+				return is_be ? nv2a_write<pvideo::Impl, uint32_t, &pvideo::Impl::write32<true, on>, big> : nv2a_write<pvideo::Impl, uint32_t, &pvideo::Impl::write32<true, on>, le>;
 			}
 			else {
-				return is_be ? nv2a_write<pvideo, uint32_t, &pvideo::write32<false, on>, big> : nv2a_write<pvideo, uint32_t, &pvideo::write32<false, on>, le>;
+				return is_be ? nv2a_write<pvideo::Impl, uint32_t, &pvideo::Impl::write32<false, on>, big> : nv2a_write<pvideo::Impl, uint32_t, &pvideo::Impl::write32<false, on>, le>;
 			}
 		}
 		else {
-			return nv2a_write<pvideo, uint32_t, &pvideo::write32<false, off>, big>;
+			return nv2a_write<pvideo::Impl, uint32_t, &pvideo::Impl::write32<false, off>, big>;
 		}
 	}
 	else {
 		if (enabled) {
 			if (log) {
-				return is_be ? nv2a_read<pvideo, uint32_t, &pvideo::read32<true, on>, big> : nv2a_read<pvideo, uint32_t, &pvideo::read32<true, on>, le>;
+				return is_be ? nv2a_read<pvideo::Impl, uint32_t, &pvideo::Impl::read32<true, on>, big> : nv2a_read<pvideo::Impl, uint32_t, &pvideo::Impl::read32<true, on>, le>;
 			}
 			else {
-				return is_be ? nv2a_read<pvideo, uint32_t, &pvideo::read32<false, on>, big> : nv2a_read<pvideo, uint32_t, &pvideo::read32<false, on>, le>;
+				return is_be ? nv2a_read<pvideo::Impl, uint32_t, &pvideo::Impl::read32<false, on>, big> : nv2a_read<pvideo::Impl, uint32_t, &pvideo::Impl::read32<false, on>, le>;
 			}
 		}
 		else {
-			return nv2a_read<pvideo, uint32_t, &pvideo::read32<false, off>, big>;
+			return nv2a_read<pvideo::Impl, uint32_t, &pvideo::Impl::read32<false, off>, big>;
 		}
 	}
 }
 
 bool
-pvideo::update_io(bool is_update)
+pvideo::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
-	bool enabled = m_machine->invoke(&pmc::read32<false>, NV_PMC_ENABLE) & NV_PMC_ENABLE_PVIDEO;
-	bool is_be = m_machine->invoke(&pmc::read32<false>, NV_PMC_BOOT_1) & NV_PMC_BOOT_1_ENDIAN24_BIG;
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), NV_PVIDEO_MMIO_BASE, NV_PVIDEO_SIZE, false,
+	bool enabled = m_pmc->read32(NV_PMC_ENABLE) & NV_PMC_ENABLE_PVIDEO;
+	bool is_be = m_pmc->read32(NV_PMC_BOOT_1) & NV_PMC_BOOT_1_ENDIAN24_BIG;
+	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, NV_PVIDEO_MMIO_BASE, NV_PVIDEO_SIZE, false,
 		{
-			.fnr32 = get_io_func<false>(log, enabled, is_be),
-			.fnw32 = get_io_func<true>(log, enabled, is_be)
+			.fnr32 = getIoFunc<false>(log, enabled, is_be),
+			.fnw32 = getIoFunc<true>(log, enabled, is_be)
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update mmio region");
@@ -155,7 +209,7 @@ pvideo::update_io(bool is_update)
 }
 
 void
-pvideo::reset()
+pvideo::Impl::reset()
 {
 	// Values dumped from a Retail 1.0 xbox
 	debug[0] = 0x00000010;
@@ -172,14 +226,45 @@ pvideo::reset()
 }
 
 bool
-pvideo::init()
+pvideo::Impl::init(cpu *cpu, nv2a *gpu)
 {
+	m_pmc = gpu->getPmc();
+	m_lc86cpu = cpu->get86cpu();
 	reset();
 
-	if (!update_io(false)) {
+	if (!updateIo(false)) {
 		return false;
 	}
 
 	return true;
 }
+
+/** Public interface implementation **/
+bool pvideo::init(cpu *cpu, nv2a *gpu)
+{
+	return m_impl->init(cpu, gpu);
+}
+
+void pvideo::reset()
+{
+	m_impl->reset();
+}
+
+void pvideo::updateIo()
+{
+	m_impl->updateIo();
+}
+
+uint32_t pvideo::read32(uint32_t addr)
+{
+	return m_impl->read32<false, on>(addr);
+}
+
+void pvideo::write32(uint32_t addr, const uint32_t value)
+{
+	m_impl->write32<false, on>(addr, value);
+}
+
+pvideo::pvideo() : m_impl{std::make_unique<pvideo::Impl>()} {}
+pvideo::~pvideo() {}
 

@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2024 ergo720
 
-#include "util.hpp"
+#include "lib86cpu.h"
 #include "clock.hpp"
-#include "machine.hpp"
+#include "pramdac.hpp"
+#include "ptimer.hpp"
+#include "pmc.hpp"
+// Must be included last because of the template functions nv2a_read/write, which require a complete definition for the engine objects
+#include "nv2a.hpp"
+#include "util.hpp"
 
 #define MODULE_NAME ptimer
 
@@ -12,17 +16,72 @@
 #define COUNTER_OFF 0
 
 
+/** Private device implementation **/
+class ptimer::Impl
+{
+public:
+	bool init(cpu *cpu, nv2a *gpu);
+	void reset();
+	void updateIo() { updateIo(true); }
+	uint64_t getNextAlarmTime(uint64_t now);
+	template<bool log, engine_enabled enabled>
+	uint32_t read32(uint32_t addr);
+	template<bool log, engine_enabled enabled>
+	void write32(uint32_t addr, const uint32_t value);
+	uint8_t isCounterOn() { return counter_active; }
+	void setCounterPeriod(uint64_t new_period) { counter_period = new_period; }
+	uint64_t counterToUs();
+
+private:
+	bool updateIo(bool is_update);
+	template<bool is_write>
+	auto getIoFunc(bool log, bool enabled, bool is_be);
+
+	// connected devices
+	pmc *m_pmc;
+	pramdac *m_pramdac;
+	cpu *m_cpu;
+	cpu_t *m_lc86cpu;
+	// Host time when the last alarm interrupt was triggered
+	uint64_t last_alarm_time;
+	// Time in us before the alarm triggers
+	uint64_t counter_period;
+	// Bias added/subtracted to counter before an alarm is due
+	int64_t counter_bias;
+	// Counter is running if not zero
+	uint8_t counter_active;
+	// Offset added to counter
+	uint64_t counter_offset;
+	// Counter value when it was stopped
+	uint64_t counter_when_stopped;
+	// atomic registers
+	std::atomic_uint32_t m_int_status;
+	std::atomic_uint32_t m_int_enabled;
+	// registers
+	uint32_t multiplier, divider;
+	uint32_t alarm;
+	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+		{ NV_PTIMER_INTR_0, "NV_PTIMER_INTR_0" },
+		{ NV_PTIMER_INTR_EN_0, "NV_PTIMER_INTR_EN_0" },
+		{ NV_PTIMER_NUMERATOR, "NV_PTIMER_NUMERATOR" },
+		{ NV_PTIMER_DENOMINATOR, "NV_PTIMER_DENOMINATOR" },
+		{ NV_PTIMER_TIME_0, "NV_PTIMER_TIME_0" },
+		{ NV_PTIMER_TIME_1, "NV_PTIMER_TIME_1" },
+		{ NV_PTIMER_ALARM_0, "NV_PTIMER_ALARM_0" }
+	};
+};
+
 uint64_t
-ptimer::counter_to_us()
+ptimer::Impl::counterToUs()
 {
 	// Tested on a Retail 1.0 xbox: the ratio is calculated with denominator / numerator, and not the other way around like it might seem at first. The gpu documentation
 	// from envytools also indicates this. Also, the alarm value has no effect on the counter period, which is only affected by the ratio instead
 	constexpr uint64_t max_alarm = 0xFFFFFFE0 >> 5;
-	return util::muldiv128(util::muldiv128(max_alarm, timer::g_ticks_per_second, m_machine->invoke(&pramdac::getCoreFreq)), divider, multiplier);
+	return util::muldiv128(util::muldiv128(max_alarm, timer::g_ticks_per_second, m_pramdac->getCoreFreq()), divider, multiplier);
 }
 
 uint64_t
-ptimer::get_next_alarm_time(uint64_t now)
+ptimer::Impl::getNextAlarmTime(uint64_t now)
 {
 	if (((m_int_enabled & NV_PTIMER_INTR_EN_0_ALARM_ENABLED) | counter_active) == (NV_PTIMER_INTR_EN_0_ALARM_ENABLED | COUNTER_ON)) {
 		uint64_t next_time, ptimer_period = counter_period;
@@ -32,7 +91,7 @@ ptimer::get_next_alarm_time(uint64_t now)
 			next_time = ptimer_period;
 
 			m_int_status |= NV_PTIMER_INTR_0_ALARM_PENDING;
-			m_machine->invoke(&pmc::updateIrq);
+			m_pmc->updateIrq();
 		}
 		else {
 			next_time = last_alarm_time + ptimer_period - now;
@@ -45,7 +104,7 @@ ptimer::get_next_alarm_time(uint64_t now)
 }
 
 template<bool log, engine_enabled enabled>
-void ptimer::write32(uint32_t addr, const uint32_t value)
+void ptimer::Impl::write32(uint32_t addr, const uint32_t value)
 {
 	if constexpr (!enabled) {
 		return;
@@ -58,19 +117,19 @@ void ptimer::write32(uint32_t addr, const uint32_t value)
 	{
 	case NV_PTIMER_INTR_0:
 		m_int_status &= ~value;
-		m_machine->invoke(&pmc::updateIrq);
+		m_pmc->updateIrq();
 		break;
 
 	case NV_PTIMER_INTR_EN_0:
 		m_int_enabled = value;
-		m_machine->invoke(&pmc::updateIrq);
+		m_pmc->updateIrq();
 		break;
 
 	case NV_PTIMER_NUMERATOR:
 		divider = value & NV_PTIMER_NUMERATOR_MASK;
 		if (counter_active) {
-			counter_period = counter_to_us();
-			cpu_set_timeout(m_machine->get_cpu(), m_machine->invoke(static_cast<uint64_t(cpu::*)(uint64_t)>(&cpu::check_periodic_events), timer::get_now()));
+			counter_period = counterToUs();
+			cpu_set_timeout(m_lc86cpu, m_cpu->checkPeriodicEvents(timer::get_now()));
 		}
 		break;
 
@@ -85,13 +144,13 @@ void ptimer::write32(uint32_t addr, const uint32_t value)
 		counter_active = multiplier ? COUNTER_ON : COUNTER_OFF; // A multiplier of zero stops the 56 bit counter
 		uint64_t now = timer::get_now();
 		if (counter_active) {
-			counter_period = counter_to_us();
+			counter_period = counterToUs();
 			last_alarm_time = now;
 		}
 		else {
-			counter_when_stopped = timer::get_dev_now(m_machine->invoke(&pramdac::getCoreFreq)) & 0x00FFFFFFFFFFFFFF;
+			counter_when_stopped = timer::get_dev_now(m_pramdac->getCoreFreq()) & 0x00FFFFFFFFFFFFFF;
 		}
-		cpu_set_timeout(m_machine->get_cpu(), m_machine->invoke(static_cast<uint64_t(cpu::*)(uint64_t)>(&cpu::check_periodic_events), now));
+		cpu_set_timeout(m_lc86cpu, m_cpu->checkPeriodicEvents(now));
 	}
 	break;
 
@@ -121,7 +180,7 @@ void ptimer::write32(uint32_t addr, const uint32_t value)
 		uint32_t new_alarm = alarm >> 5;
 		counter_bias = new_alarm - old_alarm;
 		if (counter_active) {
-			cpu_set_timeout(m_machine->get_cpu(), m_machine->invoke(static_cast<uint64_t(cpu::*)(uint64_t)>(&cpu::check_periodic_events), timer::get_now()));
+			cpu_set_timeout(m_lc86cpu, m_cpu->checkPeriodicEvents(timer::get_now()));
 		}
 	}
 	break;
@@ -132,7 +191,7 @@ void ptimer::write32(uint32_t addr, const uint32_t value)
 }
 
 template<bool log, engine_enabled enabled>
-uint32_t ptimer::read32(uint32_t addr)
+uint32_t ptimer::Impl::read32(uint32_t addr)
 {
 	if constexpr (!enabled) {
 		return 0;
@@ -160,14 +219,14 @@ uint32_t ptimer::read32(uint32_t addr)
 
 	case NV_PTIMER_TIME_0: {
 		// Returns the low 27 bits of the 56 bit counter
-		uint64_t counter_base = counter_active ? timer::get_dev_now(m_machine->invoke(&pramdac::getCoreFreq)) : counter_when_stopped;
+		uint64_t counter_base = counter_active ? timer::get_dev_now(m_pramdac->getCoreFreq()) : counter_when_stopped;
 		value = uint32_t(((counter_offset + counter_base) & 0x7FFFFFF) << 5);
 	}
 	break;
 
 	case NV_PTIMER_TIME_1: {
 		// Returns the high 29 bits of the 56 bit counter
-		uint64_t counter_base = counter_active ? timer::get_dev_now(m_machine->invoke(&pramdac::getCoreFreq)) : counter_when_stopped;
+		uint64_t counter_base = counter_active ? timer::get_dev_now(m_pramdac->getCoreFreq()) : counter_when_stopped;
 		value = uint32_t(((counter_offset + counter_base) >> 27) & 0x1FFFFFFF);
 	}
 	break;
@@ -188,46 +247,46 @@ uint32_t ptimer::read32(uint32_t addr)
 }
 
 template<bool is_write>
-auto ptimer::get_io_func(bool log, bool enabled, bool is_be)
+auto ptimer::Impl::getIoFunc(bool log, bool enabled, bool is_be)
 {
 	if constexpr (is_write) {
 		if (enabled) {
 			if (log) {
-				return is_be ? nv2a_write<ptimer, uint32_t, &ptimer::write32<true, on>, big> : nv2a_write<ptimer, uint32_t, &ptimer::write32<true, on>, le>;
+				return is_be ? nv2a_write<ptimer::Impl, uint32_t, &ptimer::Impl::write32<true, on>, big> : nv2a_write<ptimer::Impl, uint32_t, &ptimer::Impl::write32<true, on>, le>;
 			}
 			else {
-				return is_be ? nv2a_write<ptimer, uint32_t, &ptimer::write32<false, on>, big> : nv2a_write<ptimer, uint32_t, &ptimer::write32<false, on>, le>;
+				return is_be ? nv2a_write<ptimer::Impl, uint32_t, &ptimer::Impl::write32<false, on>, big> : nv2a_write<ptimer::Impl, uint32_t, &ptimer::Impl::write32<false, on>, le>;
 			}
 		}
 		else {
-			return nv2a_write<ptimer, uint32_t, &ptimer::write32<false, off>, big>;
+			return nv2a_write<ptimer::Impl, uint32_t, &ptimer::Impl::write32<false, off>, big>;
 		}
 	}
 	else {
 		if (enabled) {
 			if (log) {
-				return is_be ? nv2a_read<ptimer, uint32_t, &ptimer::read32<true, on>, big> : nv2a_read<ptimer, uint32_t, &ptimer::read32<true, on>, le>;
+				return is_be ? nv2a_read<ptimer::Impl, uint32_t, &ptimer::Impl::read32<true, on>, big> : nv2a_read<ptimer::Impl, uint32_t, &ptimer::Impl::read32<true, on>, le>;
 			}
 			else {
-				return is_be ? nv2a_read<ptimer, uint32_t, &ptimer::read32<false, on>, big> : nv2a_read<ptimer, uint32_t, &ptimer::read32<false, on>, le>;
+				return is_be ? nv2a_read<ptimer::Impl, uint32_t, &ptimer::Impl::read32<false, on>, big> : nv2a_read<ptimer::Impl, uint32_t, &ptimer::Impl::read32<false, on>, le>;
 			}
 		}
 		else {
-			return nv2a_read<ptimer, uint32_t, &ptimer::read32<false, off>, big>;
+			return nv2a_read<ptimer::Impl, uint32_t, &ptimer::Impl::read32<false, off>, big>;
 		}
 	}
 }
 
 bool
-ptimer::update_io(bool is_update)
+ptimer::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
-	bool enabled = m_machine->invoke(&pmc::read32<false>, NV_PMC_ENABLE) & NV_PMC_ENABLE_PTIMER;
-	bool is_be = m_machine->invoke(&pmc::read32<false>, NV_PMC_BOOT_1) & NV_PMC_BOOT_1_ENDIAN24_BIG;
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), NV_PTIMER_BASE, NV_PTIMER_SIZE, false,
+	bool enabled = m_pmc->read32(NV_PMC_ENABLE) & NV_PMC_ENABLE_PTIMER;
+	bool is_be = m_pmc->read32(NV_PMC_BOOT_1) & NV_PMC_BOOT_1_ENDIAN24_BIG;
+	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, NV_PTIMER_BASE, NV_PTIMER_SIZE, false,
 		{
-			.fnr32 = get_io_func<false>(log, enabled, is_be),
-			.fnw32 = get_io_func<true>(log, enabled, is_be)
+			.fnr32 = getIoFunc<false>(log, enabled, is_be),
+			.fnw32 = getIoFunc<true>(log, enabled, is_be)
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update mmio region");
@@ -238,7 +297,7 @@ ptimer::update_io(bool is_update)
 }
 
 void
-ptimer::reset()
+ptimer::Impl::reset()
 {
 	// Values dumped from a Retail 1.0 xbox
 	m_int_status = NV_PTIMER_INTR_0_ALARM_NOT_PENDING;
@@ -246,21 +305,74 @@ ptimer::reset()
 	multiplier = 0x00001DCD;
 	divider = 0x0000DE86;
 	alarm = 0xFFFFFFE0;
-	counter_period = counter_to_us();
+	counter_period = counterToUs();
 	counter_active = COUNTER_ON;
 	counter_offset = 0;
 	counter_bias = 0;
-	cpu_set_timeout(m_machine->get_cpu(), m_machine->invoke(static_cast<uint64_t(cpu::*)(uint64_t)>(&cpu::check_periodic_events), timer::get_now()));
+	cpu_set_timeout(m_lc86cpu, m_cpu->checkPeriodicEvents(timer::get_now()));
 }
 
 bool
-ptimer::init()
+ptimer::Impl::init(cpu *cpu, nv2a *gpu)
 {
+	m_pmc = gpu->getPmc();
+	m_pramdac = gpu->getPramdac();
+	m_lc86cpu = cpu->get86cpu();
+	m_cpu = cpu;
 	reset();
 
-	if (!update_io(false)) {
+	if (!updateIo(false)) {
 		return false;
 	}
 
 	return true;
 }
+
+/** Public interface implementation **/
+bool ptimer::init(cpu *cpu, nv2a *gpu)
+{
+	return m_impl->init(cpu, gpu);
+}
+
+void ptimer::reset()
+{
+	m_impl->reset();
+}
+
+void ptimer::updateIo()
+{
+	m_impl->updateIo();
+}
+
+uint32_t ptimer::read32(uint32_t addr)
+{
+	return m_impl->read32<false, on>(addr);
+}
+
+void ptimer::write32(uint32_t addr, const uint32_t value)
+{
+	m_impl->write32<false, on>(addr, value);
+}
+
+uint64_t ptimer::getNextAlarmTime(uint64_t now)
+{
+	return m_impl->getNextAlarmTime(now);
+}
+
+uint8_t ptimer::isCounterOn()
+{
+	return m_impl->isCounterOn();
+}
+
+void ptimer::setCounterPeriod(uint64_t new_period)
+{
+	m_impl->setCounterPeriod(new_period);
+}
+
+uint64_t ptimer::counterToUs()
+{
+	return m_impl->counterToUs();
+}
+
+ptimer::ptimer() : m_impl{std::make_unique<ptimer::Impl>()} {}
+ptimer::~ptimer() {}

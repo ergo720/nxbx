@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // SPDX-FileCopyrightText: 2026 ergo720
 
+#include "lib86cpu.h"
 #include "console.hpp"
 #include "io.hpp"
 #include "clock.hpp"
+#include <functional>
 
 
 console* g_console = nullptr;
@@ -29,7 +31,7 @@ console::console(const boot_params &params)
 		m_machine.deinit();
 		return;
 	}
-	io::init(m_machine.get_cpu());
+	io::init(m_machine.get86cpu());
 	m_state = console_state::initialized;
 }
 
@@ -81,14 +83,14 @@ void console::cpu_thread()
 void console::apply_log_settings()
 {
 	if ((m_state == console_state::running) || (m_state == console_state::initialized)) {
-		m_machine.apply_log_settings();
+		m_machine.updateIoLogging();
 	}
 }
 
 void console::update_tray_state(tray_state state, bool do_int)
 {
 	if ((m_state == console_state::running) || (m_state == console_state::initialized)) {
-		m_machine.invoke(&smc::update_tray_state, state, do_int);
+		m_machine.getSmc()->update_tray_state(state, do_int);
 	}
 }
 

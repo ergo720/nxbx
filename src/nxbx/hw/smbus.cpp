@@ -1,9 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2024 ergo720
 
+#include "lib86cpu.h"
 #include "machine.hpp"
+#include "smbus.hpp"
+#include "eeprom.hpp"
+#include "adm1032.hpp"
+#include "smc.hpp"
+#include "video/conexant.hpp"
+#include "cpu.hpp"
 #include <cstring>
+#include <cinttypes>
 
 #define MODULE_NAME smbus
 
@@ -25,9 +32,67 @@
 #define GE_RW_WORD    3
 #define GE_RW_BLOCK   5
 
+#define SMBUS_GS_addr 0xC000
+#define SMBUS_GE_addr 0xC002
+#define SMBUS_HA_addr 0xC004
+#define SMBUS_HD0_addr 0xC006
+#define SMBUS_HD1_addr 0xC007
+#define SMBUS_HC_addr 0xC008
+#define SMBUS_HB_addr 0xC009
+#define SMBUS_REG_off(x) ((x) - SMBUS_GS_addr)
+
+
+/** Private device implementation **/
+class smbus::Impl
+{
+public:
+	bool init(machine *machine);
+	void deinit();
+	void reset();
+	void updateIoLogging() { updateIo(true); }
+	template<bool log = false>
+	uint8_t read8(uint32_t addr);
+	template<bool log = false>
+	uint16_t read16(uint32_t addr);
+	template<bool log = false>
+	void write8(uint32_t addr, const uint8_t value);
+	template<bool log = false>
+	void write16(uint32_t addr, const uint16_t value);
+
+private:
+	enum cycle_type {
+		quick_command,
+		byte_command,
+		word_command,
+		block_command,
+	};
+
+	bool updateIo(bool is_update);
+	void start_cycle();
+	template<cycle_type cmd, bool is_read, typename T = uint8_t>
+	void end_cycle(smbus_device *dev, T value = 0);
+
+	uint8_t m_regs[16];
+	uint8_t m_block_data[32];
+	unsigned m_block_off;
+	std::unordered_map<uint8_t, smbus_device *> m_devs;
+	// connected devices
+	machine *m_machine;
+	cpu_t *m_lc86cpu;
+	// registers
+	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+		{ SMBUS_GS_addr, "STATUS" },
+		{ SMBUS_GE_addr, "CONTROL" },
+		{ SMBUS_HA_addr, "ADDRESS" },
+		{ SMBUS_HD0_addr, "DATA0" },
+		{ SMBUS_HD1_addr, "DATA1" },
+		{ SMBUS_HC_addr, "COMMAND" },
+		{ SMBUS_HB_addr, "FIFO" },
+	};
+};
 
 template<bool log>
-uint8_t smbus::read8(uint32_t addr)
+uint8_t smbus::Impl::read8(uint32_t addr)
 {
 	uint8_t value;
 	if (addr == SMBUS_GE_addr) {
@@ -50,7 +115,7 @@ uint8_t smbus::read8(uint32_t addr)
 }
 
 template<bool log>
-uint16_t smbus::read16(uint32_t addr)
+uint16_t smbus::Impl::read16(uint32_t addr)
 {
 	uint16_t value = read8(addr);
 	value |= ((uint16_t)read8(addr + 1) << 8);
@@ -63,7 +128,7 @@ uint16_t smbus::read16(uint32_t addr)
 }
 
 template<bool log>
-void smbus::write8(uint32_t addr, const uint8_t value)
+void smbus::Impl::write8(uint32_t addr, const uint8_t value)
 {
 	if constexpr (log) {
 		log_io_write();
@@ -116,7 +181,7 @@ void smbus::write8(uint32_t addr, const uint8_t value)
 }
 
 template<bool log>
-void smbus::write16(uint32_t addr, const uint16_t value)
+void smbus::Impl::write16(uint32_t addr, const uint16_t value)
 {
 	if constexpr (log) {
 		log_io_write();
@@ -126,8 +191,8 @@ void smbus::write16(uint32_t addr, const uint16_t value)
 	write8(addr + 1, value >> 8 & 0xFF);
 }
 
-template<smbus::cycle_type cmd, bool is_read, typename T>
-void smbus::end_cycle(smbus_device *dev, T value)
+template<smbus::Impl::cycle_type cmd, bool is_read, typename T>
+void smbus::Impl::end_cycle(smbus_device *dev, T value)
 {
 	if (dev->has_cmd_succeeded()) {
 		m_regs[SMBUS_REG_off(SMBUS_GS_addr)] |= GS_HCYC_STS;
@@ -161,8 +226,7 @@ void smbus::end_cycle(smbus_device *dev, T value)
 	}
 }
 
-void
-smbus::start_cycle()
+void smbus::Impl::start_cycle()
 {
 	uint8_t hw_addr = m_regs[SMBUS_REG_off(SMBUS_HA_addr)] >> 1; // changes sw to hw address
 	uint8_t is_read = m_regs[SMBUS_REG_off(SMBUS_HA_addr)] & 1;
@@ -238,16 +302,15 @@ smbus::start_cycle()
 	m_regs[SMBUS_REG_off(SMBUS_GS_addr)] |= GS_PRERR_STS;
 }
 
-bool
-smbus::update_io(bool is_update)
+bool smbus::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), 0xC000, 16, true,
+	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, 0xC000, 16, true,
 		{
-			.fnr8 = log ? cpu_read<smbus, uint8_t, &smbus::read8<true>> : cpu_read<smbus, uint8_t, &smbus::read8<false>>,
-			.fnr16 = log ? cpu_read<smbus, uint16_t, &smbus::read16<true>> : cpu_read<smbus, uint16_t, &smbus::read16<false>>,
-			.fnw8 = log ? cpu_write<smbus, uint8_t, &smbus::write8<true>> : cpu_write<smbus, uint8_t, &smbus::write8<false>>,
-			.fnw16 = log ? cpu_write<smbus, uint16_t, &smbus::write16<true>> : cpu_write<smbus, uint16_t, &smbus::write16<false>>,
+			.fnr8 = log ? cpu_read<smbus::Impl, uint8_t, &smbus::Impl::read8<true>> : cpu_read<smbus::Impl, uint8_t, &smbus::Impl::read8<false>>,
+			.fnr16 = log ? cpu_read<smbus::Impl, uint16_t, &smbus::Impl::read16<true>> : cpu_read<smbus::Impl, uint16_t, &smbus::Impl::read16<false>>,
+			.fnw8 = log ? cpu_write<smbus::Impl, uint8_t, &smbus::Impl::write8<true>> : cpu_write<smbus::Impl, uint8_t, &smbus::Impl::write8<false>>,
+			.fnw16 = log ? cpu_write<smbus::Impl, uint16_t, &smbus::Impl::write16<true>> : cpu_write<smbus::Impl, uint16_t, &smbus::Impl::write16<false>>,
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update smbus io ports");
@@ -257,33 +320,56 @@ smbus::update_io(bool is_update)
 	return true;
 }
 
-void
-smbus::reset()
+void smbus::Impl::reset()
 {
 	std::fill(std::begin(m_regs), std::end(m_regs), 0);
 	std::fill(std::begin(m_block_data), std::end(m_block_data), 0);
 	m_block_off = 0;
 }
 
-void
-smbus::deinit()
+void smbus::Impl::deinit()
 {
 	for (auto dev : m_devs) {
 		dev.second->deinit();
 	}
 }
 
-bool
-smbus::init()
+bool smbus::Impl::init(machine *machine)
 {
-	if (!update_io(false)) {
+	m_lc86cpu = machine->get86cpu();
+	m_machine = machine;
+	if (!updateIo(false)) {
 		return false;
 	}
 
-	m_devs[0x54] = m_machine->invoke(&eeprom::get); // eeprom
-	m_devs[0x10] = m_machine->invoke(&smc::get); // smc
-	m_devs[0x4C] = m_machine->invoke(&adm1032::get); // adm1032
-	m_devs[0x45] = m_machine->invoke(&conexant::get); // conexant video encoder
+	m_devs[0x54] = m_machine->getEeprom(); // eeprom
+	m_devs[0x10] = m_machine->getSmc(); // smc
+	m_devs[0x4C] = m_machine->getAdm1032(); // adm1032
+	m_devs[0x45] = m_machine->getVideoEncoder(); // conexant video encoder
 	reset();
 	return true;
 }
+
+/** Public interface implementation **/
+bool smbus::init(machine *machine)
+{
+	return m_impl->init(machine);
+}
+
+void smbus::deinit()
+{
+	m_impl->deinit();
+}
+
+void smbus::reset()
+{
+	m_impl->reset();
+}
+
+void smbus::updateIoLogging()
+{
+	m_impl->updateIoLogging();
+}
+
+smbus::smbus() : m_impl{std::make_unique<smbus::Impl>()} {}
+smbus::~smbus() {}

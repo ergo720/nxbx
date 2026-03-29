@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2024 ergo720
 
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include "nv2a_defs.hpp"
 
 #define NV_PRMVGA 0x000A0000
@@ -21,32 +21,20 @@
 #define NV_PRMDIO_SIZE 0x1000
 
 
-class machine;
+class cpu;
+class nv2a;
+class vga;
 
-class pvga {
+class pvga
+{
 public:
-	pvga(machine *machine) : m_machine(machine) {}
-	bool init();
+	pvga();
+	~pvga();
+	bool init(cpu *cpu, nv2a *gpu, vga *vga);
 	void reset();
-	void update_io() { update_io(true); }
-	template<bool log = false>
-	uint8_t io_read8(uint32_t addr);
-	template<bool log = false>
-	void io_write8(uint32_t addr, const uint8_t value);
-	template<bool log = false>
-	void io_write16(uint32_t addr, const uint16_t value);
-	template<bool log = false>
-	uint8_t mem_read8(uint32_t addr);
-	template<bool log = false>
-	uint16_t mem_read16(uint32_t addr);
-	template<bool log = false>
-	void mem_write8(uint32_t addr, const uint8_t value);
-	template<bool log = false>
-	void mem_write16(uint32_t addr, const uint16_t value);
+	void updateIo();
 
 private:
-	void prmvga_log_read(uint32_t addr, uint32_t value);
-	void prmvga_log_write(uint32_t addr, uint32_t value);
-	bool update_io(bool is_update);
-	machine *const m_machine;
+	class Impl;
+	std::unique_ptr<Impl> m_impl;
 };

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2024 ergo720
 
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include "nv2a_defs.hpp"
 
 #define NV_PRAMDAC 0x00680300
@@ -19,34 +19,22 @@
 #define NV_PRAMDAC_VPLL_COEFF (NV2A_REGISTER_BASE + 0x00680508) // video pll (phase-locked loop) coefficients
 
 
-class machine;
+class cpu;
+class nv2a;
 
-class pramdac {
+class pramdac
+{
 public:
-	pramdac(machine *machine) : m_machine(machine) {}
-	bool init();
+	pramdac();
+	~pramdac();
+	bool init(cpu *cpu, nv2a *gpu);
 	void reset();
-	void update_io() { update_io(true); }
-	template<bool log = false>
-	uint8_t read8(uint32_t addr);
-	template<bool log = false>
+	void updateIo();
 	uint32_t read32(uint32_t addr);
-	template<bool log = false>
 	void write32(uint32_t addr, const uint32_t value);
-	uint64_t getCoreFreq() { return m_core_freq; }
+	uint64_t getCoreFreq();
 
 private:
-	bool update_io(bool is_update);
-	template<bool is_write, typename T>
-	auto get_io_func(bool log, bool is_be);
-
-	machine *const m_machine;
-	uint64_t m_core_freq; // gpu frequency
-	// registers
-	uint32_t nvpll_coeff, mpll_coeff, vpll_coeff;
-	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
-		{ NV_PRAMDAC_NVPLL_COEFF, "NV_PRAMDAC_NVPLL_COEFF" },
-		{ NV_PRAMDAC_MPLL_COEFF, "NV_PRAMDAC_MPLL_COEFF" },
-		{ NV_PRAMDAC_VPLL_COEFF, "NV_PRAMDAC_VPLL_COEFF" }
-	};
+	class Impl;
+	std::unique_ptr<Impl> m_impl;
 };

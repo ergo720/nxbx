@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "util.hpp"
+#include <cstdint>
 
 #define CONTIGUOUS_MEMORY_BASE 0x80000000
 #define KERNEL_BASE 0x80010000
@@ -35,7 +35,7 @@ namespace kernel {
 	constexpr inline size_t IO_SIZE = IO_END - IO_BASE;
 
 	template<bool log = false>
-	uint32_t read32(addr_t addr, void *opaque);
+	uint32_t read32(uint32_t addr, void *opaque);
 	template<bool log = false>
-	void write32(addr_t addr, const uint32_t value, void *opaque);
+	void write32(uint32_t addr, const uint32_t value, void *opaque);
 }

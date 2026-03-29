@@ -1,14 +1,52 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2024 ergo720
 
-#include "machine.hpp"
+#include "lib86cpu.h"
+#include "pmc.hpp"
+#include "pcrtc.hpp"
+// Must be included last because of the template functions nv2a_read/write, which require a complete definition for the engine objects
+#include "nv2a.hpp"
+#include <cinttypes>
 
 #define MODULE_NAME pcrtc
 
 
+/** Private device implementation **/
+class pcrtc::Impl
+{
+public:
+	bool init(cpu *cpu, nv2a *gpu);
+	void reset();
+	void updateIo() { updateIo(true); }
+	template<bool log, engine_enabled enabled>
+	uint32_t read32(uint32_t addr);
+	template<bool log, engine_enabled enabled>
+	void write32(uint32_t addr, const uint32_t value);
+
+private:
+	bool updateIo(bool is_update);
+	template<bool is_write>
+	auto getIoFunc(bool log, bool enabled, bool is_be);
+
+	// connected devices
+	pmc *m_pmc;
+	cpu_t *m_lc86cpu;
+	// atomic registers
+	std::atomic_uint32_t m_int_status;
+	std::atomic_uint32_t m_int_enabled;
+	// registers
+	uint32_t m_fb_addr;
+	uint32_t m_unknown;
+	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+		{ NV_PCRTC_INTR_0, "NV_PCRTC_INTR_0" },
+		{ NV_PCRTC_INTR_EN_0, "NV_PCRTC_INTR_EN_0" },
+		{ NV_PCRTC_START, "NV_PCRTC_START" },
+		{ NV_PCRTC_UNKNOWN0, "NV_PCRTC_UNKNOWN0" },
+	};
+};
+
 template<bool log, engine_enabled enabled>
-void pcrtc::write32(uint32_t addr, const uint32_t value)
+void pcrtc::Impl::write32(uint32_t addr, const uint32_t value)
 {
 	if constexpr (!enabled) {
 		return;
@@ -21,20 +59,20 @@ void pcrtc::write32(uint32_t addr, const uint32_t value)
 	{
 	case NV_PCRTC_INTR_0:
 		m_int_status &= ~value;
-		m_machine->invoke(&pmc::updateIrq);
+		m_pmc->updateIrq();
 		break;
 
 	case NV_PCRTC_INTR_EN_0:
 		m_int_enabled = value;
-		m_machine->invoke(&pmc::updateIrq);
+		m_pmc->updateIrq();
 		break;
 
 	case NV_PCRTC_START:
-		fb_addr = value & 0x7FFFFFC; // fb is 4 byte aligned
+		m_fb_addr = value & 0x7FFFFFC; // fb is 4 byte aligned
 		break;
 
 	case NV_PCRTC_UNKNOWN0:
-		unknown[0] = value;
+		m_unknown = value;
 		break;
 
 	default:
@@ -43,7 +81,7 @@ void pcrtc::write32(uint32_t addr, const uint32_t value)
 }
 
 template<bool log, engine_enabled enabled>
-uint32_t pcrtc::read32(uint32_t addr)
+uint32_t pcrtc::Impl::read32(uint32_t addr)
 {
 	if constexpr (!enabled) {
 		return 0;
@@ -62,11 +100,11 @@ uint32_t pcrtc::read32(uint32_t addr)
 		break;
 
 	case NV_PCRTC_START:
-		value = fb_addr;
+		value = m_fb_addr;
 		break;
 
 	case NV_PCRTC_UNKNOWN0:
-		value = unknown[0];
+		value = m_unknown;
 		break;
 
 	default:
@@ -81,46 +119,45 @@ uint32_t pcrtc::read32(uint32_t addr)
 }
 
 template<bool is_write>
-auto pcrtc::get_io_func(bool log, bool enabled, bool is_be)
+auto pcrtc::Impl::getIoFunc(bool log, bool enabled, bool is_be)
 {
 	if constexpr (is_write) {
 		if (enabled) {
 			if (log) {
-				return is_be ? nv2a_write<pcrtc, uint32_t, &pcrtc::write32<true, on>, big> : nv2a_write<pcrtc, uint32_t, &pcrtc::write32<true, on>, le>;
+				return is_be ? nv2a_write<pcrtc::Impl, uint32_t, &pcrtc::Impl::write32<true, on>, big> : nv2a_write<pcrtc::Impl, uint32_t, &pcrtc::Impl::write32<true, on>, le>;
 			}
 			else {
-				return is_be ? nv2a_write<pcrtc, uint32_t, &pcrtc::write32<false, on>, big> : nv2a_write<pcrtc, uint32_t, &pcrtc::write32<false, on>, le>;
+				return is_be ? nv2a_write<pcrtc::Impl, uint32_t, &pcrtc::Impl::write32<false, on>, big> : nv2a_write<pcrtc::Impl, uint32_t, &pcrtc::Impl::write32<false, on>, le>;
 			}
 		}
 		else {
-			return nv2a_write<pcrtc, uint32_t, &pcrtc::write32<false, off>, big>;
+			return nv2a_write<pcrtc::Impl, uint32_t, &pcrtc::Impl::write32<false, off>, big>;
 		}
 	}
 	else {
 		if (enabled) {
 			if (log) {
-				return is_be ? nv2a_read<pcrtc, uint32_t, &pcrtc::read32<true, on>, big> : nv2a_read<pcrtc, uint32_t, &pcrtc::read32<true, on>, le>;
+				return is_be ? nv2a_read<pcrtc::Impl, uint32_t, &pcrtc::Impl::read32<true, on>, big> : nv2a_read<pcrtc::Impl, uint32_t, &pcrtc::Impl::read32<true, on>, le>;
 			}
 			else {
-				return is_be ? nv2a_read<pcrtc, uint32_t, &pcrtc::read32<false, on>, big> : nv2a_read<pcrtc, uint32_t, &pcrtc::read32<false, on>, le>;
+				return is_be ? nv2a_read<pcrtc::Impl, uint32_t, &pcrtc::Impl::read32<false, on>, big> : nv2a_read<pcrtc::Impl, uint32_t, &pcrtc::Impl::read32<false, on>, le>;
 			}
 		}
 		else {
-			return nv2a_read<pcrtc, uint32_t, &pcrtc::read32<false, off>, big>;
+			return nv2a_read<pcrtc::Impl, uint32_t, &pcrtc::Impl::read32<false, off>, big>;
 		}
 	}
 }
 
-bool
-pcrtc::update_io(bool is_update)
+bool pcrtc::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
-	bool enabled = m_machine->invoke(&pmc::read32<false>, NV_PMC_ENABLE) & NV_PMC_ENABLE_PCRTC;
-	bool is_be = m_machine->invoke(&pmc::read32<false>, NV_PMC_BOOT_1) & NV_PMC_BOOT_1_ENDIAN24_BIG;
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), NV_PCRTC_BASE, NV_PCRTC_SIZE, false,
+	bool enabled = m_pmc->read32(NV_PMC_ENABLE) &NV_PMC_ENABLE_PCRTC;
+	bool is_be = m_pmc->read32(NV_PMC_BOOT_1) & NV_PMC_BOOT_1_ENDIAN24_BIG;
+	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, NV_PCRTC_BASE, NV_PCRTC_SIZE, false,
 		{
-			.fnr32 = get_io_func<false>(log, enabled, is_be),
-			.fnw32 = get_io_func<true>(log, enabled, is_be)
+			.fnr32 = getIoFunc<false>(log, enabled, is_be),
+			.fnw32 = getIoFunc<true>(log, enabled, is_be)
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update mmio region");
@@ -130,25 +167,52 @@ pcrtc::update_io(bool is_update)
 	return true;
 }
 
-void
-pcrtc::reset()
+void pcrtc::Impl::reset()
 {
 	m_int_status = NV_PCRTC_INTR_0_VBLANK_NOT_PENDING;
 	m_int_enabled = NV_PCRTC_INTR_EN_0_VBLANK_DISABLED;
-	fb_addr = 0;
-	for (uint32_t &reg : unknown) {
-		reg = 0;
-	}
+	m_fb_addr = 0;
+	m_unknown = 0;
 }
 
-bool
-pcrtc::init()
+bool pcrtc::Impl::init(cpu *cpu, nv2a *gpu)
 {
+	m_pmc = gpu->getPmc();
+	m_lc86cpu = cpu->get86cpu();
 	reset();
 
-	if (!update_io(false)) {
+	if (!updateIo(false)) {
 		return false;
 	}
 
 	return true;
 }
+
+/** Public interface implementation **/
+bool pcrtc::init(cpu *cpu, nv2a *gpu)
+{
+	return m_impl->init(cpu, gpu);
+}
+
+void pcrtc::reset()
+{
+	m_impl->reset();
+}
+
+void pcrtc::updateIo()
+{
+	m_impl->updateIo();
+}
+
+uint32_t pcrtc::read32(uint32_t addr)
+{
+	return m_impl->read32<false, on>(addr);
+}
+
+void pcrtc::write32(uint32_t addr, const uint32_t value)
+{
+	m_impl->write32<false, on>(addr, value);
+}
+
+pcrtc::pcrtc() : m_impl{std::make_unique<pcrtc::Impl>()} {}
+pcrtc::~pcrtc() {}

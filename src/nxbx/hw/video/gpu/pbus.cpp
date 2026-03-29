@@ -1,12 +1,53 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2024 ergo720
 
-#include "machine.hpp"
-#include <assert.h>
+#include "lib86cpu.h"
+#include "pci.hpp"
+#include "pmc.hpp"
+#include "pbus.hpp"
+// Must be included last because of the template functions nv2a_read/write, which require a complete definition for the engine objects
+#include "nv2a.hpp"
+#include <cinttypes>
+#include <cassert>
 
 #define MODULE_NAME pbus
 
+
+/** Private device implementation **/
+class pbus::Impl
+{
+public:
+	bool init(cpu *cpu, nv2a *gpu, pci *pci);
+	void reset();
+	void updateIo() { updateIo(true); }
+	template<bool log>
+	uint32_t read32(uint32_t addr);
+	template<bool log>
+	void write32(uint32_t addr, const uint32_t value);
+	template<bool log>
+	uint32_t pciRead32(uint32_t addr);
+	template<bool log>
+	void pciWrite32(uint32_t addr, const uint32_t value);
+
+private:
+	void pciLogRead(uint32_t addr, uint32_t value);
+	void pciLogWrite(uint32_t addr, uint32_t value);
+	bool updateIo(bool is_update);
+	template<bool is_write, bool is_pci>
+	auto getIoFunc(bool log, bool is_be);
+	void pciInit();
+
+	void *m_pci_conf;
+	// connected devices
+	pmc *m_pmc;
+	pci *m_pci;
+	cpu_t *m_lc86cpu;
+	// registers
+	uint32_t m_fbio_ram;
+	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+		{ NV_PBUS_FBIO_RAM, "NV_PBUS_FBIO_RAM" }
+	};
+};
 
 // Values dumped from a Retail 1.0 xbox
 static constexpr uint32_t s_default_pci_configuration[] = {
@@ -76,14 +117,13 @@ static constexpr uint32_t s_default_pci_configuration[] = {
 	0x00000000,
 };
 
-static int
-nv2a_pci_write(uint8_t *ptr, uint8_t addr, uint8_t value, void *opaque)
+static int nv2aPciWrite(uint8_t *ptr, uint8_t addr, uint8_t value, void *opaque)
 {
 	return 0; // pass-through the write
 }
 
 template<bool log>
-void pbus::write32(uint32_t addr, const uint32_t value)
+void pbus::Impl::write32(uint32_t addr, const uint32_t value)
 {
 	if constexpr (log) {
 		nv2a_log_write();
@@ -92,7 +132,7 @@ void pbus::write32(uint32_t addr, const uint32_t value)
 	switch (addr)
 	{
 	case NV_PBUS_FBIO_RAM:
-		fbio_ram = value;
+		m_fbio_ram = value;
 		break;
 
 	default:
@@ -101,14 +141,14 @@ void pbus::write32(uint32_t addr, const uint32_t value)
 }
 
 template<bool log>
-uint32_t pbus::read32(uint32_t addr)
+uint32_t pbus::Impl::read32(uint32_t addr)
 {
 	uint32_t value = 0;
 
 	switch (addr)
 	{
 	case NV_PBUS_FBIO_RAM:
-		value = fbio_ram;
+		value = m_fbio_ram;
 		break;
 
 	default:
@@ -123,10 +163,10 @@ uint32_t pbus::read32(uint32_t addr)
 }
 
 template<bool log>
-void pbus::pci_write32(uint32_t addr, const uint32_t value)
+void pbus::Impl::pciWrite32(uint32_t addr, const uint32_t value)
 {
 	if constexpr (log) {
-		pci_log_write(addr, value);
+		pciLogWrite(addr, value);
 	}
 
 	uint32_t *pci_conf = (uint32_t *)m_pci_conf;
@@ -134,99 +174,95 @@ void pbus::pci_write32(uint32_t addr, const uint32_t value)
 }
 
 template<bool log>
-uint32_t pbus::pci_read32(uint32_t addr)
+uint32_t pbus::Impl::pciRead32(uint32_t addr)
 {
 	uint32_t *pci_conf = (uint32_t *)m_pci_conf;
 	uint32_t value = pci_conf[(addr - NV_PBUS_PCI_BASE) / 4];
 
 	if constexpr (log) {
-		pci_log_read(addr, value);
+		pciLogRead(addr, value);
 	}
 
 	return value;
 }
 
-void
-pbus::pci_log_read(uint32_t addr, uint32_t value)
+void pbus::Impl::pciLogRead(uint32_t addr, uint32_t value)
 {
 	logger<log_lv::debug, log_module::pbus, false>("Read at NV_PBUS_PCI_NV_0 + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PBUS_PCI_BASE, addr, value);
 }
 
-void
-pbus::pci_log_write(uint32_t addr, uint32_t value)
+void pbus::Impl::pciLogWrite(uint32_t addr, uint32_t value)
 {
 	logger<log_lv::debug, log_module::pbus, false>("Write at NV_PBUS_PCI_NV_0 + 0x%08X (0x%08X) of value 0x%08X", addr - NV_PBUS_PCI_BASE, addr, value);
 }
 
-void
-pbus::pci_init()
+void pbus::Impl::pciInit()
 {
-	void *pci_conf = m_machine->invoke(&pci::create_device, 1, 0, 0, nv2a_pci_write, nullptr);
+	void *pci_conf = m_pci->createDevice(1, 0, 0, nv2aPciWrite, nullptr);
 	assert(pci_conf);
-	m_machine->invoke(&pci::copy_default_configuration, pci_conf, (void *)s_default_pci_configuration, sizeof(s_default_pci_configuration));
+	m_pci->copyDefaultConfiguration(pci_conf, (void *)s_default_pci_configuration, sizeof(s_default_pci_configuration));
 	m_pci_conf = pci_conf;
 }
 
 template<bool is_write, bool is_pci>
-auto pbus::get_io_func(bool log, bool is_be)
+auto pbus::Impl::getIoFunc(bool log, bool is_be)
 {
 	if constexpr (is_pci) {
 		if constexpr (is_write) {
 			if (log) {
-				return is_be ? nv2a_write<pbus, uint32_t, &pbus::pci_write32<true>, big> : nv2a_write<pbus, uint32_t, &pbus::pci_write32<true>, le>;
+				return is_be ? nv2a_write<pbus::Impl, uint32_t, &pbus::Impl::pciWrite32<true>, big> : nv2a_write<pbus::Impl, uint32_t, &pbus::Impl::pciWrite32<true>, le>;
 			}
 			else {
-				return is_be ? nv2a_write<pbus, uint32_t, &pbus::pci_write32<false>, big> : nv2a_write<pbus, uint32_t, &pbus::pci_write32<false>, le>;
+				return is_be ? nv2a_write<pbus::Impl, uint32_t, &pbus::Impl::pciWrite32<false>, big> : nv2a_write<pbus::Impl, uint32_t, &pbus::Impl::pciWrite32<false>, le>;
 			}
 		}
 		else {
 			if (log) {
-				return is_be ? nv2a_read<pbus, uint32_t, &pbus::pci_read32<true>, big> : nv2a_read<pbus, uint32_t, &pbus::pci_read32<true>, le>;
+				return is_be ? nv2a_read<pbus::Impl, uint32_t, &pbus::Impl::pciRead32<true>, big> : nv2a_read<pbus::Impl, uint32_t, &pbus::Impl::pciRead32<true>, le>;
 			}
 			else {
-				return is_be ? nv2a_read<pbus, uint32_t, &pbus::pci_read32<false>, big> : nv2a_read<pbus, uint32_t, &pbus::pci_read32<false>, le>;
+				return is_be ? nv2a_read<pbus::Impl, uint32_t, &pbus::Impl::pciRead32<false>, big> : nv2a_read<pbus::Impl, uint32_t, &pbus::Impl::pciRead32<false>, le>;
 			}
 		}
 	}
 	else {
 		if constexpr (is_write) {
 			if (log) {
-				return is_be ? nv2a_write<pbus, uint32_t, &pbus::write32<true>, big> : nv2a_write<pbus, uint32_t, &pbus::write32<true>, le>;
+				return is_be ? nv2a_write<pbus::Impl, uint32_t, &pbus::Impl::write32<true>, big> : nv2a_write<pbus::Impl, uint32_t, &pbus::Impl::write32<true>, le>;
 			}
 			else {
-				return is_be ? nv2a_write<pbus, uint32_t, &pbus::write32<false>, big> : nv2a_write<pbus, uint32_t, &pbus::write32<false>, le>;
+				return is_be ? nv2a_write<pbus::Impl, uint32_t, &pbus::Impl::write32<false>, big> : nv2a_write<pbus::Impl, uint32_t, &pbus::Impl::write32<false>, le>;
 			}
 		}
 		else {
 			if (log) {
-				return is_be ? nv2a_read<pbus, uint32_t, &pbus::read32<true>, big> : nv2a_read<pbus, uint32_t, &pbus::read32<true>, le>;
+				return is_be ? nv2a_read<pbus::Impl, uint32_t, &pbus::Impl::read32<true>, big> : nv2a_read<pbus::Impl, uint32_t, &pbus::Impl::read32<true>, le>;
 			}
 			else {
-				return is_be ? nv2a_read<pbus, uint32_t, &pbus::read32<false>, big> : nv2a_read<pbus, uint32_t, &pbus::read32<false>, le>;
+				return is_be ? nv2a_read<pbus::Impl, uint32_t, &pbus::Impl::read32<false>, big> : nv2a_read<pbus::Impl, uint32_t, &pbus::Impl::read32<false>, le>;
 			}
 		}
 	}
 }
 
-bool
-pbus::update_io(bool is_update)
+bool pbus::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
-	bool is_be = m_machine->invoke(&pmc::read32<false>, NV_PMC_BOOT_1) & NV_PMC_BOOT_1_ENDIAN24_BIG;
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), NV_PBUS_BASE, NV_PBUS_SIZE, false,
+	bool is_be = m_pmc->read32(NV_PMC_BOOT_1) & NV_PMC_BOOT_1_ENDIAN24_BIG;
+	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, NV_PBUS_BASE, NV_PBUS_SIZE, false,
 		{
-			.fnr32 = get_io_func<false, false>(log, is_be),
-			.fnw32 = get_io_func<true, false>(log, is_be)
+			.fnr32 = getIoFunc<false, false>(log, is_be),
+			.fnw32 = getIoFunc<true, false>(log, is_be)
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update mmio region");
 		return false;
 	}
 
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), NV_PBUS_PCI_BASE, sizeof(s_default_pci_configuration), false,
+	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, NV_PBUS_PCI_BASE, sizeof(s_default_pci_configuration), false,
 		{
-			.fnr32 = get_io_func<false, true>(log, is_be),
-			.fnw32 = get_io_func<true, true>(log, is_be)
+			.fnr32 = getIoFunc<false, true>(log, is_be),
+			.fnw32 = getIoFunc<true, true>(log, is_be)
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update pci mmio region");
@@ -236,22 +272,62 @@ pbus::update_io(bool is_update)
 	return true;
 }
 
-void
-pbus::reset()
+void pbus::Impl::reset()
 {
 	// Values dumped from a Retail 1.0 xbox
-	fbio_ram = 0x00010000 | NV_PBUS_FBIO_RAM_TYPE_DDR; // ddr even though is should be sdram?
+	m_fbio_ram = 0x00010000 | NV_PBUS_FBIO_RAM_TYPE_DDR; // ddr even though is should be sdram?
 }
 
-bool
-pbus::init()
+bool pbus::Impl::init(cpu *cpu, nv2a *gpu, pci *pci)
 {
-	pci_init();
+	m_pmc = gpu->getPmc();
+	m_lc86cpu = cpu->get86cpu();
+	m_pci = pci;
+	pciInit();
 	reset();
 
-	if (!update_io(false)) {
+	if (!updateIo(false)) {
 		return false;
 	}
 
 	return true;
 }
+
+/** Public interface implementation **/
+bool pbus::init(cpu *cpu, nv2a *gpu, pci *pci)
+{
+	return m_impl->init(cpu, gpu, pci);
+}
+
+void pbus::reset()
+{
+	m_impl->reset();
+}
+
+void pbus::updateIo()
+{
+	m_impl->updateIo();
+}
+
+uint32_t pbus::read32(uint32_t addr)
+{
+	return m_impl->read32<false>(addr);
+}
+
+void pbus::write32(uint32_t addr, const uint32_t value)
+{
+	m_impl->write32<false>(addr, value);
+}
+
+uint32_t pbus::pciRead32(uint32_t addr)
+{
+	return m_impl->pciRead32<false>(addr);
+}
+
+void pbus::pciWrite32(uint32_t addr, const uint32_t value)
+{
+	m_impl->pciWrite32<false>(addr, value);
+}
+
+pbus::pbus() : m_impl{std::make_unique<pbus::Impl>()} {}
+pbus::~pbus() {}

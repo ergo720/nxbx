@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2023 ergo720
 // SPDX-FileCopyrightText: 2019 Halfix devs
 // This code is derived from https://github.com/nepx/halfix/blob/master/src/hardware/cmos.c
 
+#include "lib86cpu.h"
 #include "machine.hpp"
+#include "cmos.hpp"
+#include "cpu.hpp"
 #include "clock.hpp"
 #include "isettings.hpp"
+#include "host.hpp"
+#include <chrono>
 
 #define MODULE_NAME cmos
 
@@ -23,9 +27,59 @@
 #define C_AF 0x20 // alarm interrupt flag
 #define C_UF 0x10 // update-ended interrupt flag
 
+#define CMOS_PORT_CMD 0x70
+#define CMOS_PORT_DATA 0x71
 
-uint8_t
-cmos::to_bcd(uint8_t value) // binary -> bcd
+
+/** Private device implementation **/
+class cmos::Impl
+{
+public:
+	bool init(machine *machine);
+	void deinit();
+	void reset();
+	void updateIoLogging() { updateIo(true); }
+	template<bool log = false>
+	uint8_t read8(uint32_t addr);
+	template<bool log = false>
+	void write8(uint32_t addr, const uint8_t value);
+	uint64_t getNextUpdateTime(uint64_t now);
+
+private:
+	bool updateIo(bool is_update);
+	void update_clock(uint64_t elapsed_us);
+	uint64_t update_periodic_ticks(uint64_t elapsed_us);
+	void update_timer();
+	void raiseIrq(uint8_t why);
+	uint8_t to_bcd(uint8_t value);
+	uint8_t from_bcd(uint8_t value);
+	uint8_t read(uint8_t idx);
+
+	uint8_t m_ram[128 * 2]; // byte at index 0x7F is the century register on the xbox
+	uint8_t m_reg_idx;
+	uint8_t m_int_running;
+	uint8_t m_clock_running;
+	uint64_t m_period_int; // expressed in us
+	uint64_t m_periodic_ticks;
+	uint64_t m_periodic_ticks_max;
+	uint64_t m_last_int; // The last time the timer handler was called
+	uint64_t m_last_clock; // The last time the seconds counter rolled over
+	uint64_t m_lost_ticks; // expressed in us
+	uint64_t m_lost_us;
+	std::time_t m_sys_time; // actual real time wall clock of the host
+	int64_t m_sys_time_bias; // difference between guest and host clocks
+	// connected devices
+	cpu *m_cpu;
+	machine *m_machine;
+	cpu_t *m_lc86cpu;
+	// registers
+	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+		{ CMOS_PORT_CMD, "COMMAND" },
+		{ CMOS_PORT_DATA, "DATA" },
+	};
+};
+
+uint8_t cmos::Impl::to_bcd(uint8_t value) // binary -> bcd
 {
 	if (!(m_ram[0x0B] & 4)) {
 		// Binary format enabled, convert
@@ -37,8 +91,7 @@ cmos::to_bcd(uint8_t value) // binary -> bcd
 	return value;
 }
 
-uint8_t
-cmos::from_bcd(uint8_t value) // bcd -> binary
+uint8_t cmos::Impl::from_bcd(uint8_t value) // bcd -> binary
 {
 	if (m_ram[0x0B] & 4) {
 		// Binary format enabled, don't convert
@@ -50,7 +103,7 @@ cmos::from_bcd(uint8_t value) // bcd -> binary
 	return (tens * 10) + units;
 }
 
-uint8_t cmos::read(uint8_t idx)
+uint8_t cmos::Impl::read(uint8_t idx)
 {
 	uint8_t value = 0;
 
@@ -159,7 +212,7 @@ uint8_t cmos::read(uint8_t idx)
 }
 
 template<bool log>
-uint8_t cmos::read8(uint32_t addr)
+uint8_t cmos::Impl::read8(uint32_t addr)
 {
 	uint8_t value = 0;
 
@@ -175,7 +228,7 @@ uint8_t cmos::read8(uint32_t addr)
 }
 
 template<bool log>
-void cmos::write8(uint32_t addr, const uint8_t value)
+void cmos::Impl::write8(uint32_t addr, const uint8_t value)
 {
 	if constexpr (log) {
 		log_io_write();
@@ -288,15 +341,13 @@ void cmos::write8(uint32_t addr, const uint8_t value)
 	}
 }
 
-void
-cmos::raise_irq(uint8_t why)
+void cmos::Impl::raiseIrq(uint8_t why)
 {
 	m_ram[0xC] = C_IRQF | why;
 	m_machine->raise_irq(CMOS_IRQ_NUM);
 }
 
-void
-cmos::update_timer()
+void cmos::Impl::update_timer()
 {
 	uint64_t now = timer::get_now();
 	uint8_t old_int_state = m_int_running;
@@ -344,12 +395,11 @@ cmos::update_timer()
 	}
 
 	if ((old_int_state ^ m_int_running) | (old_clock_state ^ m_clock_running)) {
-		cpu_set_timeout(m_machine->get_cpu(), m_machine->invoke(static_cast<uint64_t(cpu::*)(uint64_t)>(&cpu::check_periodic_events), now));
+		cpu_set_timeout(m_lc86cpu, m_cpu->checkPeriodicEvents(now));
 	}
 }
 
-void
-cmos::update_clock(uint64_t elapsed_us)
+void cmos::Impl::update_clock(uint64_t elapsed_us)
 {
 	m_lost_us += elapsed_us;
 	uint64_t actual_elapsed_sec = m_lost_us / timer::g_ticks_per_second;
@@ -357,8 +407,7 @@ cmos::update_clock(uint64_t elapsed_us)
 	m_lost_us -= (actual_elapsed_sec * timer::g_ticks_per_second);
 }
 
-uint64_t
-cmos::update_periodic_ticks(uint64_t elapsed_us)
+uint64_t cmos::Impl::update_periodic_ticks(uint64_t elapsed_us)
 {
 	m_lost_ticks += elapsed_us;
 	uint64_t actual_elapsed_ticks = m_lost_ticks / m_period_int;
@@ -366,8 +415,7 @@ cmos::update_periodic_ticks(uint64_t elapsed_us)
 	return actual_elapsed_ticks;
 }
 
-uint64_t
-cmos::get_next_update_time(uint64_t now)
+uint64_t cmos::Impl::getNextUpdateTime(uint64_t now)
 {
 	// Some things to deal with:
 	//  - Periodic interrupt
@@ -396,7 +444,7 @@ cmos::get_next_update_time(uint64_t now)
 					m_periodic_ticks = update_periodic_ticks(now - m_last_int);
 					if (m_periodic_ticks != m_periodic_ticks_max) {
 						m_last_int = now; // No, we haven't reached the Nth tick yet
-						raise_irq(why);
+						raiseIrq(why);
 						return m_period_int;
 					}
 
@@ -427,7 +475,7 @@ cmos::get_next_update_time(uint64_t now)
 				m_last_clock = now; // we just updated the seconds
 
 				if (why) {
-					raise_irq(why);
+					raiseIrq(why);
 				}
 
 				return m_int_running ? m_period_int : timer::g_ticks_per_second;
@@ -451,14 +499,13 @@ cmos::get_next_update_time(uint64_t now)
 	return std::numeric_limits<uint64_t>::max();
 }
 
-bool
-cmos::update_io(bool is_update)
+bool cmos::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), 0x70, 2, true,
+	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, 0x70, 2, true,
 		{
-			.fnr8 = log ? cpu_read<cmos, uint8_t, &cmos::read8<true>> : cpu_read<cmos, uint8_t, &cmos::read8<false>>,
-			.fnw8 = log ? cpu_write<cmos, uint8_t, &cmos::write8<true>> : cpu_write<cmos, uint8_t, &cmos::write8<false>>
+			.fnr8 = log ? cpu_read<cmos::Impl, uint8_t, &cmos::Impl::read8<true>> : cpu_read<cmos::Impl, uint8_t, &cmos::Impl::read8<false>>,
+			.fnw8 = log ? cpu_write<cmos::Impl, uint8_t, &cmos::Impl::write8<true>> : cpu_write<cmos::Impl, uint8_t, &cmos::Impl::write8<false>>
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update io ports");
@@ -468,17 +515,18 @@ cmos::update_io(bool is_update)
 	return true;
 }
 
-void
-cmos::reset()
+void cmos::Impl::reset()
 {
 	m_ram[0x0B] &= ~0x78; // clears interrupt enable and square wave output flags
 	m_ram[0x0C] = 0x00; // clears all interrupt flags
 }
 
-bool
-cmos::init()
+bool cmos::Impl::init(machine *machine)
 {
-	if (!update_io(false)) {
+	m_lc86cpu = machine->get86cpu();
+	m_cpu = machine->getCpu();
+	m_machine = machine;
+	if (!updateIo(false)) {
 		return false;
 	}
 
@@ -496,8 +544,36 @@ cmos::init()
 	return true;
 }
 
-void
-cmos::deinit()
+void cmos::Impl::deinit()
 {
 	get_settings()->set_int64_value("core", "sys_time_bias", m_sys_time_bias);
 }
+
+/** Public interface implementation **/
+bool cmos::init(machine *machine)
+{
+	return m_impl->init(machine);
+}
+
+void cmos::deinit()
+{
+	m_impl->deinit();
+}
+
+void cmos::reset()
+{
+	m_impl->reset();
+}
+
+void cmos::updateIoLogging()
+{
+	m_impl->updateIoLogging();
+}
+
+uint64_t cmos::getNextUpdateTime(uint64_t now)
+{
+	return m_impl->getNextUpdateTime(now);
+}
+
+cmos::cmos() : m_impl{std::make_unique<cmos::Impl>()} {}
+cmos::~cmos() {}

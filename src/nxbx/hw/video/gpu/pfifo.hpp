@@ -1,13 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2024 ergo720
 
 #pragma once
 
 #include <cstdint>
-#include <thread>
-#include <mutex>
-#include <coroutine>
+#include <memory>
 #include "nv2a_defs.hpp"
 
 #define NV_PFIFO 0x00002000
@@ -86,99 +83,22 @@
 #define NV_PFIFO_CACHE1_DATA(i) (NV2A_REGISTER_BASE + 0x00003804 + (i) * 8) // cache1 register array of 128 entries (caches parameters)
 
 
-class machine;
-enum engine_enabled : int;
+class cpu;
+class nv2a;
 
 class pfifo
 {
 public:
-	pfifo(machine *machine) : m_machine(machine) {}
-	bool init();
+	pfifo();
+	~pfifo();
+	bool init(cpu *cpu, nv2a *gpu);
 	void deinit();
 	void reset();
-	void update_io() { update_io(true); }
-	template<bool log, engine_enabled enabled>
+	void updateIo();
 	uint32_t read32(uint32_t addr);
-	template<bool log, engine_enabled enabled>
-	uint8_t read8(uint32_t addr);
-	template<bool log, engine_enabled enabled>
 	void write32(uint32_t addr, const uint32_t value);
 
 private:
-	struct CoroFrame
-	{
-		struct promise_type
-		{
-			CoroFrame get_return_object()
-			{
-				return CoroFrame{ std::coroutine_handle<promise_type>::from_promise(*this) };
-			}
-			constexpr std::suspend_never initial_suspend() const noexcept { return {}; }
-			constexpr std::suspend_never final_suspend() const noexcept { return {}; }
-			constexpr void return_void() const noexcept {}
-			void unhandled_exception() { throw; } // rethrow the exception to terminate the fifo thread
-		};
-		explicit CoroFrame(std::coroutine_handle<promise_type> h) : m_handle(h) {}
-
-		std::coroutine_handle<promise_type> m_handle;
-	};
-	struct RamhtElement
-	{
-		uint32_t m_handle; // handle of the object
-		uint32_t m_instance; // addr of object inside ramin
-		uint32_t m_engine; // engine to which the object is bound
-		uint32_t m_chid; // channel to which the object is bound
-		uint32_t m_valid; // whether or not the object is valid
-	};
-
-	void log_read(uint32_t addr, uint32_t value);
-	void log_write(uint32_t addr, uint32_t value);
-	bool update_io(bool is_update);
-	template<bool is_write, typename T>
-	auto get_io_func(bool log, bool enabled, bool is_be);
-	void fifoHandler(std::stop_token stok);
-	CoroFrame pusher(const std::stop_token &stok);
-	void puller(const std::stop_token &stok, std::coroutine_handle<CoroFrame::promise_type> coro_pusher);
-	RamhtElement ramhtSearch(uint32_t handle);
-
-	machine *const m_machine;
-	uint8_t *m_ram;
-	std::jthread m_jthr; // async fifo worker thread
-	std::atomic_flag m_fifo_has_work;
-	std::atomic_bool m_is_enabled;
-	std::mutex m_fifo_mtx;
-	// registers
-	uint32_t m_regs[NV_PFIFO_SIZE / 4];
-	const std::unordered_map<uint32_t, const std::string> m_regs_info =
-	{
-		{ NV_PFIFO_INTR_0, "NV_PFIFO_INTR_0" },
-		{ NV_PFIFO_INTR_EN_0, "NV_PFIFO_INTR_EN_0" },
-		{ NV_PFIFO_RAMHT, "NV_PFIFO_RAMHT" },
-		{ NV_PFIFO_RAMFC, "NV_PFIFO_RAMFC" },
-		{ NV_PFIFO_RAMRO, "NV_PFIFO_RAMRO" },
-		{ NV_PFIFO_RUNOUT_STATUS, "NV_PFIFO_RUNOUT_STATUS" },
-		{ NV_PFIFO_MODE, "NV_PFIFO_MODE" },
-		{ NV_PFIFO_CACHE1_PUSH0, "NV_PFIFO_CACHE1_PUSH0" },
-		{ NV_PFIFO_CACHE1_PUSH1, "NV_PFIFO_CACHE1_PUSH1" },
-		{ NV_PFIFO_CACHE1_PUT, "NV_PFIFO_CACHE1_PUT" },
-		{ NV_PFIFO_CACHE1_STATUS, "NV_PFIFO_CACHE1_STATUS" },
-		{ NV_PFIFO_CACHE1_DMA_PUSH, "NV_PFIFO_CACHE1_DMA_PUSH" },
-		{ NV_PFIFO_CACHE1_DMA_FETCH, "NV_PFIFO_CACHE1_DMA_FETCH" },
-		{ NV_PFIFO_CACHE1_DMA_STATE, "NV_PFIFO_CACHE1_DMA_STATE" },
-		{ NV_PFIFO_CACHE1_DMA_INSTANCE, "NV_PFIFO_CACHE1_DMA_INSTANCE" },
-		{ NV_PFIFO_CACHE1_DMA_PUT, "NV_PFIFO_CACHE1_DMA_PUT" },
-		{ NV_PFIFO_CACHE1_DMA_GET, "NV_PFIFO_CACHE1_DMA_GET" },
-		{ NV_PFIFO_CACHE1_REF, "NV_PFIFO_CACHE1_REF" },
-		{ NV_PFIFO_CACHE1_DMA_SUBROUTINE, "NV_PFIFO_CACHE1_DMA_SUBROUTINE" },
-		{ NV_PFIFO_CACHE1_PULL0, "NV_PFIFO_CACHE1_PULL0" },
-		{ NV_PFIFO_CACHE1_PULL1, "NV_PFIFO_CACHE1_PULL1" },
-		{ NV_PFIFO_CACHE1_GET, "NV_PFIFO_CACHE1_GET" },
-		{ NV_PFIFO_CACHE1_ENGINE, "NV_PFIFO_CACHE1_ENGINE" },
-		{ NV_PFIFO_CACHE1_DMA_DCOUNT, "NV_PFIFO_CACHE1_DMA_DCOUNT" },
-		{ NV_PFIFO_CACHE1_DMA_GET_JMP_SHADOW, "NV_PFIFO_CACHE1_DMA_GET_JMP_SHADOW" },
-		{ NV_PFIFO_CACHE1_DMA_RSVD_SHADOW, "NV_PFIFO_CACHE1_DMA_RSVD_SHADOW" },
-		{ NV_PFIFO_CACHE1_DMA_DATA_SHADOW, "NV_PFIFO_CACHE1_DMA_DATA_SHADOW" },
-		{ NV_PFIFO_CACHE1_METHOD(0), "NV_PFIFO_CACHE1_METHOD + 0"},
-		{ NV_PFIFO_CACHE1_DATA(0), "NV_PFIFO_CACHE1_DATA + 0"}
-	};
+	class Impl;
+	std::unique_ptr<Impl> m_impl;
 };

@@ -1,17 +1,66 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2024 ergo720
 // SPDX-FileCopyrightText: 2020 Halfix devs
 // This code is derived from https://github.com/nepx/halfix/blob/master/src/hardware/pci.c
 
+#include "lib86cpu.h"
 #include "machine.hpp"
+#include "pci.hpp"
+#include "cpu.hpp"
+#include "host.hpp"
 #include <cstring>
+#include <cinttypes>
 
 #define MODULE_NAME pci
 
+#define PCI_CONFIG_ADDRESS 0xCF8
+#define PCI_CONFIG_DATA 0xCFC
+
+
+/** Private device implementation **/
+class pci::Impl
+{
+public:
+	bool init(machine *machine);
+	void reset();
+	void updateIoLogging() { updateIo(true); }
+	template<bool log = false>
+	uint8_t read8(uint32_t addr);
+	template<bool log = false>
+	uint16_t read16(uint32_t addr);
+	template<bool log = false>
+	uint32_t read32(uint32_t addr);
+	template<bool log = false>
+	void write8(uint32_t addr, const uint8_t value);
+	template<bool log = false>
+	void write16(uint32_t addr, const uint16_t value);
+	template<bool log = false>
+	void write32(uint32_t addr, const uint32_t value);
+	void *createDevice(uint32_t bus, uint32_t device, uint32_t function, pci_conf_write_cb cb, void *opaque);
+	void copyDefaultConfiguration(void *confptr, void *area, size_t size);
+
+private:
+	bool updateIo(bool is_update);
+	void *get_configuration_ptr(uint32_t bus, uint32_t device, uint32_t function);
+
+	/// ignore: configuration_address_spaces
+	uint32_t configuration_address_register;
+	// Whether to generate a configuration cycle or not
+	int configuration_cycle;
+	// Device configuration address space and write callbacks
+	std::unordered_map<uint32_t, std::unique_ptr<uint8_t[]>> configuration_address_spaces;
+	std::unordered_map<uint32_t, std::pair<pci_conf_write_cb, void *>> configuration_modification;
+	// connected devices
+	cpu_t *m_lc86cpu;
+	// registers
+	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+		{ PCI_CONFIG_ADDRESS, "CONFIGURATION_ADDRESS" },
+		{ PCI_CONFIG_DATA, "CONFIGURATION_DATA" },
+	};
+};
 
 template<bool log>
-void pci::write8(uint32_t addr, const uint8_t value)
+void pci::Impl::write8(uint32_t addr, const uint8_t value)
 {
 	if constexpr (log) {
 		log_io_write();
@@ -58,7 +107,7 @@ void pci::write8(uint32_t addr, const uint8_t value)
 }
 
 template<bool log>
-uint8_t pci::read8(uint32_t addr)
+uint8_t pci::Impl::read8(uint32_t addr)
 {
 	int offset = addr & 3;
 	uint32_t value = -1;
@@ -103,7 +152,7 @@ uint8_t pci::read8(uint32_t addr)
 // Although the PCI spec says that all ports are "Dword-sized," the BochS BIOS reads fractions of registers.
 
 template<bool log>
-uint16_t pci::read16(uint32_t addr)
+uint16_t pci::Impl::read16(uint32_t addr)
 {
 	uint16_t value = read8(addr);
 	value |= ((uint16_t)read8(addr + 1) << 8);
@@ -116,7 +165,7 @@ uint16_t pci::read16(uint32_t addr)
 }
 
 template<bool log>
-uint32_t pci::read32(uint32_t addr)
+uint32_t pci::Impl::read32(uint32_t addr)
 {
 	uint32_t value = read8(addr);
 	value |= ((uint32_t)read8(addr + 1) << 8);
@@ -131,7 +180,7 @@ uint32_t pci::read32(uint32_t addr)
 }
 
 template<bool log>
-void pci::write16(uint32_t addr, const uint16_t value)
+void pci::Impl::write16(uint32_t addr, const uint16_t value)
 {
 	if constexpr (log) {
 		log_io_write();
@@ -142,7 +191,7 @@ void pci::write16(uint32_t addr, const uint16_t value)
 }
 
 template<bool log>
-void pci::write32(uint32_t addr, const uint32_t value)
+void pci::Impl::write32(uint32_t addr, const uint32_t value)
 {
 	if constexpr (log) {
 		log_io_write();
@@ -154,8 +203,7 @@ void pci::write32(uint32_t addr, const uint32_t value)
 	write8(addr + 3, value >> 24 & 0xFF);
 }
 
-void *
-pci::create_device(uint32_t bus, uint32_t device, uint32_t function, pci_conf_write_cb cb, void *opaque)
+void *pci::Impl::createDevice(uint32_t bus, uint32_t device, uint32_t function, pci_conf_write_cb cb, void *opaque)
 {
 	if (bus > 1) {
 		nxbx_fatal("Unsupported bus id=%" PRIu32, bus);
@@ -177,14 +225,12 @@ pci::create_device(uint32_t bus, uint32_t device, uint32_t function, pci_conf_wr
 	return (configuration_address_spaces[bdf] = std::make_unique<uint8_t[]>(256)).get();
 }
 
-void
-pci::copy_default_configuration(void *confptr, void *area, size_t size)
+void pci::Impl::copyDefaultConfiguration(void *confptr, void *area, size_t size)
 {
 	memcpy(confptr, area, size > 256 ? 256 : size);
 }
 
-void *
-pci::get_configuration_ptr(uint32_t bus, uint32_t device, uint32_t function)
+void *pci::Impl::get_configuration_ptr(uint32_t bus, uint32_t device, uint32_t function)
 {
 	if (bus > 1) {
 		nxbx_fatal("Unsupported bus id=%" PRIu32, bus);
@@ -202,18 +248,17 @@ pci::get_configuration_ptr(uint32_t bus, uint32_t device, uint32_t function)
 	return (configuration_address_spaces[(bus << 8) | (device << 3) | function]).get();
 }
 
-bool
-pci::update_io(bool is_update)
+bool pci::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), 0xCF8, 8, true,
+	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, 0xCF8, 8, true,
 		{
-			.fnr8 = log ? cpu_read<pci, uint8_t, &pci::read8<true>> : cpu_read<pci, uint8_t, &pci::read8<false>>,
-			.fnr16 = log ? cpu_read<pci, uint16_t, &pci::read16<true>> : cpu_read<pci, uint16_t, &pci::read16<false>>,
-			.fnr32 = log ? cpu_read<pci, uint32_t, &pci::read32<true>> : cpu_read<pci, uint32_t, &pci::read32<false>>,
-			.fnw8 = log ? cpu_write<pci, uint8_t, &pci::write8<true>> : cpu_write<pci, uint8_t, &pci::write8<false>>,
-			.fnw16 = log ? cpu_write<pci, uint16_t, &pci::write16<true>> : cpu_write<pci, uint16_t, &pci::write16<false>>,
-			.fnw32 = log ? cpu_write<pci, uint32_t, &pci::write32<true>> : cpu_write<pci, uint32_t, &pci::write32<false>>
+			.fnr8 = log ? cpu_read<pci::Impl, uint8_t, &pci::Impl::read8<true>> : cpu_read<pci::Impl, uint8_t, &pci::Impl::read8<false>>,
+			.fnr16 = log ? cpu_read<pci::Impl, uint16_t, &pci::Impl::read16<true>> : cpu_read<pci::Impl, uint16_t, &pci::Impl::read16<false>>,
+			.fnr32 = log ? cpu_read<pci::Impl, uint32_t, &pci::Impl::read32<true>> : cpu_read<pci::Impl, uint32_t, &pci::Impl::read32<false>>,
+			.fnw8 = log ? cpu_write<pci::Impl, uint8_t, &pci::Impl::write8<true>> : cpu_write<pci::Impl, uint8_t, &pci::Impl::write8<false>>,
+			.fnw16 = log ? cpu_write<pci::Impl, uint16_t, &pci::Impl::write16<true>> : cpu_write<pci::Impl, uint16_t, &pci::Impl::write16<false>>,
+			.fnw32 = log ? cpu_write<pci::Impl, uint32_t, &pci::Impl::write32<true>> : cpu_write<pci::Impl, uint32_t, &pci::Impl::write32<false>>
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update io ports");
@@ -223,8 +268,7 @@ pci::update_io(bool is_update)
 	return true;
 }
 
-void
-pci::reset()
+void pci::Impl::reset()
 {
 	configuration_address_register = 0;
 	configuration_cycle = 0;
@@ -233,13 +277,42 @@ pci::reset()
 	configuration_modification.clear();
 }
 
-bool
-pci::init()
+bool pci::Impl::init(machine *machine)
 {
-	if (!update_io(false)) {
+	m_lc86cpu = machine->get86cpu();
+	if (!updateIo(false)) {
 		return false;
 	}
 
 	reset();
 	return true;
 }
+
+/** Public interface implementation **/
+bool pci::init(machine *machine)
+{
+	return m_impl->init(machine);
+}
+
+void pci::reset()
+{
+	m_impl->reset();
+}
+
+void pci::updateIoLogging()
+{
+	m_impl->updateIoLogging();
+}
+
+void *pci::createDevice(uint32_t bus, uint32_t device, uint32_t function, pci_conf_write_cb cb, void *opaque)
+{
+	return m_impl->createDevice(bus, device, function, cb, opaque);
+}
+
+void pci::copyDefaultConfiguration(void *confptr, void *area, size_t size)
+{
+	m_impl->copyDefaultConfiguration(confptr, area, size);
+}
+
+pci::pci() : m_impl{std::make_unique<pci::Impl>()} {}
+pci::~pci() {}

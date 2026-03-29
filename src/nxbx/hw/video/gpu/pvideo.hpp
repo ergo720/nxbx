@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2024 ergo720
 
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include "nv2a_defs.hpp"
 
 #define NV_PVIDEO 0x00008000
@@ -31,52 +31,21 @@
 #define NV_PVIDEO_DT_DY(i) (NV2A_REGISTER_BASE + 0x00008940 + (i) * 4) // TODO
 
 
-class machine;
-enum engine_enabled : int;
+class cpu;
+class nv2a;
 
-class pvideo {
+class pvideo
+{
 public:
-	pvideo(machine *machine) : m_machine(machine) {}
-	bool init();
+	pvideo();
+	~pvideo();
+	bool init(cpu *cpu, nv2a *gpu);
 	void reset();
-	void update_io() { update_io(true); }
-	template<bool log, engine_enabled enabled>
+	void updateIo();
 	uint32_t read32(uint32_t addr);
-	template<bool log, engine_enabled enabled>
 	void write32(uint32_t addr, const uint32_t value);
 
 private:
-	bool update_io(bool is_update);
-	template<bool is_write>
-	auto get_io_func(bool log, bool enabled, bool is_be);
-
-	machine *const m_machine;
-	// registers
-	uint32_t debug[11];
-	uint32_t m_regs[24];
-	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
-		{ NV_PVIDEO_DEBUG_0, "NV_PVIDEO_DEBUG_0" },
-		{ NV_PVIDEO_DEBUG_1, "NV_PVIDEO_DEBUG_1" },
-		{ NV_PVIDEO_DEBUG_2, "NV_PVIDEO_DEBUG_2" },
-		{ NV_PVIDEO_DEBUG_3, "NV_PVIDEO_DEBUG_3" },
-		{ NV_PVIDEO_DEBUG_4, "NV_PVIDEO_DEBUG_4" },
-		{ NV_PVIDEO_DEBUG_5, "NV_PVIDEO_DEBUG_5" },
-		{ NV_PVIDEO_DEBUG_6, "NV_PVIDEO_DEBUG_6" },
-		{ NV_PVIDEO_DEBUG_7, "NV_PVIDEO_DEBUG_7" },
-		{ NV_PVIDEO_DEBUG_8, "NV_PVIDEO_DEBUG_8" },
-		{ NV_PVIDEO_DEBUG_9, "NV_PVIDEO_DEBUG_9" },
-		{ NV_PVIDEO_DEBUG_10, "NV_PVIDEO_DEBUG_10" },
-		{ NV_PVIDEO_LUMINANCE(0), "NV_PVIDEO_LUMINANCE(0)" },
-		{ NV_PVIDEO_LUMINANCE(1), "NV_PVIDEO_LUMINANCE(1)" },
-		{ NV_PVIDEO_CHROMINANCE(0),"NV_PVIDEO_CHROMINANCE(0)" },
-		{ NV_PVIDEO_CHROMINANCE(1), "NV_PVIDEO_CHROMINANCE(1)" },
-		{ NV_PVIDEO_SIZE_IN(0), "NV_PVIDEO_SIZE_IN(0)" },
-		{ NV_PVIDEO_SIZE_IN(1), "NV_PVIDEO_SIZE_IN(1)" },
-		{ NV_PVIDEO_POINT_IN(0), "NV_PVIDEO_POINT_IN(0)" },
-		{ NV_PVIDEO_POINT_IN(1), "NV_PVIDEO_POINT_IN(1)" },
-		{ NV_PVIDEO_DS_DX(0), "NV_PVIDEO_DS_DX(0)" },
-		{ NV_PVIDEO_DS_DX(1), "NV_PVIDEO_DS_DX(1)" },
-		{ NV_PVIDEO_DT_DY(0), "NV_PVIDEO_DT_DY(0)" },
-		{ NV_PVIDEO_DT_DY(1), "NV_PVIDEO_DT_DY(1)" },
-	};
+	class Impl;
+	std::unique_ptr<Impl> m_impl;
 };

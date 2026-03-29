@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2024 ergo720
 
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include "nv2a_defs.hpp"
 
 #define NV_PCRTC 0x00600000
@@ -19,35 +19,21 @@
 #define NV_PCRTC_UNKNOWN0 (NV2A_REGISTER_BASE + 0x00600804) // Unknown
 
 
-class machine;
-enum engine_enabled : int;
+class cpu;
+class nv2a;
 
-class pcrtc {
+class pcrtc
+{
 public:
-	pcrtc(machine *machine) : m_machine(machine) {}
-	bool init();
+	pcrtc();
+	~pcrtc();
+	bool init(cpu *cpu, nv2a *gpu);
 	void reset();
-	void update_io() { update_io(true); }
-	template<bool log, engine_enabled enabled>
+	void updateIo();
 	uint32_t read32(uint32_t addr);
-	template<bool log, engine_enabled enabled>
 	void write32(uint32_t addr, const uint32_t value);
 
 private:
-	bool update_io(bool is_update);
-	template<bool is_write>
-	auto get_io_func(bool log, bool enabled, bool is_be);
-
-	machine *const m_machine;
-	// registers
-	std::atomic_uint32_t m_int_status; // atomic because it's accessed by the fifo thread
-	std::atomic_uint32_t m_int_enabled; // atomic because it's accessed by the fifo thread
-	uint32_t fb_addr;
-	uint32_t unknown[1];
-	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
-		{ NV_PCRTC_INTR_0, "NV_PCRTC_INTR_0" },
-		{ NV_PCRTC_INTR_EN_0, "NV_PCRTC_INTR_EN_0" },
-		{ NV_PCRTC_START, "NV_PCRTC_START" },
-		{ NV_PCRTC_UNKNOWN0, "NV_PCRTC_UNKNOWN0" },
-	};
+	class Impl;
+	std::unique_ptr<Impl> m_impl;
 };

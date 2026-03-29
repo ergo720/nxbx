@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2024 ergo720
 
 #pragma once
 
-#include "smbus.hpp"
-#include <atomic>
+#include "smbus_virt.hpp"
+#include <memory>
 
 
 // NOTE: same state values as used internally by the smc, to avoid conversions
@@ -17,21 +16,19 @@ enum class tray_state : uint8_t {
 
 class machine;
 
-class smc : public smbus_device {
+class smc : public smbus_device
+{
 public:
-	smc(machine *machine, log_module module_name) : smbus_device(module_name), m_machine(machine) {}
-	bool init();
-	void deinit() override {}
+	smc();
+	~smc();
+	bool init(machine *machine, log_module module_name) override;
+	void deinit() override;
 	void reset();
-	smc *get() { return this; }
 	uint8_t read_byte(uint8_t command) override;
 	void write_byte(uint8_t command, uint8_t value) override;
 	void update_tray_state(tray_state state, bool do_int);
 
 private:
-	machine *const m_machine;
-	static constexpr uint8_t m_version[3] = { 'P', '0', '5' };
-	uint8_t m_version_idx;
-	uint8_t m_regs[34];
-	std::atomic_uint8_t m_tray_state; // atomic because it can be updated by console::update_tray_state
+	class Impl;
+	std::unique_ptr<Impl> m_impl;
 };

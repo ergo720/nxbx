@@ -1,23 +1,134 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2024 ergo720
 
-#include "machine.hpp"
+#include "lib86cpu.h"
+#include "pfifo.hpp"
+#include "pmc.hpp"
+#include "pramin.hpp"
+#include "pgraph.hpp"
+// Must be included last because of the template functions nv2a_read/write, which require a complete definition for the engine objects
+#include "nv2a.hpp"
+#include "util.hpp"
+#include <thread>
+#include <mutex>
+#include <coroutine>
+#include <atomic>
 #include <functional>
 #include <cassert>
 #include <bit>
+#include <charconv>
+#include <cinttypes>
 
 #define MODULE_NAME pfifo
 
 
+/** Private device implementation **/
+class pfifo::Impl
+{
+public:
+	bool init(cpu *cpu, nv2a *gpu);
+	void deinit();
+	void reset();
+	void updateIo() { updateIo(true); }
+	template<bool log, engine_enabled enabled>
+	uint32_t read32(uint32_t addr);
+	template<bool log, engine_enabled enabled>
+	uint8_t read8(uint32_t addr);
+	template<bool log, engine_enabled enabled>
+	void write32(uint32_t addr, const uint32_t value);
+
+private:
+	struct CoroFrame
+	{
+		struct promise_type
+		{
+			CoroFrame get_return_object()
+			{
+				return CoroFrame{ std::coroutine_handle<promise_type>::from_promise(*this) };
+			}
+			constexpr std::suspend_never initial_suspend() const noexcept { return {}; }
+			constexpr std::suspend_never final_suspend() const noexcept { return {}; }
+			constexpr void return_void() const noexcept {}
+			void unhandled_exception() { throw; } // rethrow the exception to terminate the fifo thread
+		};
+		explicit CoroFrame(std::coroutine_handle<promise_type> h) : m_handle(h) {}
+
+		std::coroutine_handle<promise_type> m_handle;
+	};
+	struct RamhtElement
+	{
+		uint32_t m_handle; // handle of the object
+		uint32_t m_instance; // addr of object inside ramin
+		uint32_t m_engine; // engine to which the object is bound
+		uint32_t m_chid; // channel to which the object is bound
+		uint32_t m_valid; // whether or not the object is valid
+	};
+
+	void logRead(uint32_t addr, uint32_t value);
+	void logWrite(uint32_t addr, uint32_t value);
+	bool updateIo(bool is_update);
+	template<bool is_write, typename T>
+	auto getIoFunc(bool log, bool enabled, bool is_be);
+	void fifoHandler(std::stop_token stok);
+	CoroFrame pusher(const std::stop_token &stok);
+	void puller(const std::stop_token &stok, std::coroutine_handle<CoroFrame::promise_type> coro_pusher);
+	RamhtElement ramhtSearch(uint32_t handle);
+
+	uint8_t *m_ram;
+	std::jthread m_jthr; // async fifo worker thread
+	std::atomic_flag m_fifo_has_work;
+	std::atomic_bool m_is_enabled;
+	std::mutex m_fifo_mtx;
+	// connected devices
+	pmc *m_pmc;
+	pgraph *m_pgraph;
+	pramin *m_pramin;
+	cpu_t *m_lc86cpu;
+	nv2a *m_nv2a;
+	// registers
+	uint32_t m_regs[NV_PFIFO_SIZE / 4];
+	const std::unordered_map<uint32_t, const std::string> m_regs_info =
+	{
+		{ NV_PFIFO_INTR_0, "NV_PFIFO_INTR_0" },
+		{ NV_PFIFO_INTR_EN_0, "NV_PFIFO_INTR_EN_0" },
+		{ NV_PFIFO_RAMHT, "NV_PFIFO_RAMHT" },
+		{ NV_PFIFO_RAMFC, "NV_PFIFO_RAMFC" },
+		{ NV_PFIFO_RAMRO, "NV_PFIFO_RAMRO" },
+		{ NV_PFIFO_RUNOUT_STATUS, "NV_PFIFO_RUNOUT_STATUS" },
+		{ NV_PFIFO_MODE, "NV_PFIFO_MODE" },
+		{ NV_PFIFO_CACHE1_PUSH0, "NV_PFIFO_CACHE1_PUSH0" },
+		{ NV_PFIFO_CACHE1_PUSH1, "NV_PFIFO_CACHE1_PUSH1" },
+		{ NV_PFIFO_CACHE1_PUT, "NV_PFIFO_CACHE1_PUT" },
+		{ NV_PFIFO_CACHE1_STATUS, "NV_PFIFO_CACHE1_STATUS" },
+		{ NV_PFIFO_CACHE1_DMA_PUSH, "NV_PFIFO_CACHE1_DMA_PUSH" },
+		{ NV_PFIFO_CACHE1_DMA_FETCH, "NV_PFIFO_CACHE1_DMA_FETCH" },
+		{ NV_PFIFO_CACHE1_DMA_STATE, "NV_PFIFO_CACHE1_DMA_STATE" },
+		{ NV_PFIFO_CACHE1_DMA_INSTANCE, "NV_PFIFO_CACHE1_DMA_INSTANCE" },
+		{ NV_PFIFO_CACHE1_DMA_PUT, "NV_PFIFO_CACHE1_DMA_PUT" },
+		{ NV_PFIFO_CACHE1_DMA_GET, "NV_PFIFO_CACHE1_DMA_GET" },
+		{ NV_PFIFO_CACHE1_REF, "NV_PFIFO_CACHE1_REF" },
+		{ NV_PFIFO_CACHE1_DMA_SUBROUTINE, "NV_PFIFO_CACHE1_DMA_SUBROUTINE" },
+		{ NV_PFIFO_CACHE1_PULL0, "NV_PFIFO_CACHE1_PULL0" },
+		{ NV_PFIFO_CACHE1_PULL1, "NV_PFIFO_CACHE1_PULL1" },
+		{ NV_PFIFO_CACHE1_GET, "NV_PFIFO_CACHE1_GET" },
+		{ NV_PFIFO_CACHE1_ENGINE, "NV_PFIFO_CACHE1_ENGINE" },
+		{ NV_PFIFO_CACHE1_DMA_DCOUNT, "NV_PFIFO_CACHE1_DMA_DCOUNT" },
+		{ NV_PFIFO_CACHE1_DMA_GET_JMP_SHADOW, "NV_PFIFO_CACHE1_DMA_GET_JMP_SHADOW" },
+		{ NV_PFIFO_CACHE1_DMA_RSVD_SHADOW, "NV_PFIFO_CACHE1_DMA_RSVD_SHADOW" },
+		{ NV_PFIFO_CACHE1_DMA_DATA_SHADOW, "NV_PFIFO_CACHE1_DMA_DATA_SHADOW" },
+		{ NV_PFIFO_CACHE1_METHOD(0), "NV_PFIFO_CACHE1_METHOD + 0"},
+		{ NV_PFIFO_CACHE1_DATA(0), "NV_PFIFO_CACHE1_DATA + 0"}
+	};
+};
+
 template<bool log, engine_enabled enabled>
-void pfifo::write32(uint32_t addr, const uint32_t value)
+void pfifo::Impl::write32(uint32_t addr, const uint32_t value)
 {
 	if constexpr (!enabled) {
 		return;
 	}
 	if constexpr (log) {
-		log_write(addr, value);
+		logWrite(addr, value);
 	}
 
 	std::unique_lock lock(m_fifo_mtx);
@@ -27,13 +138,13 @@ void pfifo::write32(uint32_t addr, const uint32_t value)
 	case NV_PFIFO_INTR_0:
 		REG_PFIFO(addr) &= ~value;
 		lock.unlock();
-		m_machine->invoke(&pmc::updateIrq);
+		m_pmc->updateIrq();
 		break;
 
 	case NV_PFIFO_INTR_EN_0:
 		REG_PFIFO(addr) = value;
 		lock.unlock();
-		m_machine->invoke(&pmc::updateIrq);
+		m_pmc->updateIrq();
 		break;
 
 	case NV_PFIFO_CACHE1_PUSH0: // pusher access to cache1 changed and possibly put != get, notify the pusher
@@ -66,7 +177,7 @@ void pfifo::write32(uint32_t addr, const uint32_t value)
 }
 
 template<bool log, engine_enabled enabled>
-uint32_t pfifo::read32(uint32_t addr)
+uint32_t pfifo::Impl::read32(uint32_t addr)
 {
 	if constexpr (!enabled) {
 		return 0;
@@ -77,14 +188,14 @@ uint32_t pfifo::read32(uint32_t addr)
 	m_fifo_mtx.unlock();
 
 	if constexpr (log) {
-		log_read(addr, value);
+		logRead(addr, value);
 	}
 
 	return value;
 }
 
 template<bool log, engine_enabled enabled>
-uint8_t pfifo::read8(uint32_t addr)
+uint8_t pfifo::Impl::read8(uint32_t addr)
 {
 	if constexpr (!enabled) {
 		return 0;
@@ -96,13 +207,13 @@ uint8_t pfifo::read8(uint32_t addr)
 	uint8_t value = uint8_t((value32 & (0xFF << addr_offset)) >> addr_offset);
 
 	if constexpr (log) {
-		log_read(addr_base, value);
+		logRead(addr_base, value);
 	}
 
 	return value;
 }
 
-pfifo::CoroFrame pfifo::pusher(const std::stop_token &stok)
+pfifo::Impl::CoroFrame pfifo::Impl::pusher(const std::stop_token &stok)
 {
 	co_await std::suspend_always(); // switch to caller (this only happens at startup)
 
@@ -138,7 +249,7 @@ pfifo::CoroFrame pfifo::pusher(const std::stop_token &stok)
 		uint32_t curr_pb_get = REG_PFIFO(NV_PFIFO_CACHE1_DMA_GET) & ~3;
 		uint32_t curr_pb_put = REG_PFIFO(NV_PFIFO_CACHE1_DMA_PUT) & ~3;
 		// Find the address of the new pb entries from the pb object
-		DmaObj pb_obj = m_machine->invoke(&nv2a::getDmaObj, (REG_PFIFO(NV_PFIFO_CACHE1_DMA_INSTANCE) & NV_PFIFO_CACHE1_DMA_INSTANCE_ADDRESS) << 4);
+		DmaObj pb_obj = m_nv2a->getDmaObj((REG_PFIFO(NV_PFIFO_CACHE1_DMA_INSTANCE) & NV_PFIFO_CACHE1_DMA_INSTANCE_ADDRESS) << 4);
 
 		// Process all entries until the fifo is empty
 		while (curr_pb_get != curr_pb_put) {
@@ -271,11 +382,11 @@ pfifo::CoroFrame pfifo::pusher(const std::stop_token &stok)
 		REG_PFIFO(NV_PFIFO_CACHE1_DMA_PUSH) |= NV_PFIFO_CACHE1_DMA_PUSH_STATUS; // suspend pusher
 		REG_PFIFO(NV_PFIFO_INTR_0) |= NV_PFIFO_INTR_0_DMA_PUSHER; // raise pusher interrupt
 		m_fifo_mtx.unlock();
-		m_machine->invoke(&pmc::updateIrq);
+		m_pmc->updateIrq();
 	}
 }
 
-void pfifo::puller(const std::stop_token &stok, std::coroutine_handle<CoroFrame::promise_type> coro)
+void pfifo::Impl::puller(const std::stop_token &stok, std::coroutine_handle<CoroFrame::promise_type> coro)
 {
 	coro(); // switch to pusher (this only happens at startup)
 
@@ -337,7 +448,7 @@ void pfifo::puller(const std::stop_token &stok, std::coroutine_handle<CoroFrame:
 
 			// Release the lock since submitMethod will block if the pgraph queue is full
 			m_fifo_mtx.unlock();
-			m_machine->invoke(&pgraph::submitMethod<true>, 0, elem.m_instance, mthd_subchan, elem.m_chid);
+			m_pgraph->submitMethod<true>(0, elem.m_instance, mthd_subchan, elem.m_chid);
 			m_fifo_mtx.lock();
 		}
 		else if (mthd >= 0x100) {
@@ -358,7 +469,7 @@ void pfifo::puller(const std::stop_token &stok, std::coroutine_handle<CoroFrame:
 
 			// Release the lock since submitMethod will block if the pgraph queue is full
 			m_fifo_mtx.unlock();
-			m_machine->invoke(&pgraph::submitMethod<false>, mthd, param, mthd_subchan, 0);
+			m_pgraph->submitMethod<false>(mthd, param, mthd_subchan, 0);
 			m_fifo_mtx.lock();
 		}
 		else {
@@ -374,13 +485,13 @@ void pfifo::puller(const std::stop_token &stok, std::coroutine_handle<CoroFrame:
 
 	m_fifo_mtx.unlock();
 	while (true) {
-		if (stok.stop_requested()) { // sync with pfifo::deinit
+		if (stok.stop_requested()) { // sync with pfifo::Impl::deinit
 			throw std::exception();
 		}
 	}
 }
 
-void pfifo::fifoHandler(std::stop_token stok)
+void pfifo::Impl::fifoHandler(std::stop_token stok)
 {
 	// This function is called in a separate thread, and acts as the pfifo pusher and puller
 
@@ -397,7 +508,7 @@ void pfifo::fifoHandler(std::stop_token stok)
 	coro.destroy();
 }
 
-pfifo::RamhtElement pfifo::ramhtSearch(uint32_t handle)
+pfifo::Impl::RamhtElement pfifo::Impl::ramhtSearch(uint32_t handle)
 {
 	// An object is referenced by a user defined 32 bit handle. The hw looks up objects in a hash table in the instance memory (ramin)
 	// An entry in the table consists of two DWORDs. The first is a handle, and the second is a context the describes the object
@@ -420,8 +531,8 @@ pfifo::RamhtElement pfifo::ramhtSearch(uint32_t handle)
 	hash ^= curr_chan_id << (ramht_bits - 4);
 
 	uint32_t ramht_addr = (REG_PFIFO(NV_PFIFO_RAMHT) & NV_PFIFO_RAMHT_BASE_ADDRESS) << 8;
-	uint32_t entry_handle = m_machine->invoke(&pramin::read<uint32_t>, NV_PRAMIN_BASE + ramht_addr + hash * 8);
-	uint32_t entry_ctx = m_machine->invoke(&pramin::read<uint32_t>, NV_PRAMIN_BASE + ramht_addr + 4 + hash * 8);
+	uint32_t entry_handle = m_pramin->read32(NV_PRAMIN_BASE + ramht_addr + hash * 8);
+	uint32_t entry_ctx = m_pramin->read32(NV_PRAMIN_BASE + ramht_addr + 4 + hash * 8);
 
 	return RamhtElement{
 		.m_handle = entry_handle,
@@ -433,7 +544,7 @@ pfifo::RamhtElement pfifo::ramhtSearch(uint32_t handle)
 }
 
 void
-pfifo::log_read(uint32_t addr, uint32_t value)
+pfifo::Impl::logRead(uint32_t addr, uint32_t value)
 {
 	const auto it = m_regs_info.find(addr & ~3);
 	if (it != m_regs_info.end()) {
@@ -452,7 +563,7 @@ pfifo::log_read(uint32_t addr, uint32_t value)
 }
 
 void
-pfifo::log_write(uint32_t addr, uint32_t value)
+pfifo::Impl::logWrite(uint32_t addr, uint32_t value)
 {
 	const auto it = m_regs_info.find(addr & ~3);
 	if (it != m_regs_info.end()) {
@@ -471,62 +582,62 @@ pfifo::log_write(uint32_t addr, uint32_t value)
 }
 
 template<bool is_write, typename T>
-auto pfifo::get_io_func(bool log, bool enabled, bool is_be)
+auto pfifo::Impl::getIoFunc(bool log, bool enabled, bool is_be)
 {
 	if constexpr (is_write) {
 		if (enabled) {
 			if (log) {
-				return is_be ? nv2a_write<pfifo, uint32_t, &pfifo::write32<true, on>, big> : nv2a_write<pfifo, uint32_t, &pfifo::write32<true, on>, le>;
+				return is_be ? nv2a_write<pfifo::Impl, uint32_t, &pfifo::Impl::write32<true, on>, big> : nv2a_write<pfifo::Impl, uint32_t, &pfifo::Impl::write32<true, on>, le>;
 			}
 			else {
-				return is_be ? nv2a_write<pfifo, uint32_t, &pfifo::write32<false, on>, big> : nv2a_write<pfifo, uint32_t, &pfifo::write32<false, on>, le>;
+				return is_be ? nv2a_write<pfifo::Impl, uint32_t, &pfifo::Impl::write32<false, on>, big> : nv2a_write<pfifo::Impl, uint32_t, &pfifo::Impl::write32<false, on>, le>;
 			}
 		}
 		else {
-			return nv2a_write<pfifo, uint32_t, &pfifo::write32<false, off>, big>;
+			return nv2a_write<pfifo::Impl, uint32_t, &pfifo::Impl::write32<false, off>, big>;
 		}
 	}
 	else {
 		if constexpr (sizeof(T) == 1) {
 			if (enabled) {
 				if (log) {
-					return is_be ? nv2a_read<pfifo, uint8_t, &pfifo::read8<true, on>, big> : nv2a_read<pfifo, uint8_t, &pfifo::read8<true, on>, le>;
+					return is_be ? nv2a_read<pfifo::Impl, uint8_t, &pfifo::Impl::read8<true, on>, big> : nv2a_read<pfifo::Impl, uint8_t, &pfifo::Impl::read8<true, on>, le>;
 				}
 				else {
-					return is_be ? nv2a_read<pfifo, uint8_t, &pfifo::read8<false, on>, big> : nv2a_read<pfifo, uint8_t, &pfifo::read8<false, on>, le>;
+					return is_be ? nv2a_read<pfifo::Impl, uint8_t, &pfifo::Impl::read8<false, on>, big> : nv2a_read<pfifo::Impl, uint8_t, &pfifo::Impl::read8<false, on>, le>;
 				}
 			}
 			else {
-				return nv2a_read<pfifo, uint8_t, &pfifo::read8<false, off>, big>;
+				return nv2a_read<pfifo::Impl, uint8_t, &pfifo::Impl::read8<false, off>, big>;
 			}
 		}
 		else {
 			if (enabled) {
 				if (log) {
-					return is_be ? nv2a_read<pfifo, uint32_t, &pfifo::read32<true, on>, big> : nv2a_read<pfifo, uint32_t, &pfifo::read32<true, on>, le>;
+					return is_be ? nv2a_read<pfifo::Impl, uint32_t, &pfifo::Impl::read32<true, on>, big> : nv2a_read<pfifo::Impl, uint32_t, &pfifo::Impl::read32<true, on>, le>;
 				}
 				else {
-					return is_be ? nv2a_read<pfifo, uint32_t, &pfifo::read32<false, on>, big> : nv2a_read<pfifo, uint32_t, &pfifo::read32<false, on>, le>;
+					return is_be ? nv2a_read<pfifo::Impl, uint32_t, &pfifo::Impl::read32<false, on>, big> : nv2a_read<pfifo::Impl, uint32_t, &pfifo::Impl::read32<false, on>, le>;
 				}
 			}
 			else {
-				return nv2a_read<pfifo, uint32_t, &pfifo::read32<false, off>, big>;
+				return nv2a_read<pfifo::Impl, uint32_t, &pfifo::Impl::read32<false, off>, big>;
 			}
 		}
 	}
 }
 
 bool
-pfifo::update_io(bool is_update)
+pfifo::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
-	m_is_enabled = m_machine->invoke(&pmc::read32<false>, NV_PMC_ENABLE) & NV_PMC_ENABLE_PFIFO;
-	bool is_be = m_machine->invoke(&pmc::read32<false>, NV_PMC_BOOT_1) & NV_PMC_BOOT_1_ENDIAN24_BIG;
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), NV_PFIFO_BASE, NV_PFIFO_SIZE, false,
+	m_is_enabled = m_pmc->read32(NV_PMC_ENABLE) & NV_PMC_ENABLE_PFIFO;
+	bool is_be = m_pmc->read32(NV_PMC_BOOT_1) & NV_PMC_BOOT_1_ENDIAN24_BIG;
+	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, NV_PFIFO_BASE, NV_PFIFO_SIZE, false,
 		{
-			.fnr8 = get_io_func<false, uint8_t>(log, m_is_enabled, is_be),
-			.fnr32 = get_io_func<false, uint32_t>(log, m_is_enabled, is_be),
-			.fnw32 = get_io_func<true, uint32_t>(log, m_is_enabled, is_be)
+			.fnr8 = getIoFunc<false, uint8_t>(log, m_is_enabled, is_be),
+			.fnr32 = getIoFunc<false, uint32_t>(log, m_is_enabled, is_be),
+			.fnw32 = getIoFunc<true, uint32_t>(log, m_is_enabled, is_be)
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update mmio region");
@@ -537,7 +648,7 @@ pfifo::update_io(bool is_update)
 }
 
 void
-pfifo::reset()
+pfifo::Impl::reset()
 {
 	std::fill(std::begin(m_regs), std::end(m_regs), 0);
 	REG_PFIFO(NV_PFIFO_CACHE1_STATUS) = NV_PFIFO_CACHE1_STATUS_LOW_MARK;
@@ -549,25 +660,66 @@ pfifo::reset()
 }
 
 bool
-pfifo::init()
+pfifo::Impl::init(cpu *cpu, nv2a *gpu)
 {
+	m_pmc = gpu->getPmc();
+	m_pgraph = gpu->getPgraph();
+	m_pramin = gpu->getPramin();
+	m_lc86cpu = cpu->get86cpu();
+	m_nv2a = gpu;
 	reset();
 
-	if (!update_io(false)) {
+	if (!updateIo(false)) {
 		return false;
 	}
 
-	m_ram = get_ram_ptr(m_machine->get_cpu());
-	m_jthr = std::jthread(std::bind_front(&pfifo::fifoHandler, this));
+	m_ram = get_ram_ptr(m_lc86cpu);
+	m_jthr = std::jthread(std::bind_front(&pfifo::Impl::fifoHandler, this));
 	return true;
 }
 
-void pfifo::deinit()
+void pfifo::Impl::deinit()
 {
 	assert(m_jthr.joinable());
 	m_jthr.request_stop();
-	m_machine->invoke(&pgraph::deinit);
+	if (m_pgraph) {
+		m_pgraph->deinit();
+	}
 	m_fifo_has_work.test_and_set();
 	m_fifo_has_work.notify_one();
 	m_jthr.join();
 }
+
+/** Public interface implementation **/
+bool pfifo::init(cpu *cpu, nv2a *gpu)
+{
+	return m_impl->init(cpu, gpu);
+}
+
+void pfifo::deinit()
+{
+	m_impl->deinit();
+}
+
+void pfifo::reset()
+{
+	m_impl->reset();
+}
+
+void pfifo::updateIo()
+{
+	m_impl->updateIo();
+}
+
+uint32_t pfifo::read32(uint32_t addr)
+{
+	return m_impl->read32<false, on>(addr);
+}
+
+void pfifo::write32(uint32_t addr, const uint32_t value)
+{
+	m_impl->write32<false, on>(addr, value);
+}
+
+pfifo::pfifo() : m_impl{std::make_unique<pfifo::Impl>()} {}
+pfifo::~pfifo() {}

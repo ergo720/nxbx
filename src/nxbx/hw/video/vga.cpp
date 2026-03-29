@@ -1,11 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2024 ergo720
 // SPDX-FileCopyrightText: 2020 Halfix devs
 // This code is derived from https://github.com/nepx/halfix/blob/master/src/hardware/vga.c
 
-#include "machine.hpp"
+#include "lib86cpu.h"
+#include "gpu/pcrtc.hpp"
+// Must be included last because of the template functions nv2a_read/write, which require a complete definition for the engine objects
+#include "gpu/nv2a.hpp"
+#include "vga.hpp"
+#include "host.hpp"
 #include <cstring>
+#include <cinttypes>
+#include <vector>
 
 #define MODULE_NAME vga
 
@@ -33,27 +39,105 @@ enum {
 };
 
 
-static void
-display_set_resolution(uint32_t width, uint32_t height)
+/** Private device implementation **/
+class vga::Impl
+{
+public:
+	bool init(cpu *cpu, nv2a *gpu);
+	void reset();
+	uint8_t ioRead8(uint32_t addr);
+	void ioWrite8(uint32_t addr, const uint8_t value);
+	void ioWrite16(uint32_t addr, const uint16_t value);
+	uint8_t memRead8(uint32_t addr);
+	uint16_t memRead16(uint32_t addr);
+	void memWrite8(uint32_t addr, const uint8_t value);
+	void memWrite16(uint32_t addr, const uint16_t value);
+	void update();
+
+private:
+	void update_size();
+	void change_renderer();
+	void complete_redraw();
+	void update_mem_access();
+	void update_all_dac_entries();
+	void update_one_dac_entry(int i);
+	void change_attr_cache(int i);
+	uint8_t alu_rotate(uint8_t value);
+
+	// connected devices
+	pcrtc *m_pcrtc;
+	// CRT Controller
+	uint8_t crt[256], crt_index;
+	// Attribute Controller
+	uint8_t attr[32], attr_index, attr_palette[16];
+	// Sequencer
+	uint8_t seq[8], seq_index;
+	// Graphics Registers
+	uint8_t gfx[256], gfx_index;
+	// Digital To Analog
+	uint8_t dac[1024];
+	uint32_t dac_palette[256];
+	uint8_t dac_mask,
+		dac_state, // 0 if reading, 3 if writing
+		dac_address, // Index into dac_palette
+		dac_color, // Current color being read (0: red, 1: blue, 2: green)
+		dac_read_address; // same as dac_address, but for reads
+
+	// Status stuff
+	uint8_t status[2];
+
+	// Miscellaneous Graphics Register
+	uint8_t misc;
+
+	// Text Mode Rendering variables
+	uint8_t char_width;
+	uint32_t character_map[2];
+
+	// General rendering variables
+	uint8_t pixel_panning, current_pixel_panning;
+	uint32_t total_height, total_width;
+	int renderer;
+	uint32_t current_scanline, character_scanline;
+	uint32_t *framebuffer; // where pixel data is written to
+	uint32_t framebuffer_offset; // the offset being written to right now
+	uint32_t vram_addr; // Current VRAM offset being accessed by renderer
+	uint32_t scanlines_to_update; // Number of scanlines to update per vga_update
+
+	// Memory access settings
+	uint8_t write_access, read_access, write_mode;
+	uint32_t vram_window_base, vram_window_size;
+	union {
+		uint8_t latch8[4];
+		uint32_t latch32;
+	};
+
+	uint32_t framectr;
+	uint32_t vram_size;
+	uint8_t *vram;
+
+	std::vector<uint8_t> vbe_scanlines_modified;
+
+	// Screen data cannot change if memory_modified is zero.
+	int memory_modified;
+};
+
+static void display_set_resolution(uint32_t width, uint32_t height)
 {
 	// TODO: this should update the size of the rendering window
 }
 
-static void *
-display_get_pixels()
+static void *display_get_pixels()
 {
 	// TODO: this should get the rendering target used by the rendering window
 	return nullptr;
 }
 
-static void
-display_update()
+static void display_update()
 {
 	// TODO: this should redraw the image shown in the rendering window
 }
 
-static void
-expand32_alt(uint8_t *ptr, int v4)
+static void expand32_alt(uint8_t *ptr, int v4)
 {
 	ptr[0] = v4 & 1 ? 0xFF : 0;
 	ptr[1] = v4 & 2 ? 0xFF : 0;
@@ -61,8 +145,7 @@ expand32_alt(uint8_t *ptr, int v4)
 	ptr[3] = v4 & 8 ? 0xFF : 0;
 }
 
-static uint32_t
-expand32(int v4)
+static uint32_t expand32(int v4)
 {
 	uint32_t r = v4 & 1 ? 0xFF : 0;
 	r |= v4 & 2 ? 0xFF00 : 0;
@@ -71,15 +154,13 @@ expand32(int v4)
 	return r;
 }
 
-static uint8_t
-c6to8(uint8_t a)
+static uint8_t c6to8(uint8_t a)
 {
 	uint8_t b = a & 1;
 	return a << 2 | b << 1 | b;
 }
 
-static uint32_t
-b8to32(uint8_t x)
+static uint32_t b8to32(uint8_t x)
 {
 	uint32_t y = x;
 	y |= y << 8;
@@ -88,8 +169,7 @@ b8to32(uint8_t x)
 
 // If a bit in "mask_enabled" is set, then replace value with the value in "mask," otherwise keep the same
 // Example: value=0x12345678 mask=0x9ABCDEF0 mask_enabled=0b1010 result=0x9A34DE78
-static inline uint32_t
-do_mask(uint32_t value, uint32_t mask, int mask_enabled)
+static inline uint32_t do_mask(uint32_t value, uint32_t mask, int mask_enabled)
 {
 	static uint32_t lut32[9] = { 0, 0xFF, 0xFF00, 0, 0xFF0000, 0, 0, 0, 0xFF000000 };
 	// Uses XOR for fast bit replacement
@@ -101,42 +181,36 @@ do_mask(uint32_t value, uint32_t mask, int mask_enabled)
 	return xor_;
 }
 
-static uint8_t
-bpp4_to_offset(uint8_t i, uint8_t j, uint8_t k)
+static uint8_t bpp4_to_offset(uint8_t i, uint8_t j, uint8_t k)
 {
 	return ((i & (0x80 >> j)) != 0) ? 1 << k : 0;
 }
 
-static uint32_t
-char_map_address(int b)
+static uint32_t char_map_address(int b)
 {
 	return b << 13;
 }
 
-uint8_t
-vga::alu_rotate(uint8_t value)
+uint8_t vga::Impl::alu_rotate(uint8_t value)
 {
 	uint8_t rotate_count = gfx[3] & 7;
 	return ((value >> rotate_count) | (value << (8 - rotate_count))) & 0xFF;
 }
 
-void
-vga::update_one_dac_entry(int i)
+void vga::Impl::update_one_dac_entry(int i)
 {
 	int index = i << 2;
 	dac_palette[i] = 255 << 24 | c6to8(dac[index | 0]) << 16 | c6to8(dac[index | 1]) << 8 | c6to8(dac[index | 2]);
 }
 
-void
-vga::update_all_dac_entries()
+void vga::Impl::update_all_dac_entries()
 {
 	for (int i = 0; i < 256; i++) {
 		update_one_dac_entry(i);
 	}
 }
 
-void
-vga::change_attr_cache(int i)
+void vga::Impl::change_attr_cache(int i)
 {
 	if (attr[0x10] & 0x80) {
 		attr_palette[i] = (attr[i] & 0x0F) | ((attr[0x14] << 4) & 0xF0);
@@ -146,8 +220,7 @@ vga::change_attr_cache(int i)
 	}
 }
 
-void
-vga::update_mem_access()
+void vga::Impl::update_mem_access()
 {
 	// Different VGA memory access modes.
 	// Note that some have higher precedence than others; if Chain4 and Odd/Even write are both set, then Chain4 will be selected
@@ -178,8 +251,7 @@ vga::update_mem_access()
 	logger_en(debug, "Updating Memory Access Constants: write=%" PRIu8 " [mode=%" PRIu8 "], read=%" PRIu8, write_access, write_mode, read_access);
 }
 
-void
-vga::complete_redraw()
+void vga::Impl::complete_redraw()
 {
 	current_scanline = 0;
 	character_scanline = crt[8] & 0x1F;
@@ -188,14 +260,13 @@ vga::complete_redraw()
 	framebuffer_offset = 0;
 
 	// On nv2a, the framebuffer address is fetched from PCRTC. The address is already byte-addressed, so it doesn't need the extra multiplication here
-	vram_addr = m_machine->invoke(&pcrtc::read32<false, on>, NV_PCRTC_START);
+	vram_addr = m_pcrtc->read32(NV_PCRTC_START);
 
 	// Force a complete redraw of the screen, and to do that, pretend that memory has been written.
 	memory_modified = 3;
 }
 
-void
-vga::change_renderer()
+void vga::Impl::change_renderer()
 {
 	// First things first: check if screen is enabled
 	if (((seq[1] & 0x20) == 0) && (attr_index & 0x20)) {
@@ -230,8 +301,7 @@ vga::change_renderer()
 	complete_redraw();
 }
 
-void
-vga::update_size()
+void vga::Impl::update_size()
 {
 	// CR01 and CR02 control width.
 	// Technically, CR01 should be less than CR02, but that may not always be the case.
@@ -260,8 +330,7 @@ vga::update_size()
 	scanlines_to_update = height >> 1;
 }
 
-void
-vga::io_write8(uint32_t addr, const uint8_t value)
+void vga::Impl::ioWrite8(uint32_t addr, const uint8_t value)
 {
 	if ((addr >= 0x3B0 && addr <= 0x3BF && (misc & 1)) || (addr >= 0x3D0 && addr <= 0x3DF && !(misc & 1))) {
 		logger_en(warn, "Ignoring unsupported write to addr=%04" PRIX32 " value=%02" PRIX8 " misc=%02" PRIX8, addr, value, misc);
@@ -742,15 +811,13 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
 	}
 }
 
-void
-vga::io_write16(uint32_t addr, const uint16_t value)
+void vga::Impl::ioWrite16(uint32_t addr, const uint16_t value)
 {
-	io_write8(addr, value & 0xFF);
-	io_write8(addr + 1, (value >> 8) & 0xFF);
+	ioWrite8(addr, value & 0xFF);
+	ioWrite8(addr + 1, (value >> 8) & 0xFF);
 }
 
-uint8_t
-vga::io_read8(uint32_t addr)
+uint8_t vga::Impl::ioRead8(uint32_t addr)
 {
 	if ((addr >= 0x3B0 && addr <= 0x3BF && (misc & 1)) || (addr >= 0x3D0 && addr <= 0x3DF && !(misc & 1))) {
 		return 0;
@@ -827,8 +894,7 @@ vga::io_read8(uint32_t addr)
 	}
 }
 
-void
-vga::mem_write8(uint32_t addr, const uint8_t value)
+void vga::Impl::memWrite8(uint32_t addr, const uint8_t value)
 {
 	addr -= vram_window_base;
 	if (addr > vram_window_size) { // Note: will catch the case where addr < vram_window_base as well
@@ -913,7 +979,7 @@ vga::mem_write8(uint32_t addr, const uint8_t value)
 	*vram_ptr = do_mask(*vram_ptr, data32, plane);
 
 	// Update scanline
-	uint32_t offs = (plane_addr << 2) - m_machine->invoke(&pcrtc::read32<false, on>, NV_PCRTC_START),
+	uint32_t offs = (plane_addr << 2) - m_pcrtc->read32(NV_PCRTC_START),
 		offset_between_lines = (((crt[0x25] & 0x20) << 6) | ((crt[0x19] & 0xE0) << 3) | crt[0x13]) << 3;
 
 	unsigned int scanline = offs / offset_between_lines;
@@ -935,15 +1001,13 @@ vga::mem_write8(uint32_t addr, const uint8_t value)
 	memory_modified = 3;
 }
 
-void
-vga::mem_write16(uint32_t addr, const uint16_t value)
+void vga::Impl::memWrite16(uint32_t addr, const uint16_t value)
 {
-	mem_write8(addr, value & 0xFF);
-	mem_write8(addr + 1, (value >> 8) & 0xFF);
+	memWrite8(addr, value & 0xFF);
+	memWrite8(addr + 1, (value >> 8) & 0xFF);
 }
 
-uint8_t
-vga::mem_read8(uint32_t addr)
+uint8_t vga::Impl::memRead8(uint32_t addr)
 {
 	addr -= vram_window_base;
 	if (addr > vram_window_size) { // Note: will catch the case where addr < vram_window_base as well
@@ -989,15 +1053,13 @@ vga::mem_read8(uint32_t addr)
 	return vram[plane | (plane_addr << 2)];
 }
 
-uint16_t
-vga::mem_read16(uint32_t addr)
+uint16_t vga::Impl::memRead16(uint32_t addr)
 {
-	uint16_t result = mem_read8(addr);
-	return result | (mem_read8(addr + 1) << 8);
+	uint16_t result = memRead8(addr);
+	return result | (memRead8(addr + 1) << 8);
 }
 
-void
-vga::update()
+void vga::Impl::update()
 {
 	// TODO: this function is supposed to be called at the refresh rate of the monitor. Currently, it's not being called by anything because
 	// there's no gui yet
@@ -1327,8 +1389,7 @@ vga::update()
 	}
 }
 
-void
-vga::reset()
+void vga::Impl::reset()
 {
 	std::fill(crt, &crt[256], 0);
 	crt_index = 0;
@@ -1363,12 +1424,66 @@ vga::reset()
 	complete_redraw();
 }
 
-bool
-vga::init()
+bool vga::Impl::init(cpu *cpu, nv2a *gpu)
 {
-	vram_size = m_machine->invoke(&cpu::getRamsize);
-	vram = get_ram_ptr(m_machine->get_cpu());
+	m_pcrtc = gpu->getPcrtc();
+	vram_size = cpu->getRamsize();
+	vram = get_ram_ptr(cpu->get86cpu());
 	
 	reset();
 	return true;
 }
+
+/** Public interface implementation **/
+bool vga::init(cpu *cpu, nv2a *gpu)
+{
+	return m_impl->init(cpu, gpu);
+}
+
+void vga::reset()
+{
+	m_impl->reset();
+}
+
+void vga::update()
+{
+	m_impl->update();
+}
+
+uint8_t vga::ioRead8(uint32_t addr)
+{
+	return m_impl->ioRead8(addr);
+}
+
+void vga::ioWrite8(uint32_t addr, const uint8_t value)
+{
+	m_impl->ioWrite8(addr, value);
+}
+
+void vga::ioWrite16(uint32_t addr, const uint16_t value)
+{
+	m_impl->ioWrite16(addr, value);
+}
+
+uint8_t vga::memRead8(uint32_t addr)
+{
+	return m_impl->memRead8(addr);
+}
+
+uint16_t vga::memRead16(uint32_t addr)
+{
+	return m_impl->memRead16(addr);
+}
+
+void vga::memWrite8(uint32_t addr, const uint8_t value)
+{
+	m_impl->memWrite8(addr, value);
+}
+
+void vga::memWrite16(uint32_t addr, const uint16_t value)
+{
+	m_impl->memWrite16(addr, value);
+}
+
+vga::vga() : m_impl{std::make_unique<vga::Impl>()} {}
+vga::~vga() {}

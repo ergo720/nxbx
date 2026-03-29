@@ -1,41 +1,36 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2023 ergo720
 
 #pragma once
 
-#include "lib86cpu.h"
-#include "util.hpp"
 #include "host.hpp"
-#include <string>
+#include <memory>
 
 #define RAM_SIZE64 0x4000000 // = 64 MiB
 #define RAM_SIZE128 0x8000000 // = 128 MiB
 
 
 class machine;
+class cpu_t;
 
-class cpu {
+class cpu
+{
 public:
-	cpu(machine *machine) : m_machine(machine), m_lc86cpu(nullptr) {}
-	bool init(const boot_params &params);
+	cpu();
+	~cpu();
+	bool init(const boot_params &params, machine *machine);
 	void deinit();
 	void reset();
 	void start();
 	void exit();
-	void update_io_logging() { update_io(true); }
-	uint64_t check_periodic_events(uint64_t now);
-	cpu_t *get_lc86cpu() { return m_lc86cpu; }
-	uint32_t getRamsize() { return m_ramsize; }
+	void updateIoLogging();
+	uint64_t checkPeriodicEvents(uint64_t now);
+	cpu_t *get86cpu();
+	uint32_t getRamsize();
 
 private:
-	bool update_io(bool is_update);
-	uint64_t check_periodic_events();
-
-	machine *const m_machine;
-	cpu_t *m_lc86cpu;
-	uint32_t m_ramsize;
-	bool m_is_dbg_present;
+	class Impl;
+	std::unique_ptr<Impl> m_impl;
 };
 
 template<typename D, typename T, auto f, uint32_t base = 0>

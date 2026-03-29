@@ -1,14 +1,75 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2024 ergo720
 
+#include "lib86cpu.h"
+#include "pbus.hpp"
+#include "pfb.hpp"
+#include "pmc.hpp"
+#include "pcrtc.hpp"
+#include "ptimer.hpp"
+#include "pramin.hpp"
+#include "pramdac.hpp"
+#include "pfifo.hpp"
+#include "pvideo.hpp"
+#include "puser.hpp"
+#include "pgraph.hpp"
+// Must be included last because of the template functions nv2a_read/write, which require a complete definition for the engine objects
+#include "nv2a.hpp"
 #include "machine.hpp"
+#include <cinttypes>
 
 #define MODULE_NAME pmc
 
 
+/** Private device implementation **/
+class pmc::Impl
+{
+public:
+	bool init(cpu *cpu, nv2a *gpu, machine *machine);
+	void reset();
+	void updateIo() { updateIo(true); }
+	void updateIrq();
+	template<bool log>
+	uint32_t read32(uint32_t addr);
+	template<bool log>
+	void write32(uint32_t addr, const uint32_t value);
+
+private:
+	bool updateIo(bool is_update);
+	template<bool is_write>
+	auto getIoFunc(bool log, bool is_be);
+
+	// connected devices
+	pbus *m_pbus;
+	pfb *m_pfb;
+	pcrtc *m_pcrtc;
+	ptimer *m_ptimer;
+	pramin *m_pramin;
+	pramdac *m_pramdac;
+	pfifo *m_pfifo;
+	pvideo *m_pvideo;
+	puser *m_puser;
+	pgraph *m_pgraph;
+	cpu_t *m_lc86cpu;
+	machine *m_machine;
+	// atomic registers
+	std::atomic_uint32_t m_int_status;
+	std::atomic_uint32_t m_int_enabled;
+	std::atomic_uint32_t m_endianness;
+	std::atomic_uint32_t m_engine_enabled;
+	// registers
+	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+		{ NV_PMC_BOOT_0, "NV_PMC_BOOT_0" },
+		{ NV_PMC_BOOT_1, "NV_PMC_BOOT_1" },
+		{ NV_PMC_INTR_0, "NV_PMC_INTR_0" },
+		{ NV_PMC_INTR_0, "NV_PMC_INTR_0" },
+		{ NV_PMC_INTR_EN_0, "NV_PMC_INTR_EN_0" },
+		{ NV_PMC_ENABLE, "NV_PMC_ENABLE" }
+	};
+};
+
 template<bool log>
-void pmc::write32(uint32_t addr, const uint32_t value)
+void pmc::Impl::write32(uint32_t addr, const uint32_t value)
 {
 	if constexpr (log) {
 		nv2a_log_write();
@@ -21,21 +82,22 @@ void pmc::write32(uint32_t addr, const uint32_t value)
 		break;
 
 	case NV_PMC_BOOT_1: {
-		uint32_t old_state = endianness;
+		uint32_t old_state = m_endianness;
 		uint32_t new_endianness = (value ^ NV_PMC_BOOT_1_ENDIAN24_BIG) & NV_PMC_BOOT_1_ENDIAN24_BIG;
-		endianness = (new_endianness | (new_endianness >> 24));
-		if ((old_state ^ endianness) & NV_PMC_BOOT_1_ENDIAN24_BIG) {
-			update_io();
-			m_machine->invoke(static_cast<void(pbus::*)()>(&pbus::update_io));
-			m_machine->invoke(static_cast<void(pramdac::*)()>(&pramdac::update_io));
-			m_machine->invoke(static_cast<void(pramin::*)()>(&pramin::update_io));
-			m_machine->invoke(static_cast<void(pfifo::*)()>(&pfifo::update_io));
-			m_machine->invoke(static_cast<void(ptimer::*)()>(&ptimer::update_io));
-			m_machine->invoke(static_cast<void(pfb::*)()>(&pfb::update_io));
-			m_machine->invoke(static_cast<void(pcrtc::*)()>(&pcrtc::update_io));
-			m_machine->invoke(static_cast<void(pvideo::*)()>(&pvideo::update_io));
-			m_machine->invoke(static_cast<void(pgraph::*)()>(&pgraph::update_io));
-			mem_init_region_io(m_machine->get_cpu(), 0, 0, true, {}, m_machine->get_cpu(), true, 3); // trigger the update in lib86cpu too
+		m_endianness = (new_endianness | (new_endianness >> 24));
+		if ((old_state ^ m_endianness) & NV_PMC_BOOT_1_ENDIAN24_BIG) {
+			this->updateIo();
+			m_pbus->updateIo();
+			m_puser->updateIo();
+			m_pramdac->updateIo();
+			m_pramin->updateIo();
+			m_pfifo->updateIo();
+			m_ptimer->updateIo();
+			m_pfb->updateIo();
+			m_pcrtc->updateIo();
+			m_pvideo->updateIo();
+			m_pgraph->updateIo();
+			mem_init_region_io(m_lc86cpu, 0, 0, true, {}, m_lc86cpu, true, 3); // trigger the update in lib86cpu too
 		}
 	}
 	break;
@@ -53,38 +115,38 @@ void pmc::write32(uint32_t addr, const uint32_t value)
 
 	case NV_PMC_ENABLE: {
 		bool has_int_state_changed = false;
-		uint32_t old_state = engine_enabled;
-		engine_enabled = value;
+		uint32_t old_state = m_engine_enabled;
+		m_engine_enabled = value;
 		if ((value & NV_PMC_ENABLE_PFIFO) == 0) {
-			m_machine->invoke(&pfifo::reset);
+			m_pfifo->reset();
 			has_int_state_changed = true;
 		}
 		if ((value & NV_PMC_ENABLE_PGRAPH) == 0) {
-			m_machine->invoke(&pgraph::reset);
+			m_pgraph->reset();
 			has_int_state_changed = true;
 		}
 		if ((value & NV_PMC_ENABLE_PTIMER) == 0) {
-			m_machine->invoke(&ptimer::reset);
+			m_ptimer->reset();
 			has_int_state_changed = true;
 		}
 		if ((value & NV_PMC_ENABLE_PFB) == 0) {
-			m_machine->invoke(&pfb::reset);
+			m_pfb->reset();
 		}
 		if ((value & NV_PMC_ENABLE_PCRTC) == 0) {
-			m_machine->invoke(&pcrtc::reset);
+			m_pcrtc->reset();
 			has_int_state_changed = true;
 		}
 		if ((value & NV_PMC_ENABLE_PVIDEO) == 0) {
-			m_machine->invoke(&pvideo::reset);
+			m_pvideo->reset();
 		}
-		if ((old_state ^ engine_enabled) & NV_PMC_ENABLE_ALL) {
-			m_machine->invoke(static_cast<void(pfifo::*)()>(&pfifo::update_io));
-			m_machine->invoke(static_cast<void(pgraph::*)()>(&pgraph::update_io));
-			m_machine->invoke(static_cast<void(ptimer::*)()>(&ptimer::update_io));
-			m_machine->invoke(static_cast<void(pfb::*)()>(&pfb::update_io));
-			m_machine->invoke(static_cast<void(pcrtc::*)()>(&pcrtc::update_io));
-			m_machine->invoke(static_cast<void(pvideo::*)()>(&pvideo::update_io));
-			mem_init_region_io(m_machine->get_cpu(), 0, 0, true, {}, m_machine->get_cpu(), true, 3); // trigger the update in lib86cpu too
+		if ((old_state ^ m_engine_enabled) & NV_PMC_ENABLE_ALL) {
+			m_pfifo->updateIo();
+			m_pgraph->updateIo();
+			m_ptimer->updateIo();
+			m_pfb->updateIo();
+			m_pcrtc->updateIo();
+			m_pvideo->updateIo();
+			mem_init_region_io(m_lc86cpu, 0, 0, true, {}, m_lc86cpu, true, 3); // trigger the update in lib86cpu too
 		}
 		if (has_int_state_changed) {
 			updateIrq();
@@ -98,7 +160,7 @@ void pmc::write32(uint32_t addr, const uint32_t value)
 }
 
 template<bool log>
-uint32_t pmc::read32(uint32_t addr)
+uint32_t pmc::Impl::read32(uint32_t addr)
 {
 	uint32_t value = 0;
 
@@ -111,7 +173,7 @@ uint32_t pmc::read32(uint32_t addr)
 
 	case NV_PMC_BOOT_1:
 		// Returns the current endianness used for mmio accesses to the gpu
-		value = endianness;
+		value = m_endianness;
 		break;
 
 	case NV_PMC_INTR_0:
@@ -123,7 +185,7 @@ uint32_t pmc::read32(uint32_t addr)
 		break;
 
 	case NV_PMC_ENABLE:
-		value = engine_enabled;
+		value = m_engine_enabled;
 		break;
 
 	default:
@@ -137,11 +199,10 @@ uint32_t pmc::read32(uint32_t addr)
 	return value;
 }
 
-void
-pmc::updateIrq()
+void pmc::Impl::updateIrq()
 {
 	// Check for pending PCRTC interrupts
-	if (m_machine->invoke(&pcrtc::read32<false, on>, NV_PCRTC_INTR_0) & m_machine->invoke(&pcrtc::read32<false, on>, NV_PCRTC_INTR_EN_0)) {
+	if (m_pcrtc->read32(NV_PCRTC_INTR_0) & m_pcrtc->read32(NV_PCRTC_INTR_EN_0)) {
 		m_int_status |= (1 << NV_PMC_INTR_0_PCRTC);
 	}
 	else {
@@ -149,7 +210,7 @@ pmc::updateIrq()
 	}
 
 	// Check for pending PTIMER interrupts
-	if (m_machine->invoke(&ptimer::read32<false, on>, NV_PTIMER_INTR_0) & m_machine->invoke(&ptimer::read32<false, on>, NV_PTIMER_INTR_EN_0)) {
+	if (m_ptimer->read32(NV_PTIMER_INTR_0) & m_ptimer->read32(NV_PTIMER_INTR_EN_0)) {
 		m_int_status |= (1 << NV_PMC_INTR_0_PTIMER);
 	}
 	else {
@@ -157,7 +218,7 @@ pmc::updateIrq()
 	}
 
 	// Check for pending PFIFO interrupts
-	if (m_machine->invoke(&pfifo::read32<false, on>, NV_PFIFO_INTR_0) & m_machine->invoke(&pfifo::read32<false, on>, NV_PFIFO_INTR_EN_0)) {
+	if (m_pfifo->read32(NV_PFIFO_INTR_0) & m_pfifo->read32(NV_PFIFO_INTR_EN_0)) {
 		m_int_status |= (1 << NV_PMC_INTR_0_PFIFO);
 	}
 	else {
@@ -165,7 +226,7 @@ pmc::updateIrq()
 	}
 
 	// Check for pending PGRAPH interrupts
-	if (m_machine->invoke(&pgraph::read32<false, on>, NV_PGRAPH_INTR) & m_machine->invoke(&pgraph::read32<false, on>, NV_PGRAPH_INTR_EN)) {
+	if (m_pgraph->read32(NV_PGRAPH_INTR) & m_pgraph->read32(NV_PGRAPH_INTR_EN)) {
 		m_int_status |= (1 << NV_PMC_INTR_0_PGRAPH);
 	}
 	else {
@@ -200,35 +261,34 @@ pmc::updateIrq()
 }
 
 template<bool is_write>
-auto pmc::get_io_func(bool log, bool is_be)
+auto pmc::Impl::getIoFunc(bool log, bool is_be)
 {
 	if constexpr (is_write) {
 		if (log) {
-			return is_be ? nv2a_write<pmc, uint32_t, &pmc::write32<true>, big> : nv2a_write<pmc, uint32_t, &pmc::write32<true>, le>;
+			return is_be ? nv2a_write<pmc::Impl, uint32_t, &pmc::Impl::write32<true>, big> : nv2a_write<pmc::Impl, uint32_t, &pmc::Impl::write32<true>, le>;
 		}
 		else {
-			return is_be ? nv2a_write<pmc, uint32_t, &pmc::write32<false>, big> : nv2a_write<pmc, uint32_t, &pmc::write32<false>, le>;
+			return is_be ? nv2a_write<pmc::Impl, uint32_t, &pmc::Impl::write32<false>, big> : nv2a_write<pmc::Impl, uint32_t, &pmc::Impl::write32<false>, le>;
 		}
 	}
 	else {
 		if (log) {
-			return is_be ? nv2a_read<pmc, uint32_t, &pmc::read32<true>, big> : nv2a_read<pmc, uint32_t, &pmc::read32<true>, le>;
+			return is_be ? nv2a_read<pmc::Impl, uint32_t, &pmc::Impl::read32<true>, big> : nv2a_read<pmc::Impl, uint32_t, &pmc::Impl::read32<true>, le>;
 		}
 		else {
-			return is_be ? nv2a_read<pmc, uint32_t, &pmc::read32<false>, big> : nv2a_read<pmc, uint32_t, &pmc::read32<false>, le>;
+			return is_be ? nv2a_read<pmc::Impl, uint32_t, &pmc::Impl::read32<false>, big> : nv2a_read<pmc::Impl, uint32_t, &pmc::Impl::read32<false>, le>;
 		}
 	}
 }
 
-bool
-pmc::update_io(bool is_update)
+bool pmc::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
-	bool is_be = endianness & NV_PMC_BOOT_1_ENDIAN24_BIG;
-	if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), NV_PMC_BASE, NV_PMC_SIZE, false,
+	bool is_be = m_endianness & NV_PMC_BOOT_1_ENDIAN24_BIG;
+	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, NV_PMC_BASE, NV_PMC_SIZE, false,
 		{
-			.fnr32 = get_io_func<false>(log, is_be),
-			.fnw32 = get_io_func<true>(log, is_be)
+			.fnr32 = getIoFunc<false>(log, is_be),
+			.fnw32 = getIoFunc<true>(log, is_be)
 		},
 		this, is_update, is_update))) {
 		logger_en(error, "Failed to update mmio region");
@@ -238,24 +298,68 @@ pmc::update_io(bool is_update)
 	return true;
 }
 
-void
-pmc::reset()
+void pmc::Impl::reset()
 {
 	// Values dumped from a Retail 1.0 xbox
-	endianness = NV_PMC_BOOT_1_ENDIAN0_LITTLE | NV_PMC_BOOT_1_ENDIAN24_LITTLE;
+	m_endianness = NV_PMC_BOOT_1_ENDIAN0_LITTLE | NV_PMC_BOOT_1_ENDIAN24_LITTLE;
 	m_int_status = NV_PMC_INTR_0_NOT_PENDING;
 	m_int_enabled = NV_PMC_INTR_EN_0_INTA_DISABLED;
-	engine_enabled = NV_PMC_ENABLE_PTIMER | NV_PMC_ENABLE_PFB | NV_PMC_ENABLE_PCRTC;
+	m_engine_enabled = NV_PMC_ENABLE_PTIMER | NV_PMC_ENABLE_PFB | NV_PMC_ENABLE_PCRTC;
 }
 
-bool
-pmc::init()
+bool pmc::Impl::init(cpu *cpu, nv2a *gpu, machine *machine)
 {
+	m_pbus = gpu->getPbus();
+	m_pfb = gpu->getPfb();
+	m_pcrtc = gpu->getPcrtc();
+	m_ptimer = gpu->getPtimer();
+	m_pramin = gpu->getPramin();
+	m_pramdac = gpu->getPramdac();
+	m_pfifo = gpu->getPfifo();
+	m_pvideo = gpu->getPvideo();
+	m_puser = gpu->getPuser();
+	m_pgraph = gpu->getPgraph();
+	m_lc86cpu = cpu->get86cpu();
+	m_machine = machine;
 	reset();
 
-	if (!update_io(false)) {
+	if (!updateIo(false)) {
 		return false;
 	}
 
 	return true;
 }
+
+/** Public interface implementation **/
+bool pmc::init(cpu *cpu, nv2a *gpu, machine *machine)
+{
+	return m_impl->init(cpu, gpu, machine);
+}
+
+void pmc::reset()
+{
+	m_impl->reset();
+}
+
+void pmc::updateIo()
+{
+	m_impl->updateIo();
+}
+
+void pmc::updateIrq()
+{
+	m_impl->updateIrq();
+}
+
+uint32_t pmc::read32(uint32_t addr)
+{
+	return m_impl->read32<false>(addr);
+}
+
+void pmc::write32(uint32_t addr, const uint32_t value)
+{
+	m_impl->write32<false>(addr, value);
+}
+
+pmc::pmc() : m_impl{std::make_unique<pmc::Impl>()} {}
+pmc::~pmc() {}

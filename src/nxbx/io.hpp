@@ -43,7 +43,7 @@
 #define IO_FILE_DIRECTORY 0x10
 
 
-struct cpu_t;
+class cpu_t;
 
 namespace io {
 	// These definitions are the same used by nboxkrnl to report the final ntstatus of I/O requests

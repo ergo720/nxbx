@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include "nv2a_defs.hpp"
 
 #define NV_PTIMER 0x00009000
@@ -26,55 +27,25 @@
 #define NV_PTIMER_ALARM_0 (NV2A_REGISTER_BASE + 0x00009420) // Counter value that triggers the alarm interrupt
 
 
-class machine;
-enum engine_enabled : int;
+class cpu;
+class nv2a;
 
-class ptimer {
+class ptimer
+{
 public:
-	ptimer(machine *machine) : m_machine(machine) {}
-	bool init();
+	ptimer();
+	~ptimer();
+	bool init(cpu *cpu, nv2a *gpu);
 	void reset();
-	void update_io() { update_io(true); }
-	uint64_t get_next_alarm_time(uint64_t now);
-	template<bool log, engine_enabled enabled>
+	void updateIo();
+	uint64_t getNextAlarmTime(uint64_t now);
 	uint32_t read32(uint32_t addr);
-	template<bool log, engine_enabled enabled>
 	void write32(uint32_t addr, const uint32_t value);
-	uint8_t isCounterOn() { return counter_active; }
-	uint64_t getCounterPeriod() { return counter_period; }
-	void setCounterPeriod(uint64_t new_period) { counter_period = new_period; }
-	uint64_t counter_to_us();
+	uint8_t isCounterOn();
+	void setCounterPeriod(uint64_t new_period);
+	uint64_t counterToUs();
 
 private:
-	bool update_io(bool is_update);
-	template<bool is_write>
-	auto get_io_func(bool log, bool enabled, bool is_be);
-
-	machine *const m_machine;
-	// Host time when the last alarm interrupt was triggered
-	uint64_t last_alarm_time;
-	// Time in us before the alarm triggers
-	uint64_t counter_period;
-	// Bias added/subtracted to counter before an alarm is due
-	int64_t counter_bias;
-	// Counter is running if not zero
-	uint8_t counter_active;
-	// Offset added to counter
-	uint64_t counter_offset;
-	// Counter value when it was stopped
-	uint64_t counter_when_stopped;
-	// registers
-	std::atomic_uint32_t m_int_status; // atomic because it's accessed by the fifo thread
-	std::atomic_uint32_t m_int_enabled; // atomic because it's accessed by the fifo thread
-	uint32_t multiplier, divider;
-	uint32_t alarm;
-	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
-		{ NV_PTIMER_INTR_0, "NV_PTIMER_INTR_0" },
-		{ NV_PTIMER_INTR_EN_0, "NV_PTIMER_INTR_EN_0" },
-		{ NV_PTIMER_NUMERATOR, "NV_PTIMER_NUMERATOR" },
-		{ NV_PTIMER_DENOMINATOR, "NV_PTIMER_DENOMINATOR" },
-		{ NV_PTIMER_TIME_0, "NV_PTIMER_TIME_0" },
-		{ NV_PTIMER_TIME_1, "NV_PTIMER_TIME_1" },
-		{ NV_PTIMER_ALARM_0, "NV_PTIMER_ALARM_0" }
-	};
+	class Impl;
+	std::unique_ptr<Impl> m_impl;
 };

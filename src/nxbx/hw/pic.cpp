@@ -1,17 +1,78 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2023 ergo720
 // SPDX-FileCopyrightText: 2020 Halfix devs
 // This code is derived from https://github.com/nepx/halfix/blob/master/src/hardware/pic.c
 
+#include "lib86cpu.h"
 #include "machine.hpp"
+#include "pic.hpp"
+#include "cpu.hpp"
+#include <mutex>
 #include <bit>
 
 #define MODULE_NAME pic
 
+#define PIC_MASTER_CMD          0x20
+#define PIC_MASTER_DATA         0x21
+#define PIC_MASTER_ELCR         0x4D0
+#define PIC_SLAVE_CMD           0xA0
+#define PIC_SLAVE_DATA          0xA1
+#define PIC_SLAVE_ELCR          0x4D1
 
-uint8_t
-pic::get_interrupt()
+
+/** Private device implementation **/
+class pic::Impl
+{
+public:
+	bool init(machine *machine, unsigned idx);
+	void reset();
+	void updateIoLogging() { updateIo(true); }
+	template<bool log = false>
+	uint8_t read8(uint32_t addr);
+	template<bool log = false>
+	void write8(uint32_t addr, const uint8_t value);
+	template<bool log = false>
+	uint8_t read8elcr(uint32_t addr);
+	template<bool log = false>
+	void write8elcr(uint32_t addr, const uint8_t value);
+	static uint16_t getInterruptForCpu(void *opaque);
+	void raiseIrq(uint8_t a);
+	void lowerIrq(uint8_t a);
+
+	static inline std::mutex m_mtx;
+
+private:
+	bool updateIo(bool is_update);
+	bool isMaster() { return m_idx == 0; }
+	void updateState();
+	void writeOcw(unsigned idx, uint8_t value);
+	void writeIcw(unsigned idx, uint8_t value);
+	uint8_t lowerIntLineAndGetInterrupt();
+	uint8_t getInterrupt();
+
+	uint8_t imr, irr, isr, elcr;
+	uint8_t read_isr, in_init;
+	uint8_t vector_offset;
+	uint8_t priority_base;
+	uint8_t highest_priority_irq_to_send;
+	uint8_t pin_state;
+	unsigned icw_idx;
+	unsigned m_idx; // 0: master, 1: slave
+	// connected devices
+	static inline pic::Impl *m_picImpl[2];
+	cpu_t *m_lc86cpu;
+	// registers
+	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+		{ PIC_MASTER_CMD, "MASTER_COMMAND" },
+		{ PIC_MASTER_DATA, "MASTER_DATA" },
+		{ PIC_MASTER_ELCR, "MASTER_ELCR" },
+		{ PIC_SLAVE_CMD, "SLAVE_COMMAND" },
+		{ PIC_SLAVE_DATA, "SLAVE_DATA" },
+		{ PIC_SLAVE_ELCR, "SLAVE_ELCR" },
+	};
+};
+
+uint8_t pic::Impl::getInterrupt()
 {
 	uint8_t irq = highest_priority_irq_to_send, irq_mask = 1 << irq;
 	if ((irr & irq_mask) == 0) {
@@ -26,25 +87,29 @@ pic::get_interrupt()
 
 	isr |= irq_mask;
 
-	if (is_master() && irq == 2) {
-		return m_machine->invoke<1>(&pic::get_interrupt);
+	if (isMaster() && irq == 2) {
+		return m_picImpl[1]->getInterrupt();
 	}
 
 	return vector_offset + irq;
 }
 
-uint16_t
-get_interrupt_for_cpu(void *opaque)
+uint8_t pic::Impl::lowerIntLineAndGetInterrupt()
+{
+	cpu_lower_hw_int_line(m_lc86cpu);
+	return getInterrupt();
+}
+
+uint16_t pic::Impl::getInterruptForCpu(void *opaque)
 {
 	// NOTE: called from the cpu thread when it services a hw interrupt
-	std::unique_lock lock(pic::m_mtx);
-	pic *master = static_cast<pic *>(opaque);
-	cpu_lower_hw_int_line(master->m_machine->get_cpu());
-	return master->get_interrupt();
+	std::unique_lock lock(pic::Impl::m_mtx);
+	pic::Impl *master = static_cast<pic::Impl *>(opaque);
+	return master->lowerIntLineAndGetInterrupt();
 }
 
 void
-pic::update_state()
+pic::Impl::updateState()
 {
 	uint8_t unmasked, isr1;
 
@@ -66,12 +131,12 @@ pic::update_state()
 		if (unmasked & (1 << i)) {
 			highest_priority_irq_to_send = (priority_base + 1 + i) & 7;
 
-			if (is_master()) {
-				cpu_raise_hw_int_line(m_machine->get_cpu());
+			if (isMaster()) {
+				cpu_raise_hw_int_line(m_lc86cpu);
 			}
 			else {
-				m_machine->invoke(&pic::lower_irq, 2);
-				m_machine->invoke(&pic::raise_irq, 2);
+				m_picImpl[0]->lowerIrq(2);
+				m_picImpl[0]->raiseIrq(2);
 			}
 
 			return;
@@ -80,7 +145,7 @@ pic::update_state()
 }
 
 void
-pic::raise_irq(uint8_t irq)
+pic::Impl::raiseIrq(uint8_t irq)
 {
 	uint8_t mask = 1 << irq;
 
@@ -88,14 +153,14 @@ pic::raise_irq(uint8_t irq)
 		// level triggered
 		pin_state |= mask;
 		irr |= mask;
-		update_state();
+		updateState();
 	}
 	else {
 		// edge triggered
 		if ((pin_state & mask) == 0) {
 			pin_state |= mask;
 			irr |= mask;
-			update_state();
+			updateState();
 		}
 		else {
 			pin_state |= mask;
@@ -104,25 +169,25 @@ pic::raise_irq(uint8_t irq)
 }
 
 void
-pic::lower_irq(uint8_t irq)
+pic::Impl::lowerIrq(uint8_t irq)
 {
 	uint8_t mask = 1 << irq;
 	pin_state &= ~mask;
 	irr &= ~mask;
 
-	if (!is_master() && !irr) {
-		m_machine->invoke(&pic::lower_irq, 2);
+	if (!isMaster() && !irr) {
+		m_picImpl[0]->lowerIrq(2);
 	}
 }
 
 void
-pic::write_ocw(unsigned idx, uint8_t value)
+pic::Impl::writeOcw(unsigned idx, uint8_t value)
 {
 	switch (idx)
 	{
 	case 1:
 		imr = value;
-		update_state();
+		updateState();
 		break;
 
 	case 2: {
@@ -148,7 +213,7 @@ pic::write_ocw(unsigned idx, uint8_t value)
 					priority_base = irq;
 				}
 			}
-			update_state();
+			updateState();
 		}
 		else {
 			if (specific) {
@@ -175,7 +240,7 @@ pic::write_ocw(unsigned idx, uint8_t value)
 }
 
 void
-pic::write_icw(unsigned idx, uint8_t value)
+pic::Impl::writeIcw(unsigned idx, uint8_t value)
 {
 	switch (idx)
 	{
@@ -228,9 +293,9 @@ pic::write_icw(unsigned idx, uint8_t value)
 }
 
 template<bool log>
-void pic::write8(uint32_t addr, const uint8_t value)
+void pic::Impl::write8(uint32_t addr, const uint8_t value)
 {
-	std::unique_lock lock(pic::m_mtx);
+	std::unique_lock lock(pic::Impl::m_mtx);
 	if constexpr (log) {
 		log_io_write();
 	}
@@ -239,32 +304,32 @@ void pic::write8(uint32_t addr, const uint8_t value)
 		switch (value >> 3 & 3)
 		{
 		case 0:
-			write_ocw(2, value);
+			writeOcw(2, value);
 			break;
 
 		case 1:
-			write_ocw(3, value);
+			writeOcw(3, value);
 			break;
 
 		default:
-			cpu_lower_hw_int_line(m_machine->get_cpu());
-			write_icw(1, value);
+			cpu_lower_hw_int_line(m_lc86cpu);
+			writeIcw(1, value);
 		}
 	}
 	else {
 		if (in_init) {
-			write_icw(icw_idx, value);
+			writeIcw(icw_idx, value);
 		}
 		else {
-			write_ocw(1, value);
+			writeOcw(1, value);
 		}
 	}
 }
 
 template<bool log>
-uint8_t pic::read8(uint32_t addr)
+uint8_t pic::Impl::read8(uint32_t addr)
 {
-	std::unique_lock lock(pic::m_mtx);
+	std::unique_lock lock(pic::Impl::m_mtx);
 	uint8_t value;
 
 	if (addr & 1) {
@@ -282,9 +347,9 @@ uint8_t pic::read8(uint32_t addr)
 }
 
 template<bool log>
-void pic::write8_elcr(uint32_t addr, const uint8_t value)
+void pic::Impl::write8elcr(uint32_t addr, const uint8_t value)
 {
-	std::unique_lock lock(pic::m_mtx);
+	std::unique_lock lock(pic::Impl::m_mtx);
 	if constexpr (log) {
 		log_io_write();
 	}
@@ -293,9 +358,9 @@ void pic::write8_elcr(uint32_t addr, const uint8_t value)
 }
 
 template<bool log>
-uint8_t pic::read8_elcr(uint32_t addr)
+uint8_t pic::Impl::read8elcr(uint32_t addr)
 {
-	std::unique_lock lock(pic::m_mtx);
+	std::unique_lock lock(pic::Impl::m_mtx);
 	uint8_t value = elcr;
 
 	if constexpr (log) {
@@ -306,24 +371,24 @@ uint8_t pic::read8_elcr(uint32_t addr)
 }
 
 bool
-pic::update_io(bool is_update)
+pic::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
-	if (idx == 0) {
-		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), 0x20, 2, true,
+	if (m_idx == 0) {
+		if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, 0x20, 2, true,
 			{
-				.fnr8 = log ? cpu_read<pic, uint8_t, &pic::read8<true>> : cpu_read<pic, uint8_t, &pic::read8<false>>,
-				.fnw8 = log ? cpu_write<pic, uint8_t, &pic::write8<true>> : cpu_write<pic, uint8_t, &pic::write8<false>>
+				.fnr8 = log ? cpu_read<pic::Impl, uint8_t, &pic::Impl::read8<true>> : cpu_read<pic::Impl, uint8_t, &pic::Impl::read8<false>>,
+				.fnw8 = log ? cpu_write<pic::Impl, uint8_t, &pic::Impl::write8<true>> : cpu_write<pic::Impl, uint8_t, &pic::Impl::write8<false>>
 			},
 			this, is_update, is_update))) {
 			logger_en(error, "Failed to update io ports");
 			return false;
 		}
 
-		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), 0x4D0, 1, true,
+		if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, 0x4D0, 1, true,
 			{
-				.fnr8 = log ? cpu_read<pic, uint8_t, &pic::read8_elcr<true>> : cpu_read<pic, uint8_t, &pic::read8_elcr<false>>,
-				.fnw8 = log ? cpu_write<pic, uint8_t, &pic::write8_elcr<true>> : cpu_write<pic, uint8_t, &pic::write8_elcr<false>>
+				.fnr8 = log ? cpu_read<pic::Impl, uint8_t, &pic::Impl::read8elcr<true>> : cpu_read<pic::Impl, uint8_t, &pic::Impl::read8elcr<false>>,
+				.fnw8 = log ? cpu_write<pic::Impl, uint8_t, &pic::Impl::write8elcr<true>> : cpu_write<pic::Impl, uint8_t, &pic::Impl::write8elcr<false>>
 			},
 			this, is_update, is_update))) {
 			logger_en(error, "Failed to update elcr io ports");
@@ -331,20 +396,20 @@ pic::update_io(bool is_update)
 		}
 	}
 	else {
-		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), 0xA0, 2, true,
+		if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, 0xA0, 2, true,
 			{
-				.fnr8 = log ? cpu_read<pic, uint8_t, &pic::read8<true>> : cpu_read<pic, uint8_t, &pic::read8<false>>,
-				.fnw8 = log ? cpu_write<pic, uint8_t, &pic::write8<true>> : cpu_write<pic, uint8_t, &pic::write8<false>>
+				.fnr8 = log ? cpu_read<pic::Impl, uint8_t, &pic::Impl::read8<true>> : cpu_read<pic::Impl, uint8_t, &pic::Impl::read8<false>>,
+				.fnw8 = log ? cpu_write<pic::Impl, uint8_t, &pic::Impl::write8<true>> : cpu_write<pic::Impl, uint8_t, &pic::Impl::write8<false>>
 			},
 			this, is_update, is_update))) {
-			logger_en(error, "Failed to update pic io ports");
+			logger_en(error, "Failed to update pic::Impl io ports");
 			return false;
 		}
 
-		if (!LC86_SUCCESS(mem_init_region_io(m_machine->get_cpu(), 0x4D1, 1, true,
+		if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, 0x4D1, 1, true,
 			{
-				.fnr8 = log ? cpu_read<pic, uint8_t, &pic::read8_elcr<true>> : cpu_read<pic, uint8_t, &pic::read8_elcr<false>>,
-				.fnw8 = log ? cpu_write<pic, uint8_t, &pic::write8_elcr<true>> : cpu_write<pic, uint8_t, &pic::write8_elcr<false>>
+				.fnr8 = log ? cpu_read<pic::Impl, uint8_t, &pic::Impl::read8elcr<true>> : cpu_read<pic::Impl, uint8_t, &pic::Impl::read8elcr<false>>,
+				.fnw8 = log ? cpu_write<pic::Impl, uint8_t, &pic::Impl::write8elcr<true>> : cpu_write<pic::Impl, uint8_t, &pic::Impl::write8elcr<false>>
 			},
 			this, is_update, is_update))) {
 			logger_en(error, "Failed to update elcr io ports");
@@ -356,7 +421,7 @@ pic::update_io(bool is_update)
 }
 
 void
-pic::reset()
+pic::Impl::reset()
 {
 	vector_offset = 0;
 	imr = 0xFF;
@@ -369,12 +434,50 @@ pic::reset()
 }
 
 bool
-pic::init()
+pic::Impl::init(machine *machine, unsigned idx)
 {
-	if (!update_io(false)) {
+	m_lc86cpu = machine->get86cpu();
+	m_picImpl[idx] = this;
+	m_idx = idx;
+	if (idx == 0) {
+		cpu_set_int_func(m_lc86cpu, { pic::Impl::getInterruptForCpu, this });
+	}
+
+	if (!updateIo(false)) {
 		return false;
 	}
 
 	reset();
 	return true;
 }
+
+/** Public interface implementation **/
+bool pic::init(machine *machine, unsigned idx)
+{
+	return m_impl->init(machine, idx);
+}
+
+void pic::reset()
+{
+	m_impl->reset();
+}
+
+void pic::updateIoLogging()
+{
+	m_impl->updateIoLogging();
+}
+
+void pic::raiseIrq(uint8_t a)
+{
+	std::unique_lock lock(pic::Impl::m_mtx);
+	m_impl->raiseIrq(a);
+}
+
+void pic::lowerIrq(uint8_t a)
+{
+	std::unique_lock lock(pic::Impl::m_mtx);
+	m_impl->lowerIrq(a);
+}
+
+pic::pic() : m_impl{std::make_unique<pic::Impl>()} {}
+pic::~pic() {}

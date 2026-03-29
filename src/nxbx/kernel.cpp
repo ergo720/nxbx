@@ -2,6 +2,7 @@
 
 // SPDX-FileCopyrightText: 2023 ergo720
 
+#include "lib86cpu.h"
 #include "console.hpp"
 #include "io.hpp"
 #include "kernel.hpp"
@@ -49,7 +50,7 @@ namespace kernel {
 	}
 
 	template<bool log>
-	uint32_t read32(addr_t addr, void *opaque)
+	uint32_t read32(uint32_t addr, void *opaque)
 	{
 		static uint64_t s_acpi_time, s_curr_clock_increment;
 		uint32_t value = 0;
@@ -101,7 +102,7 @@ namespace kernel {
 	}
 
 	template<bool log>
-	void write32(addr_t addr, const uint32_t value, void *opaque)
+	void write32(uint32_t addr, const uint32_t value, void *opaque)
 	{
 		if constexpr (log) {
 			log_write<log_module::kernel, false, 0>(s_regs_info, addr, value);
@@ -140,8 +141,8 @@ namespace kernel {
 		}
 	}
 
-	template uint32_t read32<true>(addr_t addr, void *opaque);
-	template uint32_t read32<false>(addr_t addr, void *opaque);
-	template void write32<true>(addr_t addr, const uint32_t value, void *opaque);
-	template void write32<false>(addr_t addr, const uint32_t value, void *opaque);
+	template uint32_t read32<true>(uint32_t addr, void *opaque);
+	template uint32_t read32<false>(uint32_t addr, void *opaque);
+	template void write32<true>(uint32_t addr, const uint32_t value, void *opaque);
+	template void write32<false>(uint32_t addr, const uint32_t value, void *opaque);
 }

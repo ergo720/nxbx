@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2024 ergo720
 
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include "nv2a_defs.hpp"
 
 #define NV_PMC 0x00000000
@@ -13,7 +13,7 @@
 
 #define NV_PMC_BOOT_0 (NV2A_REGISTER_BASE + 0x00000000) // Contains the gpu identification number
 #define NV_PMC_BOOT_0_ID_NV2A_A3_DEVID0 0x02A000A3
-#define NV_PMC_BOOT_1 (NV2A_REGISTER_BASE + 0x00000004) // Switches the endianness of all accesses done through BAR0. PVGA is not affected because all its registers are single bytes
+#define NV_PMC_BOOT_1 (NV2A_REGISTER_BASE + 0x00000004) // Switches the endianness of all accesses done through BAR0
 #define NV_PMC_BOOT_1_ENDIAN0_LITTLE (0x00000000 << 0)
 #define NV_PMC_BOOT_1_ENDIAN0_BIG (0x00000001 << 0)
 #define NV_PMC_BOOT_1_ENDIAN24_LITTLE (0x00000000 << 24)
@@ -39,38 +39,23 @@
 #define NV_PMC_ENABLE_ALL (NV_PMC_ENABLE_PFIFO | NV_PMC_ENABLE_PGRAPH | NV_PMC_ENABLE_PTIMER | NV_PMC_ENABLE_PFB | NV_PMC_ENABLE_PCRTC | NV_PMC_ENABLE_PVIDEO)
 
 
+class cpu;
+class nv2a;
 class machine;
 
 class pmc
 {
 public:
-	pmc(machine *machine) : m_machine(machine) {}
-	bool init();
+	pmc();
+	~pmc();
+	bool init(cpu *cpu, nv2a *gpu, machine *machine);
 	void reset();
-	void update_io() { update_io(true); }
+	void updateIo();
 	void updateIrq();
-	template<bool log = false>
 	uint32_t read32(uint32_t addr);
-	template<bool log = false>
 	void write32(uint32_t addr, const uint32_t value);
 
 private:
-	bool update_io(bool is_update);
-	template<bool is_write>
-	auto get_io_func(bool log, bool is_be);
-
-	machine *const m_machine;
-	// registers
-	uint32_t endianness;
-	std::atomic_uint32_t m_int_status; // atomic because it's accessed by the fifo thread
-	std::atomic_uint32_t m_int_enabled; // atomic because it's accessed by the fifo thread
-	uint32_t engine_enabled;
-	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
-		{ NV_PMC_BOOT_0, "NV_PMC_BOOT_0" },
-		{ NV_PMC_BOOT_1, "NV_PMC_BOOT_1" },
-		{ NV_PMC_INTR_0, "NV_PMC_INTR_0" },
-		{ NV_PMC_INTR_0, "NV_PMC_INTR_0" },
-		{ NV_PMC_INTR_EN_0, "NV_PMC_INTR_EN_0" },
-		{ NV_PMC_ENABLE, "NV_PMC_ENABLE" }
-	};
+	class Impl;
+	std::unique_ptr<Impl> m_impl;
 };

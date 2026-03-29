@@ -2,6 +2,7 @@
 
 // SPDX-FileCopyrightText: 2023 ergo720
 
+#include "lib86cpu.h"
 #include "io.hpp"
 #include "logger.hpp"
 #include "cpu.hpp"

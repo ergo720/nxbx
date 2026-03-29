@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2023 ergo720
 
 #include "eeprom.hpp"
@@ -8,6 +7,7 @@
 #include <cstdint>
 #include <cinttypes>
 #include <cstring>
+#include <fstream>
 
 #define MODULE_NAME eeprom
 
@@ -50,33 +50,46 @@ static constexpr uint8_t s_default_eeprom[] = {
 static_assert(sizeof(s_default_eeprom) == 256);
 
 
-uint8_t
-eeprom::read_byte(uint8_t command)
+/** Private device implementation **/
+class eeprom::Impl
+{
+public:
+	bool init(machine *machine);
+	void deinit();
+	uint8_t read_byte(uint8_t command);
+	void write_byte(uint8_t command, uint8_t value);
+	uint16_t read_word(uint8_t command);
+	void write_word(uint8_t command, uint16_t value);
+
+private:
+	bool createDefault();
+
+	std::fstream m_fs;
+	uint8_t m_eeprom[256];
+};
+
+uint8_t eeprom::Impl::read_byte(uint8_t command)
 {
 	return m_eeprom[command];
 }
 
-void
-eeprom::write_byte(uint8_t command, uint8_t value)
+void eeprom::Impl::write_byte(uint8_t command, uint8_t value)
 {
 	m_eeprom[command] = value;
 }
 
-uint16_t
-eeprom::read_word(uint8_t command)
+uint16_t eeprom::Impl::read_word(uint8_t command)
 {
 	return m_eeprom[command] | (((uint16_t)m_eeprom[command + 1]) << 8);
 }
 
-void
-eeprom::write_word(uint8_t command, uint16_t value)
+void eeprom::Impl::write_word(uint8_t command, uint16_t value)
 {
 	m_eeprom[command] = value & 0xFF;
 	m_eeprom[command + 1] = value >> 8;
 }
 
-void
-eeprom::deinit()
+void eeprom::Impl::deinit()
 {
 	m_fs.seekg(0);
 	m_fs.write((const char *)m_eeprom, 256);
@@ -85,8 +98,7 @@ eeprom::deinit()
 	}
 }
 
-bool
-eeprom::init()
+bool eeprom::Impl::init(machine *machine)
 {
 	uintmax_t size;
 	std::filesystem::path eeprom_dir = combine_file_paths(emu_path::g_nxbx_dir, "eeprom.bin");
@@ -120,7 +132,7 @@ eeprom::init()
 	}
 }
 
-bool eeprom::createDefault()
+bool eeprom::Impl::createDefault()
 {
 	m_fs.write((const char *)s_default_eeprom, 256);
 	if (!m_fs.good()) {
@@ -130,3 +142,40 @@ bool eeprom::createDefault()
 	std::memcpy(m_eeprom, s_default_eeprom, 256);
 	return true;
 }
+
+/** Public interface implementation **/
+bool eeprom::init(machine *machine, log_module log_module)
+{
+	m_log_module = log_module;
+	return m_impl->init(machine);
+}
+
+void eeprom::deinit()
+{
+	if (m_impl) {
+		m_impl->deinit();
+	}
+}
+
+uint8_t eeprom::read_byte(uint8_t command)
+{
+	return m_impl->read_byte(command);
+}
+
+void eeprom::write_byte(uint8_t command, uint8_t value)
+{
+	m_impl->write_byte(command, value);
+}
+
+uint16_t eeprom::read_word(uint8_t command)
+{
+	return m_impl->read_word(command);
+}
+
+void eeprom::write_word(uint8_t command, uint16_t value)
+{
+	m_impl->write_word(command, value);
+}
+
+eeprom::eeprom() : m_impl{std::make_unique<eeprom::Impl>()} {}
+eeprom::~eeprom() {}

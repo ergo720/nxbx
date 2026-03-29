@@ -5,6 +5,7 @@
 #pragma once
 
 #include "machine.hpp"
+#include "smc.hpp"
 #include "host.hpp"
 #include <atomic>
 #include <thread>

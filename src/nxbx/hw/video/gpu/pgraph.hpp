@@ -1,16 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2025 ergo720
 
 #pragma once
 
 #include <cstdint>
-#include <thread>
+#include <memory>
 #include "nv2a_defs.hpp"
-#ifdef _WIN32
-#undef max
-#endif
-#include "spsc-queue.hpp"
 
 #define NV_PGRAPH 0x00400000
 #define NV_PGRAPH_BASE (NV2A_REGISTER_BASE + NV_PGRAPH)
@@ -39,74 +34,25 @@
 #define NV_PGRAPH_CHANNEL_CTX_TRIGGER_READ_IN (1 << 0) // load context
 #define NV_PGRAPH_CHANNEL_CTX_TRIGGER_WRITE_OUT (1 << 1) // unload context
 
-// Macros used in InputQueueEntry for ctx switches
-#define CTX_SWITCH_CHID 0x1F // target channel
-#define CTX_SWITCH_STATUS (1 << 31) // switch requested=1
 
-
-class machine;
-enum engine_enabled : int;
+class cpu;
+class nv2a;
 
 class pgraph
 {
 public:
-	pgraph(machine *machine) : m_machine(machine) {}
-	bool init();
+	pgraph();
+	~pgraph();
+	bool init(cpu *cpu, nv2a *gpu);
 	void deinit();
 	void reset();
-	void update_io() { update_io(true); }
-	template<bool log, engine_enabled enabled>
+	void updateIo();
 	uint32_t read32(uint32_t addr);
-	template<bool log, engine_enabled enabled>
 	void write32(uint32_t addr, const uint32_t value);
 	template<bool is_mthd_zero>
-	void submitMethod(uint32_t mthd, uint32_t param, uint32_t subchan, uint32_t chid)
-	{
-		// called from the fifo thread
-		uint32_t ctx_switch = 0;
-		if constexpr (is_mthd_zero) {
-			ctx_switch = chid | CTX_SWITCH_STATUS;
-		}
-		submitMethod(mthd, param, subchan, ctx_switch);
-	}
+	void submitMethod(uint32_t mthd, uint32_t param, uint32_t subchan, uint32_t chid);
 
 private:
-	struct InputQueueEntry
-	{
-		uint32_t m_mthd;
-		uint32_t m_param;
-		uint32_t m_subchan;
-		uint32_t m_ctx_switch;
-	};
-
-	bool update_io(bool is_update);
-	template<bool is_write>
-	auto get_io_func(bool log, bool enabled, bool is_be);
-	void graphHandler(std::stop_token stok);
-	void submitMethod(uint32_t mthd, uint32_t param, uint32_t subchan, uint32_t ctx_switch);
-
-	machine *const m_machine;
-	std::jthread m_jthr; // async graphics worker thread
-	std::atomic_flag m_graph_has_work;
-	std::atomic_flag m_ctx_switch_trig;
-	std::atomic_bool m_is_enabled;
-	std::mutex m_graph_mtx;
-	dro::SPSCQueue<InputQueueEntry> m_input_queue{256};
-	// atomic registers
-	std::atomic_uint32_t m_int_status;
-	std::atomic_uint32_t m_int_enabled;
-	std::atomic_uint32_t m_fifo_access;
-	// registers
-	uint32_t m_regs[NV_PGRAPH_SIZE / 4];
-	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
-		{ NV_PGRAPH_DEBUG_3, "NV_PGRAPH_DEBUG_3" },
-		{ NV_PGRAPH_INTR, "NV_PGRAPH_INTR" },
-		{ NV_PGRAPH_INTR_EN, "NV_PGRAPH_INTR_EN" },
-		{ NV_PGRAPH_CTX_CONTROL, "NV_PGRAPH_CTX_CONTROL" },
-		{ NV_PGRAPH_CTX_USER, "NV_PGRAPH_CTX_USER" },
-		{ NV_PGRAPH_TRAPPED_ADDR, "NV_PGRAPH_TRAPPED_ADDR"},
-		{ NV_PGRAPH_FIFO, "NV_PGRAPH_FIFO" },
-		{ NV_PGRAPH_CHANNEL_CTX_POINTER, "NV_PGRAPH_CHANNEL_CTX_POINTER" },
-		{ NV_PGRAPH_CHANNEL_CTX_TRIGGER, "NV_PGRAPH_CHANNEL_CTX_TRIGGER" },
-	};
+	class Impl;
+	std::unique_ptr<Impl> m_impl;
 };

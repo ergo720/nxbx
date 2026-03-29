@@ -1,45 +1,26 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2023 ergo720
 
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
+#include <memory>
 
-#define PIT_CHANNEL0_DATA  0x40
-#define PIT_PORT_CMD       0x43
 
 class machine;
+class cpu;
 
-struct pit_channel {
-	uint8_t timer_mode, wmode;
-	uint8_t timer_running, lsb_read;
-	uint16_t counter;
-	uint64_t last_irq_time;
-};
-
-class pit {
+class pit
+{
 public:
-	pit(machine *machine) : m_machine(machine) {}
-	bool init();
+	pit();
+	~pit();
+	bool init(machine *machine);
 	void reset();
-	void update_io_logging() { update_io(true); }
-	uint64_t get_next_irq_time(uint64_t now);
-	template<bool log = false>
-	void write8(uint32_t addr, const uint8_t value);
+	void updateIoLogging();
+	uint64_t getNextIrqTime(uint64_t now);
 
 private:
-	bool update_io(bool is_update);
-	uint64_t counter_to_us();
-	void start_timer(uint8_t channel);
-	void channel_reset(uint8_t channel);
-
-	machine *const m_machine;
-	pit_channel m_chan[3];
-	// NOTE: on the xbox, the pit frequency is 6% lower than the default one, see https://xboxdevwiki.net/Porting_an_Operating_System_to_the_Xbox_HOWTO#Timer_Frequency
-	static constexpr uint64_t clock_freq = 1125000;
-	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
-		{ PIT_CHANNEL0_DATA, "CHANNEL0_DATA" },
-		{ PIT_PORT_CMD, "COMMAND" },
-	};
+	class Impl;
+	std::unique_ptr<Impl> m_impl;
 };

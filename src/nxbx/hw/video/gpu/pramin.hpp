@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2024 ergo720
 
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include "nv2a_defs.hpp"
 
 #define NV_PRAMIN 0x00700000
@@ -12,26 +12,20 @@
 #define NV_PRAMIN_SIZE 0x100000 // = 1 MiB
 
 
-class machine;
+class cpu;
+class nv2a;
 
-class pramin {
+class pramin
+{
 public:
-	pramin(machine *machine) : m_machine(machine) {}
-	bool init();
-	void update_io() { update_io(true); }
-	template<typename T, bool log = false>
-	T read(uint32_t addr);
-	template<typename T, bool log = false>
-	void write(uint32_t addr, const T value);
+	pramin();
+	~pramin();
+	bool init(cpu *cpu, nv2a *gpu);
+	void updateIo();
+	uint32_t read32(uint32_t addr);
+	void write32(uint32_t addr, const uint32_t value);
 
 private:
-	void log_read(uint32_t addr, uint32_t value);
-	void log_write(uint32_t addr, uint32_t value);
-	bool update_io(bool is_update);
-	template<bool is_write, typename T>
-	auto get_io_func(bool log, bool is_be);
-	uint32_t ramin_to_ram_addr(uint32_t ramin_addr);
-	machine *const m_machine;
-	uint8_t *m_ram;
-	uint32_t m_ramsize;
+	class Impl;
+	std::unique_ptr<Impl> m_impl;
 };

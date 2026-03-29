@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2023 ergo720
 
+#include "lib86cpu.h"
 #include "machine.hpp"
 #include "console.hpp"
 #include "kernel.hpp"
@@ -10,6 +10,12 @@
 #include "clock.hpp"
 #include "isettings.hpp"
 #include "paths.hpp"
+#include "cpu.hpp"
+#include "pit.hpp"
+#include "cmos.hpp"
+#include "usb/ohci.hpp"
+#include "video/gpu/nv2a.hpp"
+#include "video/gpu/nv2a_defs.hpp"
 #include <fstream>
 #include <cinttypes>
 #include <cstring>
@@ -17,8 +23,37 @@
 #define MODULE_NAME cpu
 
 
-static consteval bool
-check_cpu_log_lv()
+/** Private device implementation **/
+class cpu::Impl
+{
+public:
+	bool init(const boot_params &params, machine *machine);
+	void deinit();
+	void reset();
+	void start();
+	void exit();
+	void updateIoLogging() { updateIo(true); }
+	uint64_t checkPeriodicEvents(uint64_t now);
+	cpu_t *get86cpu() { return m_lc86cpu; }
+	uint32_t getRamsize() { return m_ramsize; }
+
+private:
+	bool updateIo(bool is_update);
+	uint64_t checkPeriodicEvents();
+	static void cpu_logger(log_level lv, const unsigned count, const char *msg, ...);
+
+	uint32_t m_ramsize;
+	bool m_is_dbg_present;
+	// connected devices
+	pic *m_pic;
+	pit *m_pit;
+	cmos *m_cmos;
+	nv2a *m_nv2a;
+	usb0 *m_usb0;
+	cpu_t *m_lc86cpu;
+};	
+
+static consteval bool check_cpu_log_lv()
 {
 	return (std::to_underlying(log_level::debug) == std::to_underlying(log_lv::debug)) &&
 		(std::to_underlying(log_level::info) == std::to_underlying(log_lv::info)) &&
@@ -29,9 +64,7 @@ check_cpu_log_lv()
 // Make sure that our log levels are the same used in lib86cpu too
 static_assert(check_cpu_log_lv());
 
-
-static void
-cpu_logger(log_level lv, const unsigned count, const char *msg, ...)
+void cpu::Impl::cpu_logger(log_level lv, const unsigned count, const char *msg, ...)
 {
 	std::va_list args;
 	va_start(args, msg);
@@ -39,8 +72,7 @@ cpu_logger(log_level lv, const unsigned count, const char *msg, ...)
 	va_end(args);
 }
 
-bool
-cpu::update_io(bool is_update)
+bool cpu::Impl::updateIo(bool is_update)
 {
 	bool log = check_if_enabled<log_module::kernel>();
 	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, kernel::IO_BASE, kernel::IO_SIZE, true,
@@ -55,15 +87,18 @@ cpu::update_io(bool is_update)
 	return true;
 }
 
-void
-cpu::reset()
+void cpu::Impl::reset()
 {
 	// TODO: lib86cpu doesn't support resetting the cpu yet
 }
 
-bool
-cpu::init(const boot_params &params)
+bool cpu::Impl::init(const boot_params &params, machine *machine)
 {
+	m_pic = machine->getPic(0);
+	m_pit = machine->getPit();
+	m_cmos = machine->getCmos();
+	m_nv2a = machine->getGpu();
+	m_usb0 = machine->getUsb(0);
 	m_ramsize = params.console_type == console_t::xbox ? RAM_SIZE64 : RAM_SIZE128;
 
 	// Load the nboxkrnl exe file
@@ -115,7 +150,7 @@ cpu::init(const boot_params &params)
 	}
 
 	// Init lib86cpu
-	if (!LC86_SUCCESS(cpu_new(m_ramsize, m_lc86cpu, { get_interrupt_for_cpu, m_machine->invoke(&pic::get) }))) {
+	if (!LC86_SUCCESS(cpu_new(m_ramsize, m_lc86cpu))) {
 		logger_en(error, "Failed to create cpu instance");
 		return false;
 	}
@@ -140,7 +175,7 @@ cpu::init(const boot_params &params)
 		return false;
 	}
 
-	if (!update_io(false)) {
+	if (!updateIo(false)) {
 		return false;
 	}
 
@@ -311,32 +346,29 @@ cpu::init(const boot_params &params)
 	return true;
 }
 
-uint64_t
-cpu::check_periodic_events(uint64_t now)
+uint64_t cpu::Impl::checkPeriodicEvents(uint64_t now)
 {
 	std::array<uint64_t, 4> dev_timeout;
-	dev_timeout[0] = m_machine->invoke(&pit::get_next_irq_time, now);
-	dev_timeout[1] = m_machine->invoke(&cmos::get_next_update_time, now);
-	dev_timeout[2] = m_machine->invoke(&nv2a::get_next_update_time, now);
-	dev_timeout[3] = m_machine->invoke(&usb0::get_next_update_time, now);
+	dev_timeout[0] = m_pit->getNextIrqTime(now);
+	dev_timeout[1] = m_cmos->getNextUpdateTime(now);
+	dev_timeout[2] = m_nv2a->getNextUpdateTime(now);
+	dev_timeout[3] = m_usb0->getNextUpdateTime(now);
 
 	return *std::min_element(dev_timeout.begin(), dev_timeout.end());
 }
 
-uint64_t
-cpu::check_periodic_events()
+uint64_t cpu::Impl::checkPeriodicEvents()
 {
-	return check_periodic_events(timer::get_now());
+	return checkPeriodicEvents(timer::get_now());
 }
 
-void
-cpu::start()
+void cpu::Impl::start()
 {
 	cpu_sync_state(m_lc86cpu);
 
 	lc86_status code;
 	while (true) {
-		code = cpu_run_until(m_lc86cpu, check_periodic_events());
+		code = cpu_run_until(m_lc86cpu, checkPeriodicEvents());
 		if (code != lc86_status::timeout) [[unlikely]] {
 			break;
 		}
@@ -345,14 +377,12 @@ cpu::start()
 	logger<log_lv::highest, log_module::nxbx, false>("Emulation terminated with status %" PRId32 ". The error was \"%s\"", static_cast<int32_t>(code), get_last_error().c_str());
 }
 
-void
-cpu::exit()
+void cpu::Impl::exit()
 {
 	cpu_exit(m_lc86cpu);
 }
 
-void
-cpu::deinit()
+void cpu::Impl::deinit()
 {
 	if (m_is_dbg_present) {
 		auto ini = get_settings();
@@ -403,3 +433,52 @@ cpu::deinit()
 		m_lc86cpu = nullptr;
 	}
 }
+
+/** Public interface implementation **/
+bool cpu::init(const boot_params &params, machine *machine)
+{
+	return m_impl->init(params, machine);
+}
+
+void cpu::deinit()
+{
+	m_impl->deinit();
+}
+
+void cpu::reset()
+{
+	m_impl->reset();
+}
+
+void cpu::start()
+{
+	m_impl->start();
+}
+
+void cpu::exit()
+{
+	m_impl->exit();
+}
+
+void cpu::updateIoLogging()
+{
+	m_impl->updateIoLogging();
+}
+
+cpu_t *cpu::get86cpu()
+{
+	return m_impl->get86cpu();
+}
+
+uint32_t cpu::getRamsize()
+{
+	return m_impl->getRamsize();
+}
+
+uint64_t cpu::checkPeriodicEvents(uint64_t now)
+{
+	return m_impl->checkPeriodicEvents(now);
+}
+
+cpu::cpu() : m_impl{std::make_unique<cpu::Impl>()} {}
+cpu::~cpu() {}
