@@ -12,7 +12,7 @@ class machine;
 class adm1032 : public smbus_device
 {
 public:
-	adm1032() ;
+	adm1032();
 	~adm1032();
 	bool init(machine *machine, log_module module_name) override;
 	void deinit() override;

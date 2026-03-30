@@ -15,6 +15,8 @@
 
 #define logger_en(lv, msg, ...) do { logger<log_lv::lv, log_module::MODULE_NAME, true>(msg __VA_OPT__(,) __VA_ARGS__); } while(0)
 #define logger_mod_en(lv, mod, msg, ...) do { logger<log_lv::lv, log_module::mod, true>(msg __VA_OPT__(,) __VA_ARGS__); } while(0)
+#define log_io_read_en() log_read<log_module::MODULE_NAME, true, 0>(m_regs_info, addr, value)
+#define log_io_write_en() log_write<log_module::MODULE_NAME, true, 0>(m_regs_info, addr, value)
 #define log_io_read() log_read<log_module::MODULE_NAME, false, 0>(m_regs_info, addr, value)
 #define log_io_write() log_write<log_module::MODULE_NAME, false, 0>(m_regs_info, addr, value)
 #define module_enabled() check_if_enabled<log_module::MODULE_NAME>()

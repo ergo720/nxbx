@@ -109,13 +109,15 @@ uint8_t smc::Impl::read_byte(uint8_t addr)
 		value = 0;
 	}
 
-	log_io_read();
+	log_io_read_en();
 
 	return value;
 }
 
 void smc::Impl::write_byte(uint8_t addr, uint8_t value)
 {
+	log_io_write_en();
+
 	switch (addr)
 	{
 	case SMC_VERSION_STR:
@@ -144,8 +146,6 @@ void smc::Impl::write_byte(uint8_t addr, uint8_t value)
 	default:
 		nxbx_fatal("Unhandled write with command 0x%" PRIX8 " and value 0x%" PRIX8, addr, value);
 	}
-
-	log_io_write();
 }
 
 void smc::Impl::update_tray_state(::tray_state state, bool do_int)
