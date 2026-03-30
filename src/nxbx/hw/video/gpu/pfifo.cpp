@@ -77,6 +77,7 @@ private:
 	uint8_t *m_ram;
 	std::jthread m_jthr; // async fifo worker thread
 	std::atomic_flag m_fifo_has_work;
+	std::atomic_flag m_puller_has_err;
 	std::atomic_bool m_is_enabled;
 	std::mutex m_fifo_mtx;
 	// connected devices
@@ -110,6 +111,7 @@ private:
 		{ NV_PFIFO_CACHE1_DMA_SUBROUTINE, "NV_PFIFO_CACHE1_DMA_SUBROUTINE" },
 		{ NV_PFIFO_CACHE1_PULL0, "NV_PFIFO_CACHE1_PULL0" },
 		{ NV_PFIFO_CACHE1_PULL1, "NV_PFIFO_CACHE1_PULL1" },
+		{ NV_PFIFO_CACHE1_HASH, "NV_PFIFO_CACHE1_HASH" },
 		{ NV_PFIFO_CACHE1_GET, "NV_PFIFO_CACHE1_GET" },
 		{ NV_PFIFO_CACHE1_ENGINE, "NV_PFIFO_CACHE1_ENGINE" },
 		{ NV_PFIFO_CACHE1_DMA_DCOUNT, "NV_PFIFO_CACHE1_DMA_DCOUNT" },
@@ -148,27 +150,35 @@ void pfifo::Impl::write32(uint32_t addr, const uint32_t value)
 		break;
 
 	case NV_PFIFO_CACHE1_PUSH0: // pusher access to cache1 changed and possibly put != get, notify the pusher
+	case NV_PFIFO_CACHE1_DMA_PUSH: // pusher state changed and possibly put != get, notify the pusher
 	case NV_PFIFO_CACHE1_DMA_PUT: // dma pointer changed, notify the pusher
 	case NV_PFIFO_CACHE1_DMA_GET: // dma pointer changed, notify the pusher
 	case NV_PFIFO_CACHE1_PULL0: // puller access to cache1 changed and possibly put != get, notify the pusher
-		REG_PFIFO(addr) = value;
+	{
+		uint32_t ro_mask = 0;
+		if (addr == NV_PFIFO_CACHE1_DMA_PUSH) {
+			ro_mask = NV_PFIFO_CACHE1_DMA_PUSH_STATE | NV_PFIFO_CACHE1_DMA_PUSH_BUFFER;
+		}
+		else if (addr == NV_PFIFO_CACHE1_PULL0) {
+			ro_mask = NV_PFIFO_CACHE1_PULL0_HASH | NV_PFIFO_CACHE1_PULL0_DEVICE | NV_PFIFO_CACHE1_PULL0_HASH_STATE;
+		}
+		REG_PFIFO(addr) = value & ~ro_mask;
 		lock.unlock();
 		m_fifo_has_work.test_and_set();
 		m_fifo_has_work.notify_one();
-		break;
-
-	case NV_PFIFO_CACHE1_DMA_PUSH:
-		// Mask out read-only bits
-		REG_PFIFO(addr) = (value & ~(NV_PFIFO_CACHE1_DMA_PUSH_STATE | NV_PFIFO_CACHE1_DMA_PUSH_BUFFER));
-		// pusher state changed and possibly put != get, notify the pusher
-		lock.unlock();
-		m_fifo_has_work.test_and_set();
-		m_fifo_has_work.notify_one();
-		break;
+	}
+	break;
 
 	case NV_PFIFO_CACHE1_STATUS:
 	case NV_PFIFO_RUNOUT_STATUS:
 		// read-only
+		break;
+
+	case NV_PFIFO_CACHE1_HASH:
+		REG_PFIFO(addr) = value;
+		m_puller_has_err.clear();
+		lock.unlock();
+		m_puller_has_err.notify_one();
 		break;
 
 	default:
@@ -254,7 +264,7 @@ pfifo::Impl::CoroFrame pfifo::Impl::pusher(const std::stop_token &stok)
 		// Process all entries until the fifo is empty
 		while (curr_pb_get != curr_pb_put) {
 			if (curr_pb_get >= pb_obj.limit) {
-				err_msg = "Pusher error: curr_pb_get >= pb_obj.limit";
+				err_msg = "Pusher exception: curr_pb_get >= pb_obj.limit";
 				err_code = NV_PFIFO_CACHE1_DMA_STATE_ERROR_PROTECTION; // set mem fault error
 				goto pusher_error;
 			}
@@ -328,7 +338,7 @@ pfifo::Impl::CoroFrame pfifo::Impl::pusher(const std::stop_token &stok)
 					// call (nv1a+) -> save current pb get addr and calls the routine at the specified addr
 					// JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ10 -> J: call addr
 					if (REG_PFIFO(NV_PFIFO_CACHE1_DMA_SUBROUTINE) & 1) {
-						err_msg = "Pusher error: call command while another subroutine is already active";
+						err_msg = "Pusher exception: call command while another subroutine is already active";
 						err_code = NV_PFIFO_CACHE1_DMA_STATE_ERROR_CALL; // set call error
 						goto pusher_error;
 					}
@@ -339,7 +349,7 @@ pfifo::Impl::CoroFrame pfifo::Impl::pusher(const std::stop_token &stok)
 					// return (nv1a+) -> restore pb get addr from subroutine return addr saved with a previous call
 					// 00000000000000100000000000000000
 					if ((REG_PFIFO(NV_PFIFO_CACHE1_DMA_SUBROUTINE) & 1) == 0) {
-						err_msg = "Pusher error: return command while subroutine is not active";
+						err_msg = "Pusher exception: return command while subroutine is not active";
 						err_code = NV_PFIFO_CACHE1_DMA_STATE_ERROR_RETURN; // set return error
 						goto pusher_error;
 					}
@@ -358,7 +368,7 @@ pfifo::Impl::CoroFrame pfifo::Impl::pusher(const std::stop_token &stok)
 				}
 				else {
 					std::array<char, 9> pb_entry_buff{};
-					err_msg = "Pusher error: encountered unrecognized command, pb_entry=0x";
+					err_msg = "Pusher exception: encountered unrecognized command, pb_entry=0x";
 					[[maybe_unused]] const auto &ret = std::to_chars(pb_entry_buff.data(), pb_entry_buff.data() + pb_entry_buff.size(), pb_entry, 16);
 					assert(ret.ec == std::errc());
 					err_msg += pb_entry_buff.data();
@@ -383,12 +393,29 @@ pfifo::Impl::CoroFrame pfifo::Impl::pusher(const std::stop_token &stok)
 		REG_PFIFO(NV_PFIFO_INTR_0) |= NV_PFIFO_INTR_0_DMA_PUSHER; // raise pusher interrupt
 		m_fifo_mtx.unlock();
 		m_pmc->updateIrq();
+		err_msg = "";
+		err_code = 0;
 	}
 }
 
 void pfifo::Impl::puller(const std::stop_token &stok, std::coroutine_handle<CoroFrame::promise_type> coro)
 {
 	coro(); // switch to pusher (this only happens at startup)
+
+	// These three are used when the puller encounters an error
+	std::string err_msg("");
+	uint32_t err_code = 0;
+	auto &&err_handler = [&err_msg, &err_code](RamhtElement elem)
+		{
+			if (elem.m_valid == NV_RAMHT_STATUS_INVALID) {
+				err_msg = "Puller exception: hashing failed, no matching object found. Method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32;
+				err_code = NV_PFIFO_CACHE1_PULL0_HASH;
+			}
+			else {
+				err_msg = "Puller exception: software method. Method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32;
+				err_code = NV_PFIFO_CACHE1_PULL0_DEVICE;
+			}
+		};
 
 	while (true) {
 		uint32_t cache1_status = REG_PFIFO(NV_PFIFO_CACHE1_STATUS);
@@ -397,7 +424,6 @@ void pfifo::Impl::puller(const std::stop_token &stok, std::coroutine_handle<Coro
 			// Puller access to cache1 is disabled, switch back to the pusher and push new entries if cache1 is not full
 			if (cache1_status & NV_PFIFO_CACHE1_STATUS_HIGH_MARK) {
 				// Cache1 is full, so we must wait here
-				assert(m_fifo_has_work.test() == false);
 				m_fifo_mtx.unlock();
 				m_fifo_has_work.wait(false);
 				m_fifo_mtx.lock();
@@ -438,13 +464,16 @@ void pfifo::Impl::puller(const std::stop_token &stok, std::coroutine_handle<Coro
 			// Method zero binds an engine object to a subchannel, and the handle to lookup is the parameter of the method
 
 			RamhtElement elem = ramhtSearch(param);
-			assert(elem.m_valid == NV_RAMHT_STATUS_VALID); // should always be valid
+			if ((elem.m_valid == NV_RAMHT_STATUS_INVALID) || (elem.m_engine == NV_RAMHT_ENGINE_SW)) [[unlikely]] {
+				err_handler(elem);
+				goto puller_error;
+			}
 			assert(elem.m_chid == (REG_PFIFO(NV_PFIFO_CACHE1_PUSH1) & NV_PFIFO_CACHE1_PUSH1_CHID)); // should always be the case on xbox
 			assert(elem.m_engine == NV_RAMHT_ENGINE_GRAPHICS); // should always be the case on xbox
 
 			// Bind the found engine to subchannel
 			(REG_PFIFO(NV_PFIFO_CACHE1_ENGINE) &= ~(3 << (mthd_subchan << 2))) |= (elem.m_engine << (mthd_subchan << 2));
-			(REG_PFIFO(NV_PFIFO_CACHE1_PULL1) &= ~NV_PFIFO_CACHE0_PULL1_ENGINE) |= elem.m_engine;
+			(REG_PFIFO(NV_PFIFO_CACHE1_PULL1) &= ~NV_PFIFO_CACHE1_PULL1_ENGINE) |= elem.m_engine;
 
 			// Release the lock since submitMethod will block if the pgraph queue is full
 			m_fifo_mtx.unlock();
@@ -458,14 +487,17 @@ void pfifo::Impl::puller(const std::stop_token &stok, std::coroutine_handle<Coro
 				// Methods in the range [0x180-0x1fc] require a handle lookup in ramht, which is then sent to the bound engine as parameter
 
 				RamhtElement elem = ramhtSearch(param);
-				assert(elem.m_valid == NV_RAMHT_STATUS_VALID); // should always be valid
+				if ((elem.m_valid == NV_RAMHT_STATUS_INVALID) || (elem.m_engine == NV_RAMHT_ENGINE_SW)) [[unlikely]] {
+					err_handler(elem);
+					goto puller_error;
+				}
 				assert(elem.m_chid == (REG_PFIFO(NV_PFIFO_CACHE1_PUSH1) & NV_PFIFO_CACHE1_PUSH1_CHID)); // should always be the case on xbox
 				param = elem.m_instance;
 			}
 
 			uint32_t bound_engine = (REG_PFIFO(NV_PFIFO_CACHE1_ENGINE) & (3 << (mthd_subchan << 2))) >> (mthd_subchan << 2);
 			assert(bound_engine == NV_RAMHT_ENGINE_GRAPHICS); // should always be the case on xbox
-			(REG_PFIFO(NV_PFIFO_CACHE1_PULL1) &= ~NV_PFIFO_CACHE0_PULL1_ENGINE) |= bound_engine;
+			(REG_PFIFO(NV_PFIFO_CACHE1_PULL1) &= ~NV_PFIFO_CACHE1_PULL1_ENGINE) |= bound_engine;
 
 			// Release the lock since submitMethod will block if the pgraph queue is full
 			m_fifo_mtx.unlock();
@@ -478,6 +510,26 @@ void pfifo::Impl::puller(const std::stop_token &stok, std::coroutine_handle<Coro
 			break;
 		}
 
+		if (stok.stop_requested()) [[unlikely]] {
+			break;
+		}
+
+		continue;
+
+	puller_error:
+		assert((err_msg != "") && err_code);
+		logger_en(warn, err_msg.c_str(), mthd, mthd_subchan, param);
+		REG_PFIFO(NV_PFIFO_CACHE1_PULL0) |= err_code; // set error code
+		REG_PFIFO(NV_PFIFO_CACHE1_DMA_PUSH) &= ~NV_PFIFO_CACHE1_DMA_PUSH_STATE; // clear pusher busy flag
+		REG_PFIFO(NV_PFIFO_CACHE1_GET) = cache1_get; // restart from the faulting method
+		REG_PFIFO(NV_PFIFO_INTR_0) |= NV_PFIFO_INTR_0_CACHE_ERROR; // raise puller interrupt
+		m_puller_has_err.test_and_set();
+		m_fifo_mtx.unlock();
+		m_pmc->updateIrq();
+		err_msg = "";
+		err_code = 0;
+		m_puller_has_err.wait(true);
+		m_fifo_mtx.lock();
 		if (stok.stop_requested()) [[unlikely]] {
 			break;
 		}
@@ -523,12 +575,18 @@ pfifo::Impl::RamhtElement pfifo::Impl::ramhtSearch(uint32_t handle)
 	uint32_t ramht_bits = std::countr_zero(ramht_size) - 1;
 	uint32_t hash = 0;
 
+	// We are hashing, so set the busy flag
+	REG_PFIFO(NV_PFIFO_CACHE1_PULL0) |= NV_PFIFO_CACHE1_PULL0_HASH_STATE;
+
 	// Same algorithm as used in nouveau
 	while (handle) {
 		hash ^= (handle & ((1 << ramht_bits) - 1));
 		handle >>= ramht_bits;
 	}
 	hash ^= curr_chan_id << (ramht_bits - 4);
+
+	// We are done with hashing, so clear the busy flag
+	REG_PFIFO(NV_PFIFO_CACHE1_PULL0) &= ~NV_PFIFO_CACHE1_PULL0_HASH_STATE;
 
 	uint32_t ramht_addr = (REG_PFIFO(NV_PFIFO_RAMHT) & NV_PFIFO_RAMHT_BASE_ADDRESS) << 8;
 	uint32_t entry_handle = m_pramin->read32(NV_PRAMIN_BASE + ramht_addr + hash * 8);
@@ -685,6 +743,8 @@ void pfifo::Impl::deinit()
 	if (m_pgraph) {
 		m_pgraph->deinit();
 	}
+	m_puller_has_err.clear();
+	m_puller_has_err.notify_one();
 	m_fifo_has_work.test_and_set();
 	m_fifo_has_work.notify_one();
 	m_jthr.join();

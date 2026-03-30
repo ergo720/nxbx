@@ -25,6 +25,7 @@
 #define NV_RAMHT_STATUS_VALID 1
 
 #define NV_PFIFO_INTR_0 (NV2A_REGISTER_BASE + 0x00002100) // Pending pfifo interrupts. Writing a 0 has no effect, and writing a 1 clears the interrupt
+#define NV_PFIFO_INTR_0_CACHE_ERROR (1 << 0)
 #define NV_PFIFO_INTR_0_DMA_PUSHER (1 << 12)
 #define NV_PFIFO_INTR_EN_0 (NV2A_REGISTER_BASE + 0x00002140) // Enable/disable pfifo interrupts
 #define NV_PFIFO_RAMHT (NV2A_REGISTER_BASE + 0x00002210) // Contains the base address and size of ramht in ramin
@@ -69,10 +70,16 @@
 #define NV_PFIFO_CACHE1_DMA_GET (NV2A_REGISTER_BASE + 0x00003244) // The back pointer of the active pb fifo
 #define NV_PFIFO_CACHE1_REF (NV2A_REGISTER_BASE + 0x00003248) // reference count of the active pb (set when the REF_CNT method is executed)
 #define NV_PFIFO_CACHE1_DMA_SUBROUTINE (NV2A_REGISTER_BASE + 0x0000324C)  // copy of NV_PFIFO_CACHE1_DMA_GET before the call + subroutine active flag
-#define NV_PFIFO_CACHE1_PULL0 (NV2A_REGISTER_BASE + 0x00003250)
+#define NV_PFIFO_CACHE1_PULL0 (NV2A_REGISTER_BASE + 0x00003250) // puller's state 0
 #define NV_PFIFO_CACHE1_PULL0_ACCESS (1 << 0) // Enable/disable puller access to cache1, enabled=1
-#define NV_PFIFO_CACHE1_PULL1 (NV2A_REGISTER_BASE + 0x00003254)
-#define NV_PFIFO_CACHE0_PULL1_ENGINE (3 << 0) // The bound engine for the current method
+#define NV_PFIFO_CACHE1_PULL0_HASH (1 << 4) // Hashing was successful, failed=1
+#define NV_PFIFO_CACHE1_PULL0_DEVICE (1 << 8) // hw/sw fifo object, sw=1
+#define NV_PFIFO_CACHE1_PULL0_HASH_STATE (1 << 12) // hashing in progress, busy=1
+#define NV_PFIFO_CACHE1_PULL1 (NV2A_REGISTER_BASE + 0x00003254) // puller's state 1
+#define NV_PFIFO_CACHE1_PULL1_ENGINE (3 << 0) // The bound engine for the current method
+#define NV_PFIFO_CACHE1_HASH (NV2A_REGISTER_BASE + 0x00003258)
+#define NV_PFIFO_CACHE1_HASH_INSTANCE 0xFFFF // Object instance address of the last hashed handle? Probably in the form NV_PRAMIN_BASE + (value << 4)
+#define NV_PFIFO_CACHE1_HASH_VALID (1 << 16) // Valid object?
 #define NV_PFIFO_CACHE1_GET (NV2A_REGISTER_BASE + 0x00003270) // The back pointer of cache1
 #define NV_PFIFO_CACHE1_ENGINE (NV2A_REGISTER_BASE + 0x00003280) // The bound engine, one for each subchannel
 #define NV_PFIFO_CACHE1_DMA_DCOUNT (NV2A_REGISTER_BASE + 0x000032A0) // the number of parameters that have being processed for the current method
