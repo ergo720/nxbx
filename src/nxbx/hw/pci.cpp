@@ -3,7 +3,7 @@
 // SPDX-FileCopyrightText: 2020 Halfix devs
 // This code is derived from https://github.com/nepx/halfix/blob/master/src/hardware/pci.c
 
-#include "lib86cpu.h"
+#include "lib86cpu.hpp"
 #include "machine.hpp"
 #include "pci.hpp"
 #include "cpu.hpp"

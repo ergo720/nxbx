@@ -9,6 +9,7 @@
 #include "console.hpp"
 #include "host.hpp"
 #include "paths.hpp"
+#include "lib86cpu.hpp"
 #include <charconv>
 
 #if _WIN32

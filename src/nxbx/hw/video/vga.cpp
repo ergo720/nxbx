@@ -3,7 +3,7 @@
 // SPDX-FileCopyrightText: 2020 Halfix devs
 // This code is derived from https://github.com/nepx/halfix/blob/master/src/hardware/vga.c
 
-#include "lib86cpu.h"
+#include "lib86cpu.hpp"
 #include "gpu/pcrtc.hpp"
 // Must be included last because of the template functions nv2a_read/write, which require a complete definition for the engine objects
 #include "gpu/nv2a.hpp"

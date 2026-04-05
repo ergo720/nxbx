@@ -6,7 +6,6 @@
 
 #include "SimpleIni.h"
 #include "isettings.hpp"
-#include "lib86cpu.h"
 #include <string>
 
 

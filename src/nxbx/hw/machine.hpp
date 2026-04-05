@@ -14,7 +14,7 @@ class pic;
 class cmos;
 class pci;
 class vga;
-class cpu_t;
+struct cpu_t;
 class smbus;
 class eeprom;
 class smc;

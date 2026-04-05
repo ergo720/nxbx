@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // SPDX-FileCopyrightText: 2026 ergo720
 
-#include "lib86cpu.h"
 #include "console.hpp"
 #include "io.hpp"
 #include "clock.hpp"

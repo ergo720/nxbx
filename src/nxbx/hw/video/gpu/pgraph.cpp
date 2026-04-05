@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // SPDX-FileCopyrightText: 2025 ergo720
 
-#include "lib86cpu.h"
+#include "lib86cpu.hpp"
 #include "pramin.hpp"
 #include "pmc.hpp"
 #include "pgraph.hpp"
@@ -100,9 +100,7 @@ void pgraph::Impl::write32(uint32_t addr, const uint32_t value)
 		return;
 	}
 	if constexpr (log) {
-		m_graph_mtx.lock();
 		nv2a_log_write();
-		m_graph_mtx.unlock();
 	}
 
 	switch (addr)
@@ -178,9 +176,7 @@ uint32_t pgraph::Impl::read32(uint32_t addr)
 	}
 
 	if constexpr (log) {
-		m_graph_mtx.lock();
 		nv2a_log_read();
-		m_graph_mtx.unlock();
 	}
 
 	return value;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // SPDX-FileCopyrightText: 2024 ergo720
 
-#include "lib86cpu.h"
+#include "lib86cpu.hpp"
 #include "pmc.hpp"
 #include "pcrtc.hpp"
 // Must be included last because of the template functions nv2a_read/write, which require a complete definition for the engine objects

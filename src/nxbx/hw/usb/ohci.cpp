@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // SPDX-FileCopyrightText: 2025 ergo720
 
-#include "lib86cpu.h"
+#include "lib86cpu.hpp"
 #include "machine.hpp"
 #include "ohci.hpp"
 #include "cpu.hpp"
