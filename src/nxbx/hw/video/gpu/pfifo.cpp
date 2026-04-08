@@ -118,8 +118,8 @@ private:
 		{ NV_PFIFO_CACHE1_DMA_GET_JMP_SHADOW, "NV_PFIFO_CACHE1_DMA_GET_JMP_SHADOW" },
 		{ NV_PFIFO_CACHE1_DMA_RSVD_SHADOW, "NV_PFIFO_CACHE1_DMA_RSVD_SHADOW" },
 		{ NV_PFIFO_CACHE1_DMA_DATA_SHADOW, "NV_PFIFO_CACHE1_DMA_DATA_SHADOW" },
-		{ NV_PFIFO_CACHE1_METHOD(0), "NV_PFIFO_CACHE1_METHOD + 0"},
-		{ NV_PFIFO_CACHE1_DATA(0), "NV_PFIFO_CACHE1_DATA + 0"}
+		{ NV_PFIFO_CACHE1_METHOD(0), "NV_PFIFO_CACHE1_METHOD"},
+		{ NV_PFIFO_CACHE1_DATA(0), "NV_PFIFO_CACHE1_DATA"}
 	};
 };
 
@@ -625,17 +625,17 @@ pfifo::Impl::logWrite(uint32_t addr, uint32_t value)
 {
 	const auto it = m_regs_info.find(addr & ~3);
 	if (it != m_regs_info.end()) {
-		logger<log_lv::debug, log_module::pfifo, false>("Write at %s (0x%08X) of value 0x%08X", it->second.c_str(), addr, value);
-	}
-	else {
 		if (util::in_range(addr, NV_PFIFO_CACHE1_METHOD(0), NV_PFIFO_CACHE1_DATA(127) + 3)) {
 			bool is_data = addr & 7;
 			logger<log_lv::debug, log_module::pfifo, false>("Write at %s %u (0x%08X) of value 0x%08X", is_data ? "NV_PFIFO_CACHE1_DATA" : "NV_PFIFO_CACHE1_METHOD",
 				is_data ? (addr - NV_PFIFO_CACHE1_DATA(0)) >> 3 : (addr - NV_PFIFO_CACHE1_METHOD(0)) >> 3, addr, value);
 		}
 		else {
-			logger<log_lv::debug, log_module::pfifo, false>("Write at UNKNOWN (0x%08X) of value 0x%08X", addr, value);
+			logger<log_lv::debug, log_module::pfifo, false>("Write at %s (0x%08X) of value 0x%08X", it->second.c_str(), addr, value);
 		}
+	}
+	else {
+		logger<log_lv::debug, log_module::pfifo, false>("Write at UNKNOWN (0x%08X) of value 0x%08X", addr, value);
 	}
 }
 

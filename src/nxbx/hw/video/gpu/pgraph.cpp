@@ -7,6 +7,7 @@
 #include "pgraph.hpp"
 // Must be included last because of the template functions nv2a_read/write, which require a complete definition for the engine objects
 #include "nv2a.hpp"
+#include "util.hpp"
 #include <thread>
 #include <atomic>
 #include <mutex>
@@ -58,6 +59,8 @@ private:
 		uint32_t m_ctx_switch;
 	};
 
+	void logRead(uint32_t addr, uint32_t value);
+	void logWrite(uint32_t addr, uint32_t value);
 	bool updateIo(bool is_update);
 	template<bool is_write>
 	auto getIoFunc(bool log, bool enabled, bool is_be);
@@ -80,12 +83,23 @@ private:
 	std::atomic_uint32_t m_fifo_access;
 	// registers
 	uint32_t m_regs[NV_PGRAPH_SIZE / 4];
-	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
+	const std::unordered_map<uint32_t, const std::string> m_regs_info =
+	{
 		{ NV_PGRAPH_DEBUG_3, "NV_PGRAPH_DEBUG_3" },
 		{ NV_PGRAPH_INTR, "NV_PGRAPH_INTR" },
 		{ NV_PGRAPH_INTR_EN, "NV_PGRAPH_INTR_EN" },
 		{ NV_PGRAPH_CTX_CONTROL, "NV_PGRAPH_CTX_CONTROL" },
 		{ NV_PGRAPH_CTX_USER, "NV_PGRAPH_CTX_USER" },
+		{ NV_PGRAPH_CTX_SWITCH1, "NV_PGRAPH_CTX_SWITCH1"},
+		{ NV_PGRAPH_CTX_SWITCH2, "NV_PGRAPH_CTX_SWITCH2"},
+		{ NV_PGRAPH_CTX_SWITCH3, "NV_PGRAPH_CTX_SWITCH3"},
+		{ NV_PGRAPH_CTX_SWITCH4, "NV_PGRAPH_CTX_SWITCH4"},
+		{ NV_PGRAPH_CTX_SWITCH5, "NV_PGRAPH_CTX_SWITCH5"},
+		{ NV_PGRAPH_CTX_CACHE1(0), "NV_PGRAPH_CTX_CACHE"},
+		{ NV_PGRAPH_CTX_CACHE2(0), "NV_PGRAPH_CTX_CACHE"},
+		{ NV_PGRAPH_CTX_CACHE3(0), "NV_PGRAPH_CTX_CACHE"},
+		{ NV_PGRAPH_CTX_CACHE4(0), "NV_PGRAPH_CTX_CACHE"},
+		{ NV_PGRAPH_CTX_CACHE5(0), "NV_PGRAPH_CTX_CACHE"},
 		{ NV_PGRAPH_TRAPPED_ADDR, "NV_PGRAPH_TRAPPED_ADDR"},
 		{ NV_PGRAPH_FIFO, "NV_PGRAPH_FIFO" },
 		{ NV_PGRAPH_CHANNEL_CTX_POINTER, "NV_PGRAPH_CHANNEL_CTX_POINTER" },
@@ -100,7 +114,7 @@ void pgraph::Impl::write32(uint32_t addr, const uint32_t value)
 		return;
 	}
 	if constexpr (log) {
-		nv2a_log_write();
+		logWrite(addr, value);
 	}
 
 	switch (addr)
@@ -176,7 +190,7 @@ uint32_t pgraph::Impl::read32(uint32_t addr)
 	}
 
 	if constexpr (log) {
-		nv2a_log_read();
+		logRead(addr, value);
 	}
 
 	return value;
@@ -240,9 +254,29 @@ void pgraph::Impl::graphHandler(std::stop_token stok)
 					break;
 				}
 			}
+
+			// Cache the object context to the appropriate subchannel
+			uint32_t ctx_addr = elem.m_param;
+			uint32_t ctx1 = m_pramin->read32(NV_PRAMIN_BASE + ctx_addr);
+			uint32_t ctx2 = m_pramin->read32(NV_PRAMIN_BASE + ctx_addr + 4);
+			uint32_t ctx3 = m_pramin->read32(NV_PRAMIN_BASE + ctx_addr + 8);
+			uint32_t ctx4 = m_pramin->read32(NV_PRAMIN_BASE + ctx_addr + 12);
+			uint32_t ctx5 = ctx_addr;
+			REG_PGRAPH(NV_PGRAPH_CTX_CACHE1(elem.m_subchan)) = ctx1;
+			REG_PGRAPH(NV_PGRAPH_CTX_CACHE2(elem.m_subchan)) = ctx2;
+			REG_PGRAPH(NV_PGRAPH_CTX_CACHE3(elem.m_subchan)) = ctx3;
+			REG_PGRAPH(NV_PGRAPH_CTX_CACHE4(elem.m_subchan)) = ctx4;
+			REG_PGRAPH(NV_PGRAPH_CTX_CACHE5(elem.m_subchan)) = ctx5;
 		}
 
-		// TODO: implement methos handling
+		// Switch to the object context for the appropriate subchannel from the cache
+		REG_PGRAPH(NV_PGRAPH_CTX_SWITCH1) = REG_PGRAPH(NV_PGRAPH_CTX_CACHE1(elem.m_subchan));
+		REG_PGRAPH(NV_PGRAPH_CTX_SWITCH2) = REG_PGRAPH(NV_PGRAPH_CTX_CACHE2(elem.m_subchan));
+		REG_PGRAPH(NV_PGRAPH_CTX_SWITCH3) = REG_PGRAPH(NV_PGRAPH_CTX_CACHE3(elem.m_subchan));
+		REG_PGRAPH(NV_PGRAPH_CTX_SWITCH4) = REG_PGRAPH(NV_PGRAPH_CTX_CACHE4(elem.m_subchan));
+		REG_PGRAPH(NV_PGRAPH_CTX_SWITCH5) = REG_PGRAPH(NV_PGRAPH_CTX_CACHE5(elem.m_subchan));
+
+		// TODO: implement methods handling
 		nxbx_fatal("Method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32 " not implemented", elem.m_mthd, elem.m_subchan, elem.m_param);
 		break;
 	}
@@ -256,6 +290,44 @@ void pgraph::Impl::graphHandler(std::stop_token stok)
 		if (stok.stop_requested()) { // sync with pgraph::Impl::deinit
 			return;
 		}
+	}
+}
+
+void
+pgraph::Impl::logRead(uint32_t addr, uint32_t value)
+{
+	const auto it = m_regs_info.find(addr & ~3);
+	if (it != m_regs_info.end()) {
+		if (util::in_range(addr, NV_PGRAPH_CTX_CACHE1(0), NV_PGRAPH_CTX_CACHE5(7) + 3)) {
+			uint32_t num = ((addr >> 5) & 7) - 2;
+			uint32_t subchannel = (addr & 0x1F) >> 2;
+			logger<log_lv::debug, log_module::pgraph, false>("Read at %s%u (0x%08X) of value 0x%08X (subchannel %u)", it->second, num, addr, value, subchannel);
+		}
+		else {
+			logger<log_lv::debug, log_module::pgraph, false>("Read at %s (0x%08X) of value 0x%08X", it->second.c_str(), addr, value);
+		}
+	}
+	else {
+		logger<log_lv::debug, log_module::pgraph, false>("Read at UNKNOWN (0x%08X) of value 0x%08X", addr, value);
+	}
+}
+
+void
+pgraph::Impl::logWrite(uint32_t addr, uint32_t value)
+{
+	const auto it = m_regs_info.find(addr & ~3);
+	if (it != m_regs_info.end()) {
+		if (util::in_range(addr, NV_PGRAPH_CTX_CACHE1(0), NV_PGRAPH_CTX_CACHE5(7) + 3)) {
+			uint32_t num = ((addr >> 5) & 7) - 2;
+			uint32_t subchannel = (addr & 0x1F) >> 2;
+			logger<log_lv::debug, log_module::pgraph, false>("Write at %s%u (0x%08X) of value 0x%08X (subchannel %u)", it->second, num, addr, value, subchannel);
+		}
+		else {
+			logger<log_lv::debug, log_module::pgraph, false>("Write at %s (0x%08X) of value 0x%08X", it->second.c_str(), addr, value);
+		}
+	}
+	else {
+		logger<log_lv::debug, log_module::pgraph, false>("Write at UNKNOWN (0x%08X) of value 0x%08X", addr, value);
 	}
 }
 
