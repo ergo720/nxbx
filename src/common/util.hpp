@@ -10,6 +10,14 @@
 #include <stdexcept>
 #include <utility>
 
+#ifndef _MSC_VER
+#define ASSUME(x) assert((x));\
+[[assume((x))]]
+#else
+#define ASSUME(x) assert((x));\
+__assume((x))
+#endif
+
 
 namespace util {
 	uint64_t muldiv128(uint64_t a, uint64_t b, uint64_t c);

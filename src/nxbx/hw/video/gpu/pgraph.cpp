@@ -21,10 +21,41 @@
 #define MODULE_NAME pgraph
 
 #define SET_REG(reg, mask, val) (REG_PGRAPH(reg) &= ~(mask)) |= (val)
+#define REG_PGRAPH_ptr(r) (impl->m_regs[REGS_PGRAPH_idx(r)])
 
 // Macros used in InputQueueEntry for ctx switches
 #define CTX_SWITCH_CHID 0x1F // target channel
 #define CTX_SWITCH_STATUS (1 << 31) // switch requested=1
+
+// Object graphics classes
+#define NV_MEMORY_TO_MEMORY_FORMAT                       0x00000039
+#define NV10_CONTEXT_SURFACES_2D                         0x00000062
+#define NV20_KELVIN_PRIMITIVE                            0x00000097
+#define NV15_IMAGE_BLIT                                  0x0000009F
+#define HIGHEST_CLASS                                    NV15_IMAGE_BLIT
+
+// Object methods
+#define INC_MTHD(name, base, i) name ## i = ((base)+(i)*4)
+
+enum class nv039 : uint32_t
+{
+	NV039_SET_OBJECT =                                   0x00000000,
+};
+
+enum class nv062 : uint32_t
+{
+	NV062_SET_OBJECT =                                   0x00000000,
+};
+
+enum class nv097 : uint32_t
+{
+	NV097_SET_OBJECT =                                   0x00000000,
+};
+
+enum class nv09f : uint32_t
+{
+	NV09F_SET_OBJECT =                                   0x00000000,
+};
 
 
 /** Private device implementation **/
@@ -50,6 +81,22 @@ public:
 		submitMethod(mthd, param, subchan, ctx_switch);
 	}
 
+	// method friend declarations
+	friend void unimplemented_method(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
+	friend void unimplemented_class(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
+
+	friend void dispatch_nv039(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
+	friend void NV039_SET_OBJECT(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
+
+	friend void dispatch_nv062(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
+	friend void NV062_SET_OBJECT(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
+
+	friend void dispatch_nv097(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
+	friend void NV097_SET_OBJECT(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
+
+	friend void dispatch_nv09f(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
+	friend void NV09F_SET_OBJECT(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
+
 private:
 	struct InputQueueEntry
 	{
@@ -70,9 +117,31 @@ private:
 	std::jthread m_jthr; // async graphics worker thread
 	std::atomic_flag m_graph_has_work;
 	std::atomic_flag m_ctx_switch_trig;
-	std::atomic_bool m_is_enabled;
+	std::atomic_uint32_t m_is_enabled;
 	std::mutex m_graph_mtx;
 	dro::SPSCQueue<InputQueueEntry> m_input_queue{256};
+	uint32_t m_should_exit; // 0: exit, 3: continue
+	// classes states
+	struct
+	{
+		// NV_MEMORY_TO_MEMORY_FORMAT
+		uint32_t instance_addr;
+	} m_memcpy;
+	struct
+	{
+		// NV10_CONTEXT_SURFACES_2D
+		uint32_t instance_addr;
+	} m_ctx_surfaces_2d;
+	struct
+	{
+		// NV20_KELVIN_PRIMITIVE
+		uint32_t instance_addr;
+	} m_kelvin;
+	struct
+	{
+		// NV15_IMAGE_BLIT
+		uint32_t instance_addr;
+	} m_img_blit;
 	// connected devices
 	pmc *m_pmc;
 	pramin *m_pramin;
@@ -106,6 +175,192 @@ private:
 		{ NV_PGRAPH_CHANNEL_CTX_TRIGGER, "NV_PGRAPH_CHANNEL_CTX_TRIGGER" },
 	};
 };
+
+/** Method implementations **/
+void unimplemented_method(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
+{
+	nxbx_fatal("Method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32 " not implemented", mthd, subchan, param);
+	impl->m_should_exit = 0;
+}
+
+void unimplemented_class(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
+{
+	uint32_t gr_class = REG_PGRAPH_ptr(NV_PGRAPH_CTX_SWITCH1) & NV_PGRAPH_CTX_SWITCH1_GRCLASS;
+	nxbx_fatal("Class 0x%08" PRIX32 ", method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32" not implemented", gr_class, mthd, subchan, param);
+	impl->m_should_exit = 0;
+}
+
+void NV039_SET_OBJECT(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
+{
+	// Binds the engine object to the subchannel
+	impl->m_memcpy.instance_addr = param;
+}
+
+void NV062_SET_OBJECT(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
+{
+	// Binds the engine object to the subchannel
+	impl->m_ctx_surfaces_2d.instance_addr = param;
+}
+
+void NV097_SET_OBJECT(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
+{
+	// Binds the engine object to the subchannel
+	impl->m_kelvin.instance_addr = param;
+}
+
+void NV09F_SET_OBJECT(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
+{
+	// Binds the engine object to the subchannel
+	impl->m_img_blit.instance_addr = param;
+}
+
+/** Method table declarations **/
+// NOTE: msvc has a hard limit of 128 nesting levels while compiling code, which will be reached if putting all method cases
+// in a single function. To avoid that, we split the if/else statements in multiple functions after 100 methods
+
+#define MTHD_BEGIN(func) if (mthd == (std::to_underlying(EnumT::func) / 4)) {\
+return &func;\
+}
+#define MTHD_CASE(func) else if (mthd == (std::to_underlying(EnumT::func) / 4)) {\
+return &func;\
+}
+#define MTHD_RANGE(func, start, end) else if ((mthd >= (std::to_underlying(EnumT::func ## start) / 4)) && (mthd <= (std::to_underlying(EnumT::func ## end) / 4))) {\
+return &func;\
+}
+#define MTHD_END() \
+return unimplemented_method
+
+#define MTHD_CALL(func) \
+return func(mthd)
+
+using mthd_func = void(*)(pgraph::ImplAlias *, uint32_t, uint32_t, uint32_t);
+
+template<typename EnumT>
+constexpr auto dispatch_func_nv039(uint32_t mthd)
+{
+	MTHD_BEGIN(NV039_SET_OBJECT)
+	MTHD_END();
+}
+
+template<typename EnumT>
+constexpr auto dispatch_func_nv062(uint32_t mthd)
+{
+	MTHD_BEGIN(NV062_SET_OBJECT)
+	MTHD_END();
+}
+
+template<typename EnumT>
+constexpr auto dispatch_func_nv097(uint32_t mthd)
+{
+	MTHD_BEGIN(NV097_SET_OBJECT)
+	MTHD_END();
+}
+
+template<typename EnumT>
+constexpr auto dispatch_func_nv09f(uint32_t mthd)
+{
+	MTHD_BEGIN(NV09F_SET_OBJECT)
+	MTHD_END();
+}
+
+#undef MTHD_BEGIN
+#undef MTHD_CASE
+#undef MTHD_RANGE
+#undef MTHD_END
+#undef MTHD_CALL
+
+template<typename EnumT>
+constexpr auto dispatch_func(uint32_t mthd)
+{
+	if constexpr (std::is_same_v<EnumT, nv039>) {
+		return dispatch_func_nv039<EnumT>(mthd);
+	}
+	else if constexpr (std::is_same_v<EnumT, nv062>) {
+		return dispatch_func_nv062<EnumT>(mthd);
+	}
+	else if constexpr (std::is_same_v<EnumT, nv097>) {
+		return dispatch_func_nv097<EnumT>(mthd);
+	}
+	else if constexpr (std::is_same_v<EnumT, nv09f>) {
+		return dispatch_func_nv09f<EnumT>(mthd);
+	}
+	else {
+		static_assert(false, "Unknown class type specified");
+	}
+}
+
+template<std::size_t Length, typename Generator, std::size_t... Indexes>
+constexpr auto gen_mthd_table_impl(Generator&& f, std::index_sequence<Indexes...>)
+{
+	return std::array<mthd_func, Length> {{ f(Indexes)... }};
+}
+
+template<std::size_t Length, typename Generator>
+constexpr auto gen_mthd_table(Generator&& f)
+{
+	return gen_mthd_table_impl<Length>(std::forward<Generator>(f), std::make_index_sequence<Length>{});
+}
+
+// The size of 2048 (instead of the expected 8192) relies on the fact that all method numbers are multiples of four. This is because they represent
+// the offset they have when accessed from a channel in PIO mode, that is, the offset from the start of the corresponding class MMIO area
+static constexpr std::array<mthd_func, 2048> s_method_table_nv039 = gen_mthd_table<2048>(dispatch_func<nv039>);
+static constexpr std::array<mthd_func, 2048> s_method_table_nv062 = gen_mthd_table<2048>(dispatch_func<nv062>);
+static constexpr std::array<mthd_func, 2048> s_method_table_nv097 = gen_mthd_table<2048>(dispatch_func<nv097>);
+static constexpr std::array<mthd_func, 2048> s_method_table_nv09f = gen_mthd_table<2048>(dispatch_func<nv09f>);
+
+void dispatch_nv039(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
+{
+	uint32_t idx = mthd >> 2;
+	ASSUME(idx < s_method_table_nv039.size());
+	mthd_func func = s_method_table_nv039[idx];
+	ASSUME(func);
+	func(impl, mthd, param, subchan);
+}
+
+void dispatch_nv062(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
+{
+	uint32_t idx = mthd >> 2;
+	ASSUME(idx < s_method_table_nv062.size());
+	mthd_func func = s_method_table_nv062[idx];
+	ASSUME(func);
+	func(impl, mthd, param, subchan);
+}
+
+void dispatch_nv097(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
+{
+	uint32_t idx = mthd >> 2;
+	ASSUME(idx < s_method_table_nv097.size());
+	mthd_func func = s_method_table_nv097[idx];
+	ASSUME(func);
+	func(impl, mthd, param, subchan);
+}
+
+void dispatch_nv09f(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
+{
+	uint32_t idx = mthd >> 2;
+	ASSUME(idx < s_method_table_nv09f.size());
+	mthd_func func = s_method_table_nv09f[idx];
+	ASSUME(func);
+	func(impl, mthd, param, subchan);
+}
+
+static constexpr std::array<mthd_func, HIGHEST_CLASS + 1> s_method_table_classes = []()
+	{
+		std::array<std::pair<mthd_func, unsigned>, 4> class_arr
+		{ {
+			{ &dispatch_nv039, NV_MEMORY_TO_MEMORY_FORMAT },
+			{ &dispatch_nv062, NV10_CONTEXT_SURFACES_2D },
+			{ &dispatch_nv097, NV20_KELVIN_PRIMITIVE },
+			{ &dispatch_nv09f, NV15_IMAGE_BLIT },
+		} };
+		std::array<mthd_func, HIGHEST_CLASS + 1> local_arr;
+		std::fill(local_arr.begin(), local_arr.end(), &unimplemented_class);
+		std::for_each(class_arr.begin(), class_arr.end(), [&local_arr](auto pair)
+			{
+				local_arr[pair.second] = pair.first;
+			});
+		return local_arr;
+	}();
 
 template<bool log, engine_enabled enabled>
 void pgraph::Impl::write32(uint32_t addr, const uint32_t value)
@@ -206,6 +461,8 @@ void pgraph::Impl::submitMethod(uint32_t mthd, uint32_t param, uint32_t subchan,
 
 void pgraph::Impl::graphHandler(std::stop_token stok)
 {
+	m_should_exit = 3;
+
 	while (true) {
 		// Wait until the puller pushes some methods
 		m_graph_has_work.wait(false);
@@ -216,69 +473,72 @@ void pgraph::Impl::graphHandler(std::stop_token stok)
 			break;
 		}
 
-		if ((m_fifo_access & NV_PGRAPH_FIFO_ACCESS) == 0) {
-			// Fifo access to graph is disabled, so keep looping
-			continue;
-		}
-
-		if (m_is_enabled == false) {
-			// Need to check this too because fifo will keep submitting methods even when this engine is disabled
-			continue;
-		}
-
-		InputQueueEntry elem;
-		m_input_queue.pop(elem);
-
-		if (elem.m_ctx_switch & CTX_SWITCH_STATUS) {
-			// A context switch was requested, do it now
-			assert(elem.m_mthd == 0);
-			uint32_t target_chid = (elem.m_ctx_switch & CTX_SWITCH_CHID);
-			bool valid_chid = REG_PGRAPH(NV_PGRAPH_CTX_CONTROL) & NV_PGRAPH_CTX_CONTROL_CHID;
-			uint32_t curr_chid = (REG_PGRAPH(NV_PGRAPH_CTX_USER) & NV_PGRAPH_CTX_USER_CHID) >> 24;
-
-			if (!valid_chid || (curr_chid != target_chid)) {
-				if (REG_PGRAPH(NV_PGRAPH_DEBUG_3) & NV_PGRAPH_DEBUG_3_HW_CONTEXT_SWITCH) [[unlikely]] {
-					// Should never happen on xbox
-					nxbx_fatal("Hw context switch not implemented");
-					break;
-				}
-				SET_REG(NV_PGRAPH_TRAPPED_ADDR, NV_PGRAPH_TRAPPED_ADDR_CHID, target_chid << 20); // write channel exception data
-				m_int_status |= NV_PGRAPH_INTR_CONTEXT_SWITCH; // raise graph interrupt
-				m_ctx_switch_trig.test_and_set();
-				lock.unlock();
-				m_pmc->updateIrq();
-				m_ctx_switch_trig.wait(true); // wait until the title does the switch and clears the interrupt
-				lock.lock();
-
-				if (stok.stop_requested()) [[unlikely]] {
-					break;
-				}
+		while (!m_input_queue.empty()) {
+			if (uint32_t access_granted = (m_fifo_access & NV_PGRAPH_FIFO_ACCESS) // fifo access to graph is disabled, keep looping
+				| m_is_enabled // need to check this too because fifo will keep submitting methods even when this engine is disabled
+				& m_should_exit; // this thread encountered a fatal error
+				access_granted != 3) {
+				break;
 			}
 
-			// Cache the object context to the appropriate subchannel
-			uint32_t ctx_addr = elem.m_param;
-			uint32_t ctx1 = m_pramin->read32(NV_PRAMIN_BASE + ctx_addr);
-			uint32_t ctx2 = m_pramin->read32(NV_PRAMIN_BASE + ctx_addr + 4);
-			uint32_t ctx3 = m_pramin->read32(NV_PRAMIN_BASE + ctx_addr + 8);
-			uint32_t ctx4 = m_pramin->read32(NV_PRAMIN_BASE + ctx_addr + 12);
-			uint32_t ctx5 = ctx_addr;
-			REG_PGRAPH(NV_PGRAPH_CTX_CACHE1(elem.m_subchan)) = ctx1;
-			REG_PGRAPH(NV_PGRAPH_CTX_CACHE2(elem.m_subchan)) = ctx2;
-			REG_PGRAPH(NV_PGRAPH_CTX_CACHE3(elem.m_subchan)) = ctx3;
-			REG_PGRAPH(NV_PGRAPH_CTX_CACHE4(elem.m_subchan)) = ctx4;
-			REG_PGRAPH(NV_PGRAPH_CTX_CACHE5(elem.m_subchan)) = ctx5;
+			InputQueueEntry elem;
+			m_input_queue.pop(elem);
+
+			if (elem.m_ctx_switch & CTX_SWITCH_STATUS) {
+				// A context switch was requested, do it now
+				assert(elem.m_mthd == 0);
+				uint32_t target_chid = (elem.m_ctx_switch & CTX_SWITCH_CHID);
+				bool valid_chid = REG_PGRAPH(NV_PGRAPH_CTX_CONTROL) & NV_PGRAPH_CTX_CONTROL_CHID;
+				uint32_t curr_chid = (REG_PGRAPH(NV_PGRAPH_CTX_USER) & NV_PGRAPH_CTX_USER_CHID) >> 24;
+
+				if (!valid_chid || (curr_chid != target_chid)) {
+					if (REG_PGRAPH(NV_PGRAPH_DEBUG_3) & NV_PGRAPH_DEBUG_3_HW_CONTEXT_SWITCH) [[unlikely]] {
+						// Should never happen on xbox
+						nxbx_fatal("Hw context switch not implemented");
+						break;
+					}
+					SET_REG(NV_PGRAPH_TRAPPED_ADDR, NV_PGRAPH_TRAPPED_ADDR_CHID, target_chid << 20); // write channel exception data
+					m_int_status |= NV_PGRAPH_INTR_CONTEXT_SWITCH; // raise graph interrupt
+					m_ctx_switch_trig.test_and_set();
+					lock.unlock();
+					m_pmc->updateIrq();
+					m_ctx_switch_trig.wait(true); // wait until the title does the switch and clears the interrupt
+					lock.lock();
+
+					if (stok.stop_requested()) [[unlikely]] {
+						break;
+					}
+				}
+
+				// Cache the object context to the appropriate subchannel
+				uint32_t ctx_addr = elem.m_param;
+				uint32_t ctx1 = m_pramin->read32(NV_PRAMIN_BASE + ctx_addr);
+				uint32_t ctx2 = m_pramin->read32(NV_PRAMIN_BASE + ctx_addr + 4);
+				uint32_t ctx3 = m_pramin->read32(NV_PRAMIN_BASE + ctx_addr + 8);
+				uint32_t ctx4 = m_pramin->read32(NV_PRAMIN_BASE + ctx_addr + 12);
+				uint32_t ctx5 = ctx_addr;
+				REG_PGRAPH(NV_PGRAPH_CTX_CACHE1(elem.m_subchan)) = ctx1;
+				REG_PGRAPH(NV_PGRAPH_CTX_CACHE2(elem.m_subchan)) = ctx2;
+				REG_PGRAPH(NV_PGRAPH_CTX_CACHE3(elem.m_subchan)) = ctx3;
+				REG_PGRAPH(NV_PGRAPH_CTX_CACHE4(elem.m_subchan)) = ctx4;
+				REG_PGRAPH(NV_PGRAPH_CTX_CACHE5(elem.m_subchan)) = ctx5;
+			}
+
+			// Switch to the object context for the appropriate subchannel from the cache
+			REG_PGRAPH(NV_PGRAPH_CTX_SWITCH1) = REG_PGRAPH(NV_PGRAPH_CTX_CACHE1(elem.m_subchan));
+			REG_PGRAPH(NV_PGRAPH_CTX_SWITCH2) = REG_PGRAPH(NV_PGRAPH_CTX_CACHE2(elem.m_subchan));
+			REG_PGRAPH(NV_PGRAPH_CTX_SWITCH3) = REG_PGRAPH(NV_PGRAPH_CTX_CACHE3(elem.m_subchan));
+			REG_PGRAPH(NV_PGRAPH_CTX_SWITCH4) = REG_PGRAPH(NV_PGRAPH_CTX_CACHE4(elem.m_subchan));
+			REG_PGRAPH(NV_PGRAPH_CTX_SWITCH5) = REG_PGRAPH(NV_PGRAPH_CTX_CACHE5(elem.m_subchan));
+
+			uint32_t gr_class = REG_PGRAPH(NV_PGRAPH_CTX_SWITCH1) & NV_PGRAPH_CTX_SWITCH1_GRCLASS;
+			logger_en(debug, "Class 0x%08" PRIX32 ", method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32, gr_class, elem.m_mthd, elem.m_subchan, elem.m_param);
+
+			ASSUME(gr_class < s_method_table_classes.size());
+			mthd_func func = s_method_table_classes[gr_class];
+			ASSUME(func);
+			func(this, elem.m_mthd, elem.m_param, elem.m_subchan);
 		}
-
-		// Switch to the object context for the appropriate subchannel from the cache
-		REG_PGRAPH(NV_PGRAPH_CTX_SWITCH1) = REG_PGRAPH(NV_PGRAPH_CTX_CACHE1(elem.m_subchan));
-		REG_PGRAPH(NV_PGRAPH_CTX_SWITCH2) = REG_PGRAPH(NV_PGRAPH_CTX_CACHE2(elem.m_subchan));
-		REG_PGRAPH(NV_PGRAPH_CTX_SWITCH3) = REG_PGRAPH(NV_PGRAPH_CTX_CACHE3(elem.m_subchan));
-		REG_PGRAPH(NV_PGRAPH_CTX_SWITCH4) = REG_PGRAPH(NV_PGRAPH_CTX_CACHE4(elem.m_subchan));
-		REG_PGRAPH(NV_PGRAPH_CTX_SWITCH5) = REG_PGRAPH(NV_PGRAPH_CTX_CACHE5(elem.m_subchan));
-
-		// TODO: implement methods handling
-		nxbx_fatal("Method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32 " not implemented", elem.m_mthd, elem.m_subchan, elem.m_param);
-		break;
 	}
 
 	// NOTE: it's safe to drain the queue only from the consumer thread
@@ -365,7 +625,7 @@ auto pgraph::Impl::getIoFunc(bool log, bool enabled, bool is_be)
 bool pgraph::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
-	m_is_enabled = m_pmc->read32(NV_PMC_ENABLE) &NV_PMC_ENABLE_PGRAPH;
+	m_is_enabled = (m_pmc->read32(NV_PMC_ENABLE) & NV_PMC_ENABLE_PGRAPH) >> 11;
 	bool is_be = m_pmc->read32(NV_PMC_BOOT_1) & NV_PMC_BOOT_1_ENDIAN24_BIG;
 	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, NV_PGRAPH_BASE, NV_PGRAPH_SIZE, false,
 		{

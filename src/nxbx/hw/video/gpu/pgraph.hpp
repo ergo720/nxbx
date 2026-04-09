@@ -23,6 +23,7 @@
 #define NV_PGRAPH_CTX_USER (NV2A_REGISTER_BASE + 0x00400148) // 3d channel state
 #define NV_PGRAPH_CTX_USER_CHID (0x1F << 24) // channel in use
 #define NV_PGRAPH_CTX_SWITCH1 (NV2A_REGISTER_BASE + 0x0040014C) // object context bound to subchannel specified by current method being accepted 1
+#define NV_PGRAPH_CTX_SWITCH1_GRCLASS 0xFF // object's class
 #define NV_PGRAPH_CTX_SWITCH2 (NV2A_REGISTER_BASE + 0x00400150) // object context bound to subchannel specified by current method being accepted 2
 #define NV_PGRAPH_CTX_SWITCH3 (NV2A_REGISTER_BASE + 0x00400154) // object context bound to subchannel specified by current method being accepted 3
 #define NV_PGRAPH_CTX_SWITCH4 (NV2A_REGISTER_BASE + 0x00400158) // object context bound to subchannel specified by current method being accepted 4
@@ -65,4 +66,7 @@ public:
 private:
 	class Impl;
 	std::unique_ptr<Impl> m_impl;
+
+public:
+	using ImplAlias = pgraph::Impl;
 };
