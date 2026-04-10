@@ -21,6 +21,8 @@
 
 #define MODULE_NAME pfifo
 
+#define SET_REG(reg, mask, val) (REG_PFIFO(reg) &= ~(mask)) |= (val)
+
 
 /** Private device implementation **/
 class pfifo::Impl
@@ -282,10 +284,10 @@ pfifo::Impl::CoroFrame pfifo::Impl::pusher(const std::stop_token &stok)
 				uint32_t dma_state = REG_PFIFO(NV_PFIFO_CACHE1_DMA_STATE);
 				uint32_t mthd_type = dma_state & NV_PFIFO_CACHE1_DMA_STATE_METHOD_TYPE; // method type
 				uint32_t mthd = dma_state & NV_PFIFO_CACHE1_DMA_STATE_METHOD; // the actual method specified
-				uint32_t mthd_subchan = dma_state & NV_PFIFO_CACHE1_DMA_STATE_SUBCHANNEL; // the bound subchannel
+				uint32_t subchan = dma_state & NV_PFIFO_CACHE1_DMA_STATE_SUBCHANNEL; // the bound subchannel
 
 				// Add the method and its parameter to cache1
-				REG_PFIFO(NV_PFIFO_CACHE1_METHOD(cache1_put >> 2)) = mthd_type | mthd | mthd_subchan;
+				REG_PFIFO(NV_PFIFO_CACHE1_METHOD(cache1_put >> 2)) = mthd_type | mthd | subchan;
 				REG_PFIFO(NV_PFIFO_CACHE1_DATA(cache1_put >> 2)) = pb_entry;
 
 				uint32_t cache1_status = REG_PFIFO(NV_PFIFO_CACHE1_STATUS);
@@ -417,6 +419,25 @@ void pfifo::Impl::puller(const std::stop_token &stok, std::coroutine_handle<Coro
 			}
 		};
 
+	auto &&wait_for_idle = [this](uint32_t engine, uint32_t subchan)
+		{
+			uint32_t last_engine = (REG_PFIFO(NV_PFIFO_CACHE1_ENGINE) >> (subchan << 2)) & 3;
+			if (engine != last_engine) {
+				// we need to wait that the last used engine goes idle before submitting a new method to a different engine
+				if (last_engine == NV_RAMHT_ENGINE_SW) {
+					// there's no real engine to wait on for the sw pseudo-engine, so resume immediately
+				}
+				else if (last_engine == NV_RAMHT_ENGINE_GRAPHICS) {
+					// wait for pgraph to become idle
+					while (m_pgraph->read32(NV_PGRAPH_STATUS)) {}
+				}
+				else {
+					// NV_RAMHT_ENGINE_DVD might be the PMEDIA engine. This is currently not implemented, so abort here
+					nxbx_fatal("Unhandled NV_RAMHT_ENGINE_DVD engine wait");
+				}
+			}
+		};
+
 	while (true) {
 		uint32_t cache1_status = REG_PFIFO(NV_PFIFO_CACHE1_STATUS);
 
@@ -458,7 +479,7 @@ void pfifo::Impl::puller(const std::stop_token &stok, std::coroutine_handle<Coro
 		uint32_t mthd_entry = REG_PFIFO(NV_PFIFO_CACHE1_METHOD(cache1_get >> 2));
 		uint32_t param = REG_PFIFO(NV_PFIFO_CACHE1_DATA(cache1_get >> 2));
 		uint32_t mthd = mthd_entry & NV_PFIFO_CACHE1_DMA_STATE_METHOD; // the actual method specified
-		uint32_t mthd_subchan = (mthd_entry & NV_PFIFO_CACHE1_DMA_STATE_SUBCHANNEL) >> 13; // the bound subchannel
+		uint32_t subchan = (mthd_entry & NV_PFIFO_CACHE1_DMA_STATE_SUBCHANNEL) >> 13; // the bound subchannel
 
 		if (mthd == 0) {
 			// Method zero binds an engine object to a subchannel, and the handle to lookup is the parameter of the method
@@ -472,12 +493,13 @@ void pfifo::Impl::puller(const std::stop_token &stok, std::coroutine_handle<Coro
 			assert(elem.m_engine == NV_RAMHT_ENGINE_GRAPHICS); // should always be the case on xbox
 
 			// Bind the found engine to subchannel
-			(REG_PFIFO(NV_PFIFO_CACHE1_ENGINE) &= ~(3 << (mthd_subchan << 2))) |= (elem.m_engine << (mthd_subchan << 2));
-			(REG_PFIFO(NV_PFIFO_CACHE1_PULL1) &= ~NV_PFIFO_CACHE1_PULL1_ENGINE) |= elem.m_engine;
+			wait_for_idle(elem.m_engine, subchan);
+			SET_REG(NV_PFIFO_CACHE1_ENGINE, 3 << (subchan << 2), elem.m_engine << (subchan << 2));
+			SET_REG(NV_PFIFO_CACHE1_PULL1, NV_PFIFO_CACHE1_PULL1_ENGINE, elem.m_engine);
 
 			// Release the lock since submitMethod will block if the pgraph queue is full
 			m_fifo_mtx.unlock();
-			m_pgraph->submitMethod<true>(0, elem.m_instance, mthd_subchan, elem.m_chid);
+			m_pgraph->submitMethod<true>(0, elem.m_instance, subchan, elem.m_chid);
 			m_fifo_mtx.lock();
 		}
 		else if (mthd >= 0x100) {
@@ -495,18 +517,18 @@ void pfifo::Impl::puller(const std::stop_token &stok, std::coroutine_handle<Coro
 				param = elem.m_instance;
 			}
 
-			uint32_t bound_engine = (REG_PFIFO(NV_PFIFO_CACHE1_ENGINE) & (3 << (mthd_subchan << 2))) >> (mthd_subchan << 2);
+			uint32_t bound_engine = (REG_PFIFO(NV_PFIFO_CACHE1_ENGINE) >> (subchan << 2)) & 3;
 			assert(bound_engine == NV_RAMHT_ENGINE_GRAPHICS); // should always be the case on xbox
-			(REG_PFIFO(NV_PFIFO_CACHE1_PULL1) &= ~NV_PFIFO_CACHE1_PULL1_ENGINE) |= bound_engine;
+			SET_REG(NV_PFIFO_CACHE1_PULL1, NV_PFIFO_CACHE1_PULL1_ENGINE, bound_engine);
 
 			// Release the lock since submitMethod will block if the pgraph queue is full
 			m_fifo_mtx.unlock();
-			m_pgraph->submitMethod<false>(mthd, param, mthd_subchan, 0);
+			m_pgraph->submitMethod<false>(mthd, param, subchan, 0);
 			m_fifo_mtx.lock();
 		}
 		else {
 			// TODO: methods executed directly by the puller itself
-			nxbx_fatal("Method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32 " not implemented", mthd, mthd_subchan, param);
+			nxbx_fatal("Method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32 " not implemented", mthd, subchan, param);
 			break;
 		}
 
@@ -518,7 +540,10 @@ void pfifo::Impl::puller(const std::stop_token &stok, std::coroutine_handle<Coro
 
 	puller_error:
 		assert((err_msg != "") && err_code);
-		logger_en(warn, err_msg.c_str(), mthd, mthd_subchan, param);
+		logger_en(warn, err_msg.c_str(), mthd, subchan, param);
+		if (err_code == NV_PFIFO_CACHE1_PULL0_DEVICE) {
+			wait_for_idle(NV_RAMHT_ENGINE_SW, subchan);
+		}
 		REG_PFIFO(NV_PFIFO_CACHE1_PULL0) |= err_code; // set error code
 		REG_PFIFO(NV_PFIFO_CACHE1_DMA_PUSH) &= ~NV_PFIFO_CACHE1_DMA_PUSH_STATE; // clear pusher busy flag
 		REG_PFIFO(NV_PFIFO_CACHE1_GET) = cache1_get; // restart from the faulting method

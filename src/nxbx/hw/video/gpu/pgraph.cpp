@@ -150,6 +150,7 @@ private:
 	std::atomic_uint32_t m_int_status;
 	std::atomic_uint32_t m_int_enabled;
 	std::atomic_uint32_t m_fifo_access;
+	std::atomic_uint32_t m_busy;
 	// registers
 	uint32_t m_regs[NV_PGRAPH_SIZE / 4];
 	const std::unordered_map<uint32_t, const std::string> m_regs_info =
@@ -169,6 +170,7 @@ private:
 		{ NV_PGRAPH_CTX_CACHE3(0), "NV_PGRAPH_CTX_CACHE"},
 		{ NV_PGRAPH_CTX_CACHE4(0), "NV_PGRAPH_CTX_CACHE"},
 		{ NV_PGRAPH_CTX_CACHE5(0), "NV_PGRAPH_CTX_CACHE"},
+		{ NV_PGRAPH_STATUS, "NV_PGRAPH_STATUS" },
 		{ NV_PGRAPH_TRAPPED_ADDR, "NV_PGRAPH_TRAPPED_ADDR"},
 		{ NV_PGRAPH_FIFO, "NV_PGRAPH_FIFO" },
 		{ NV_PGRAPH_CHANNEL_CTX_POINTER, "NV_PGRAPH_CHANNEL_CTX_POINTER" },
@@ -390,6 +392,7 @@ void pgraph::Impl::write32(uint32_t addr, const uint32_t value)
 		m_pmc->updateIrq();
 		break;
 
+	case NV_PGRAPH_STATUS:
 	case NV_PGRAPH_TRAPPED_ADDR:
 		// read-only
 		break;
@@ -434,6 +437,10 @@ uint32_t pgraph::Impl::read32(uint32_t addr)
 		value = m_int_enabled;
 		break;
 
+	case NV_PGRAPH_STATUS:
+		value = m_busy;
+		break;
+
 	case NV_PGRAPH_FIFO:
 		value = m_fifo_access;
 		break;
@@ -473,6 +480,9 @@ void pgraph::Impl::graphHandler(std::stop_token stok)
 			break;
 		}
 
+		// We are going to process methods, set the busy flag
+		m_busy |= NV_PGRAPH_STATUS_STATE;
+
 		while (!m_input_queue.empty()) {
 			if (uint32_t access_granted = (m_fifo_access & NV_PGRAPH_FIFO_ACCESS) // fifo access to graph is disabled, keep looping
 				| m_is_enabled // need to check this too because fifo will keep submitting methods even when this engine is disabled
@@ -497,6 +507,7 @@ void pgraph::Impl::graphHandler(std::stop_token stok)
 						nxbx_fatal("Hw context switch not implemented");
 						break;
 					}
+					m_busy &= ~NV_PGRAPH_STATUS_STATE; // clear the busy flag
 					SET_REG(NV_PGRAPH_TRAPPED_ADDR, NV_PGRAPH_TRAPPED_ADDR_CHID, target_chid << 20); // write channel exception data
 					m_int_status |= NV_PGRAPH_INTR_CONTEXT_SWITCH; // raise graph interrupt
 					m_ctx_switch_trig.test_and_set();
@@ -508,6 +519,7 @@ void pgraph::Impl::graphHandler(std::stop_token stok)
 					if (stok.stop_requested()) [[unlikely]] {
 						break;
 					}
+					m_busy |= NV_PGRAPH_STATUS_STATE; // reset the busy flag
 				}
 
 				// Cache the object context to the appropriate subchannel
@@ -539,6 +551,9 @@ void pgraph::Impl::graphHandler(std::stop_token stok)
 			ASSUME(func);
 			func(this, elem.m_mthd, elem.m_param, elem.m_subchan);
 		}
+
+		// Done with processing methods, clear the busy flag
+		m_busy &= ~NV_PGRAPH_STATUS_STATE;
 	}
 
 	// NOTE: it's safe to drain the queue only from the consumer thread
@@ -645,6 +660,7 @@ void pgraph::Impl::reset()
 	m_int_status = 0;
 	m_int_enabled = 0;
 	m_fifo_access = 0;
+	m_busy = 0;
 	std::fill(std::begin(m_regs), std::end(m_regs), 0);
 	m_graph_has_work.clear();
 }

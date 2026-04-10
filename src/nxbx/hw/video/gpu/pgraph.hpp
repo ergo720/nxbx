@@ -33,6 +33,8 @@
 #define NV_PGRAPH_CTX_CACHE3(i) (NV2A_REGISTER_BASE + 0x004001A0 + (i) * 4) // cached object context, one register for each subchannel 3
 #define NV_PGRAPH_CTX_CACHE4(i) (NV2A_REGISTER_BASE + 0x004001C0 + (i) * 4) // cached object context, one register for each subchannel 4
 #define NV_PGRAPH_CTX_CACHE5(i) (NV2A_REGISTER_BASE + 0x004001E0 + (i) * 4) // cached object context, one register for each subchannel 5
+#define NV_PGRAPH_STATUS (NV2A_REGISTER_BASE + 0x00400700) // is pgraph busy?
+#define NV_PGRAPH_STATUS_STATE (1 << 0) // global busy flag, busy=1
 #define NV_PGRAPH_TRAPPED_ADDR (NV2A_REGISTER_BASE + 0x00400704) // info on the exception that was triggered
 #define NV_PGRAPH_TRAPPED_ADDR_MTHD 0x1FFC // method that faulted
 #define NV_PGRAPH_TRAPPED_ADDR_SUBCH (7 << 16) // subchannel that faulted
