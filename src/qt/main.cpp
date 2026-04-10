@@ -16,6 +16,8 @@
 #include <filesystem>
 #include <mutex>
 
+#define MODULE_NAME nxbx
+
 
 static bool s_nogui_mode = false;
 
@@ -45,7 +47,7 @@ static std::optional<int>
 parse_cmd_line_opt(const QStringList &args, init_info_t &init_info)
 {
 	const auto print_unk_opt = [](QStringList::ConstIterator it) {
-		logger("Unknown option %s", qPrintable(*it));
+		log_init_failure("Unknown option %s", qPrintable(*it));
 		print_help();
 		return 1;
 		};
@@ -53,7 +55,7 @@ parse_cmd_line_opt(const QStringList &args, init_info_t &init_info)
 	const auto check_missing_arg = [&args](QStringList::ConstIterator &it) {
 		it = std::next(it);
 		if ((it == args.end()) || (*it->data() == '-')) {
-			logger("Missing argument for option \"%s\"", qPrintable(it == args.end() ? *std::prev(it) : *it));
+			log_init_failure("Missing argument for option \"%s\"", qPrintable(it == args.end() ? *std::prev(it) : *it));
 			return 1;
 		}
 		return 0;
@@ -95,7 +97,7 @@ parse_cmd_line_opt(const QStringList &args, init_info_t &init_info)
 						break;
 
 					default:
-						logger("Unknown syntax specified by option \"-disas\"");
+						log_init_failure("Unknown syntax specified by option \"-disas\"");
 						return 1;
 					}
 				}
@@ -122,7 +124,7 @@ parse_cmd_line_opt(const QStringList &args, init_info_t &init_info)
 							break;
 
 						default:
-							logger("Unknown console type specified by option \"-machine\"");
+							log_init_failure("Unknown console type specified by option \"-machine\"");
 							return 1;
 						}
 					}
@@ -149,7 +151,7 @@ parse_cmd_line_opt(const QStringList &args, init_info_t &init_info)
 					}
 					init_info.sync_part = std::stoul(qPrintable(*it));
 					if (init_info.sync_part > 5) {
-						logger("Invalid partition number %u specified by option \"-sync_hdd\" (must be in the range [0-5])", init_info.sync_part);
+						log_init_failure("Invalid partition number %u specified by option \"-sync_hdd\" (must be in the range [0-5])", init_info.sync_part);
 						return 1;
 					}
 				}
@@ -160,19 +162,19 @@ parse_cmd_line_opt(const QStringList &args, init_info_t &init_info)
 		}
 		/* handle possible exceptions thrown by std::stoul */
 		catch (const std::exception &e) {
-			logger("Failed to parse \"%s\" option. The error was: %s", qPrintable(*std::prev(it)), e.what());
+			log_init_failure("Failed to parse \"%s\" option. The error was: %s", qPrintable(*std::prev(it)), e.what());
 			return 1;
 		}
 	}
 
 	if (s_nogui_mode && init_info.input_path.empty()) {
-		logger("Input file is required");
+		log_init_failure("Input file is required");
 		return 1;
 	}
 
 	// FIXME: remove this when the chihiro and devkit console types are supported
 	if ((init_info.console_type == console_t::chihiro) || (init_info.console_type == console_t::devkit)) {
-		logger("The %s console type is currently not supported", console::to_string(init_info.console_type).data());
+		log_init_failure("The %s console type is currently not supported", console::to_string(init_info.console_type).data());
 		return 1;
 	}
 
@@ -301,7 +303,7 @@ main(int argc, char **argv)
 	// Find the kernel, in the case its path wasn't passed from the command line
 	init_info.kernel_path = Host::SetupKernelPath(init_info.kernel_path);
 	if (init_info.kernel_path.empty()) {
-		logger("Unable to find \"nboxkrnl.exe\" file");
+		log_init_failure("Unable to find \"nboxkrnl.exe\" file");
 		return 1;
 	}
 

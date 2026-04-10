@@ -103,7 +103,7 @@ bool cpu::Impl::init(const boot_params &params, machine *machine)
 	// Load the nboxkrnl exe file
 	std::ifstream ifs(emu_path::g_krnl_path.c_str(), std::ios_base::in | std::ios_base::binary);
 	if (!ifs.is_open()) {
-		logger_en(error, "Could not open kernel file");
+		log_init_failure("Could not open kernel file");
 		return false;
 	}
 	ifs.seekg(0, ifs.end);
@@ -112,17 +112,17 @@ bool cpu::Impl::init(const boot_params &params, machine *machine)
 
 	// Sanity checks on the kernel exe size
 	if (length == 0) {
-		logger_en(error, "Size of kernel file detected as zero");
+		log_init_failure("Size of kernel file detected as zero");
 		return false;
 	}
 	else if (length > m_ramsize) {
-		logger_en(error, "Kernel file doesn't fit inside ram");
+		log_init_failure("Kernel file doesn't fit inside ram");
 		return false;
 	}
 
 	std::unique_ptr<char[]> krnl_buff{ new char[static_cast<unsigned>(length)] };
 	if (!krnl_buff) {
-		logger_en(error, "Could not allocate kernel buffer");
+		log_init_failure("Could not allocate kernel buffer");
 		return false;
 	}
 	ifs.read(krnl_buff.get(), length);
@@ -130,7 +130,7 @@ bool cpu::Impl::init(const boot_params &params, machine *machine)
 	// Sanity checks on the kernel exe file
 	PIMAGE_DOS_HEADER dosHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(krnl_buff.get());
 	if (dosHeader->e_magic != IMAGE_DOS_SIGNATURE) {
-		logger_en(error, "Kernel image has an invalid dos header signature");
+		log_init_failure("Kernel image has an invalid dos header signature");
 		return false;
 	}
 
@@ -139,18 +139,18 @@ bool cpu::Impl::init(const boot_params &params, machine *machine)
 		peHeader->FileHeader.Machine != IMAGE_FILE_MACHINE_I386 ||
 		peHeader->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR32_MAGIC ||
 		peHeader->OptionalHeader.Subsystem != IMAGE_SUBSYSTEM_NATIVE) {
-		logger_en(error, "Kernel image has an invalid nt header signature");
+		log_init_failure("Kernel image has an invalid nt header signature");
 		return false;
 	}
 
 	if (peHeader->OptionalHeader.ImageBase != KERNEL_BASE) {
-		logger_en(error, "Kernel image has an incorrect image base address");
+		log_init_failure("Kernel image has an incorrect image base address");
 		return false;
 	}
 
 	// Init lib86cpu
 	if (!LC86_SUCCESS(cpu_new(m_ramsize, m_lc86cpu))) {
-		logger_en(error, "Failed to create cpu instance");
+		log_init_failure("Failed to create cpu instance");
 		return false;
 	}
 
@@ -160,17 +160,17 @@ bool cpu::Impl::init(const boot_params &params, machine *machine)
 	cpu_set_flags(m_lc86cpu, static_cast<uint32_t>(params.syntax) | (m_is_dbg_present ? CPU_DBG_PRESENT : 0));
 
 	if (!LC86_SUCCESS(mem_init_region_ram(m_lc86cpu, 0, m_ramsize))) {
-		logger_en(error, "Failed to initialize ram memory");
+		log_init_failure("Failed to initialize ram memory");
 		return false;
 	}
 
 	if (!LC86_SUCCESS(mem_init_region_alias(m_lc86cpu, CONTIGUOUS_MEMORY_BASE, 0, m_ramsize))) {
-		logger_en(error, "Failed to initialize contiguous memory");
+		log_init_failure("Failed to initialize contiguous memory");
 		return false;
 	}
 
 	if (!LC86_SUCCESS(mem_init_region_alias(m_lc86cpu, NV2A_VRAM_BASE, 0, m_ramsize))) {
-		logger_en(error, "Failed to initialize vram memory for nv2a");
+		log_init_failure("Failed to initialize vram memory for nv2a");
 		return false;
 	}
 
@@ -212,7 +212,7 @@ bool cpu::Impl::init(const boot_params &params, machine *machine)
 				ExpectedNboxkrnlVersion = ExpectedNboxkrnlVersion.substr(0, pos);
 			}
 			if (ExpectedNboxkrnlVersion.compare(FoundNboxkrnlVersion)) {
-				logger_en(error, "Kernel image has an incorrect version, expected %s, got %s", ExpectedNboxkrnlVersion.c_str(), FoundNboxkrnlVersion.c_str());
+				log_init_failure("Kernel image has an incorrect version, expected %s, got %s", ExpectedNboxkrnlVersion.c_str(), FoundNboxkrnlVersion.c_str());
 				return false;
 			}
 			KernelVersionFound = true;
@@ -221,7 +221,7 @@ bool cpu::Impl::init(const boot_params &params, machine *machine)
 	}
 
 	if (!KernelVersionFound) {
-		logger_en(error, "Kernel image version not found in export table");
+		log_init_failure("Kernel image version not found in export table");
 		return false;
 	}
 
@@ -265,12 +265,12 @@ bool cpu::Impl::init(const boot_params &params, machine *machine)
 
 	// Pass eeprom and certificate keys on the stack
 	char keys[32] = { 0 };
-	const auto open_keys = [&]() {
+	[&]() {
 		if (!emu_path::g_keys_path.empty()) {
 			if (std::filesystem::path(emu_path::g_keys_path).filename().compare("keys.bin") == 0) {
 				std::ifstream ifs(emu_path::g_keys_path.c_str(), std::ios_base::in | std::ios_base::binary);
 				if (!ifs.is_open()) {
-					logger_en(info, "Could not open keys.bin file");
+					logger_en(error, "Could not open keys.bin file");
 					return;
 				}
 
@@ -278,22 +278,21 @@ bool cpu::Impl::init(const boot_params &params, machine *machine)
 				uint64_t length = ifs.tellg();
 				ifs.seekg(0, ifs.beg);
 				if (length != 32) {
-					logger_en(info, "Unexpected size of keys.bin file, should be 32 bytes (it was %" PRIu64 ")", length);
+					logger_en(error, "Unexpected size of keys.bin file, should be 32 bytes (it was %" PRIu64 ")", length);
 					return;
 				}
 
 				ifs.read(keys, 32);
 				if (!ifs.good()) {
-					logger_en(info, "Failed to read keys.bin file");
+					logger_en(error, "Failed to read keys.bin file");
 					return;
 				}
 				return;
 			}
-			logger_en(info, "Could not find keys.bin file");
+			logger_en(error, "Could not find keys.bin file");
 		}
-		};
+		}();
 
-	open_keys();
 	mem_write_block_virt(m_lc86cpu, 0x80400000, 32, keys);
 
 	if (m_is_dbg_present) {

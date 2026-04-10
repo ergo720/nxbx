@@ -119,7 +119,7 @@ create_directory(const std::filesystem::path path)
 		return true;
 	}
 	catch (const std::exception &e) {
-		logger_en(info, "Failed to created directory %s, the error was %s", local_path.string().c_str(), e.what());
+		logger_en(info, "Failed to create directory %s, the error was %s", local_path.string().c_str(), e.what());
 	}
 
 	return false;

@@ -802,16 +802,18 @@ namespace io {
 		emu_path::g_nxbx_dir = init_info.nxbx_dir;
 		emu_path::g_hdd_dir = combine_file_paths(emu_path::g_nxbx_dir, "Harddisk/");
 		if (!::create_directory(emu_path::g_hdd_dir)) {
+			log_init_failure("Could not create harddisk root directory");
 			return false;
 		}
 		for (unsigned i = 1; i < XBOX_NUM_OF_HDD_PARTITIONS; ++i) {
 			if (!::create_directory(combine_file_paths(emu_path::g_hdd_dir, ("Partition" + std::to_string(i))))) {
+				log_init_failure("Could not create harddisk partition directory");
 				return false;
 			}
 		}
 
 		if (!fatx::driver::init(emu_path::g_hdd_dir)) {
-			logger_en(error, "Failed to initialize the FATX driver");
+			log_init_failure("Failed to initialize the FATX driver");
 			return false;
 		}
 

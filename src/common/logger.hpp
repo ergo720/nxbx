@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-only
-
 // SPDX-FileCopyrightText: 2023 ergo720
 
 #pragma once
@@ -13,6 +12,7 @@
 #include <utility>
 #include <unordered_map>
 
+#define log_init_failure(msg, ...) do { logger<log_lv::highest, log_module::MODULE_NAME, false>(msg __VA_OPT__(,) __VA_ARGS__); } while(0)
 #define logger_en(lv, msg, ...) do { logger<log_lv::lv, log_module::MODULE_NAME, true>(msg __VA_OPT__(,) __VA_ARGS__); } while(0)
 #define logger_mod_en(lv, mod, msg, ...) do { logger<log_lv::lv, log_module::mod, true>(msg __VA_OPT__(,) __VA_ARGS__); } while(0)
 #define log_io_read_en() log_read<log_module::MODULE_NAME, true, 0>(m_regs_info, addr, value)
@@ -24,7 +24,8 @@
 #define NUM_OF_LOG_MODULES32 std::to_underlying(log_module::max) / 32 + 1
 
 
-enum class log_lv : int32_t {
+enum class log_lv : int32_t
+{
 	lowest = -1,
 	debug,
 	info,
@@ -34,7 +35,8 @@ enum class log_lv : int32_t {
 	max,
 };
 
-enum class log_module : int32_t {
+enum class log_module : int32_t
+{
 	lowest = -1,
 	nxbx,
 	file,
@@ -67,7 +69,8 @@ enum class log_module : int32_t {
 	max,
 };
 
-inline constexpr std::array module_to_str = {
+inline constexpr std::array module_to_str =
+{
 	"NXBX -> ",
 	"FILE -> ",
 	"IO -> ",
@@ -99,7 +102,8 @@ inline constexpr std::array module_to_str = {
 };
 static_assert(module_to_str.size() == (uint32_t)(log_module::max));
 
-inline constexpr std::array lv_to_str = {
+inline constexpr std::array lv_to_str =
+{
 	"DBG:      ",
 	"INFO:     ",
 	"WARN:     ",
@@ -111,27 +115,25 @@ static_assert(lv_to_str.size() == (uint32_t)(log_lv::max));
 inline constexpr log_lv g_default_log_lv = log_lv::info;
 inline constexpr uint32_t g_default_log_modules0 = 0;
 inline std::atomic<log_lv> g_log_lv = g_default_log_lv;
-inline std::atomic_uint32_t g_log_modules[NUM_OF_LOG_MODULES32] = {
+inline std::atomic_uint32_t g_log_modules[NUM_OF_LOG_MODULES32] =
+{
 	g_default_log_modules0
 };
 
 
-inline constexpr bool
-is_log_lv_in_range(log_lv lv)
+inline constexpr bool is_log_lv_in_range(log_lv lv)
 {
 	return (std::to_underlying(lv) > std::to_underlying(log_lv::lowest)) &&
 		(std::to_underlying(lv) < std::to_underlying(log_lv::max));
 }
 
-inline constexpr bool
-is_log_module_in_range(log_module name)
+inline constexpr bool is_log_module_in_range(log_module name)
 {
 	return (std::to_underlying(name) > std::to_underlying(log_module::lowest)) &&
 		(std::to_underlying(name) < std::to_underlying(log_module::max));
 }
 
-inline bool
-check_if_enabled(log_module name)
+inline bool check_if_enabled(log_module name)
 {
 	if (is_log_module_in_range(name)) {
 		return g_log_modules[(uint32_t)name / 32] & (1 << ((uint32_t)name % 32));
@@ -152,16 +154,14 @@ inline bool check_if_enabled()
 	}
 }
 
-inline void
-logger(const char *msg, std::va_list vlist)
+inline void logger(const char *msg, std::va_list vlist)
 {
 	std::string str(msg);
 	str += '\n';
 	std::vprintf(str.c_str(), vlist);
 }
 
-inline void
-logger(const char *msg, ...)
+inline void logger(const char *msg, ...)
 {
 	std::va_list args;
 	va_start(args, msg);
@@ -272,6 +272,7 @@ void log_write(const std::unordered_map<uint32_t, const std::string> &regs_info,
 	const auto it = regs_info.find(addr & ~align_mask);
 	logger<log_lv::debug, name, check_if>("Write at %s (0x%08X) of value 0x%08X", it != regs_info.end() ? it->second.c_str() : "UNKNOWN", addr, value);
 }
+
 template<log_module name, bool check_if, uint32_t align_mask>
 void log_read(const std::unordered_map<uint32_t, const std::string> &regs_info, uint32_t addr, uint32_t value)
 {

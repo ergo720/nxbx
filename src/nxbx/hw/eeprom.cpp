@@ -104,7 +104,7 @@ bool eeprom::Impl::init(machine *machine)
 	std::filesystem::path eeprom_dir = combine_file_paths(emu_path::g_nxbx_dir, "eeprom.bin");
 	if (auto opt = open_file(eeprom_dir, &size); !opt) {
 		if (auto opt = create_file(eeprom_dir); !opt) {
-			logger_en(error, "Failed to create eeprom file");
+			log_init_failure("Failed to create eeprom file");
 			return false;
 		}
 		else {
@@ -116,16 +116,14 @@ bool eeprom::Impl::init(machine *machine)
 		m_fs = std::move(*opt);
 		if (size != 256) {
 			if (size == 0) {
-				if (createDefault()) {
-					return true;
-				}
+				return createDefault();
 			}
-			logger_en(error, "Unexpected eeprom file size (it was %" PRIuMAX ")", size);
+			log_init_failure("Unexpected eeprom file size (it was %" PRIuMAX ")", size);
 			return false;
 		}
 		m_fs.read((char *)m_eeprom, 256);
 		if (!m_fs.good()) {
-			logger_en(error, "Failed to copy eeprom file to memory");
+			log_init_failure("Failed to copy eeprom file to memory");
 			return false;
 		}
 		return true;
@@ -136,7 +134,7 @@ bool eeprom::Impl::createDefault()
 {
 	m_fs.write((const char *)s_default_eeprom, 256);
 	if (!m_fs.good()) {
-		logger_en(error, "Failed to update eeprom file");
+		log_init_failure("Failed to update eeprom file");
 		return false;
 	}
 	std::memcpy(m_eeprom, s_default_eeprom, 256);
