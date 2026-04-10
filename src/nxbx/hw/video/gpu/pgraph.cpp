@@ -183,6 +183,7 @@ void unimplemented_method(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param
 {
 	nxbx_fatal("Method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32 " not implemented", mthd, subchan, param);
 	impl->m_should_exit = 0;
+	impl->m_graph_has_work.test_and_set();
 }
 
 void unimplemented_class(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
@@ -190,6 +191,7 @@ void unimplemented_class(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param,
 	uint32_t gr_class = REG_PGRAPH_ptr(NV_PGRAPH_CTX_SWITCH1) & NV_PGRAPH_CTX_SWITCH1_GRCLASS;
 	nxbx_fatal("Class 0x%08" PRIX32 ", method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32" not implemented", gr_class, mthd, subchan, param);
 	impl->m_should_exit = 0;
+	impl->m_graph_has_work.test_and_set();
 }
 
 void NV039_SET_OBJECT(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
@@ -399,6 +401,8 @@ void pgraph::Impl::write32(uint32_t addr, const uint32_t value)
 
 	case NV_PGRAPH_FIFO:
 		m_fifo_access = value;
+		m_graph_has_work.test_and_set();
+		m_graph_has_work.notify_one();
 		break;
 
 	case NV_PGRAPH_CHANNEL_CTX_TRIGGER:
@@ -651,6 +655,8 @@ bool pgraph::Impl::updateIo(bool is_update)
 		logger_en(error, "Failed to update mmio region");
 		return false;
 	}
+	m_graph_has_work.test_and_set();
+	m_graph_has_work.notify_one();
 
 	return true;
 }

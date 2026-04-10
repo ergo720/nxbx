@@ -406,22 +406,13 @@ void pfifo::Impl::puller(const std::stop_token &stok, std::coroutine_handle<Coro
 
 	// These three are used when the puller encounters an error
 	std::string err_msg("");
+	const std::string hash_err("Puller exception: hashing failed, no matching object found. Method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32);
+	const std::string sw_method("Puller exception: software method. Method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32);
 	uint32_t err_code = 0;
-	auto &&err_handler = [&err_msg, &err_code](RamhtElement elem)
-		{
-			if (elem.m_valid == NV_RAMHT_STATUS_INVALID) {
-				err_msg = "Puller exception: hashing failed, no matching object found. Method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32;
-				err_code = NV_PFIFO_CACHE1_PULL0_HASH;
-			}
-			else {
-				err_msg = "Puller exception: software method. Method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32;
-				err_code = NV_PFIFO_CACHE1_PULL0_DEVICE;
-			}
-		};
 
-	auto &&wait_for_idle = [this](uint32_t engine, uint32_t subchan)
+	auto &&wait_for_idle = [this](uint32_t engine)
 		{
-			uint32_t last_engine = (REG_PFIFO(NV_PFIFO_CACHE1_ENGINE) >> (subchan << 2)) & 3;
+			uint32_t last_engine = REG_PFIFO(NV_PFIFO_CACHE1_PULL1) & NV_PFIFO_CACHE1_PULL1_ENGINE;
 			if (engine != last_engine) {
 				// we need to wait that the last used engine goes idle before submitting a new method to a different engine
 				if (last_engine == NV_RAMHT_ENGINE_SW) {
@@ -485,15 +476,20 @@ void pfifo::Impl::puller(const std::stop_token &stok, std::coroutine_handle<Coro
 			// Method zero binds an engine object to a subchannel, and the handle to lookup is the parameter of the method
 
 			RamhtElement elem = ramhtSearch(param);
-			if ((elem.m_valid == NV_RAMHT_STATUS_INVALID) || (elem.m_engine == NV_RAMHT_ENGINE_SW)) [[unlikely]] {
-				err_handler(elem);
+			wait_for_idle(elem.m_engine);
+			if (elem.m_valid == NV_RAMHT_STATUS_INVALID) [[unlikely]] {
+				err_msg = hash_err;
+				err_code = NV_PFIFO_CACHE1_PULL0_HASH;
+				goto puller_error;
+			}
+			else if (elem.m_engine == NV_RAMHT_ENGINE_SW) [[unlikely]] {
+				err_msg = sw_method;
+				err_code = NV_PFIFO_CACHE1_PULL0_DEVICE;
 				goto puller_error;
 			}
 			assert(elem.m_chid == (REG_PFIFO(NV_PFIFO_CACHE1_PUSH1) & NV_PFIFO_CACHE1_PUSH1_CHID)); // should always be the case on xbox
-			assert(elem.m_engine == NV_RAMHT_ENGINE_GRAPHICS); // should always be the case on xbox
 
 			// Bind the found engine to subchannel
-			wait_for_idle(elem.m_engine, subchan);
 			SET_REG(NV_PFIFO_CACHE1_ENGINE, 3 << (subchan << 2), elem.m_engine << (subchan << 2));
 			SET_REG(NV_PFIFO_CACHE1_PULL1, NV_PFIFO_CACHE1_PULL1_ENGINE, elem.m_engine);
 
@@ -509,8 +505,9 @@ void pfifo::Impl::puller(const std::stop_token &stok, std::coroutine_handle<Coro
 				// Methods in the range [0x180-0x1fc] require a handle lookup in ramht, which is then sent to the bound engine as parameter
 
 				RamhtElement elem = ramhtSearch(param);
-				if ((elem.m_valid == NV_RAMHT_STATUS_INVALID) || (elem.m_engine == NV_RAMHT_ENGINE_SW)) [[unlikely]] {
-					err_handler(elem);
+				if (elem.m_valid == NV_RAMHT_STATUS_INVALID) [[unlikely]] {
+					err_msg = hash_err;
+					err_code = NV_PFIFO_CACHE1_PULL0_HASH;
 					goto puller_error;
 				}
 				assert(elem.m_chid == (REG_PFIFO(NV_PFIFO_CACHE1_PUSH1) & NV_PFIFO_CACHE1_PUSH1_CHID)); // should always be the case on xbox
@@ -518,7 +515,12 @@ void pfifo::Impl::puller(const std::stop_token &stok, std::coroutine_handle<Coro
 			}
 
 			uint32_t bound_engine = (REG_PFIFO(NV_PFIFO_CACHE1_ENGINE) >> (subchan << 2)) & 3;
-			assert(bound_engine == NV_RAMHT_ENGINE_GRAPHICS); // should always be the case on xbox
+			wait_for_idle(bound_engine);
+			if (bound_engine == NV_RAMHT_ENGINE_SW) [[unlikely]] {
+				err_msg = sw_method;
+				err_code = NV_PFIFO_CACHE1_PULL0_DEVICE;
+				goto puller_error;
+			}
 			SET_REG(NV_PFIFO_CACHE1_PULL1, NV_PFIFO_CACHE1_PULL1_ENGINE, bound_engine);
 
 			// Release the lock since submitMethod will block if the pgraph queue is full
@@ -541,9 +543,6 @@ void pfifo::Impl::puller(const std::stop_token &stok, std::coroutine_handle<Coro
 	puller_error:
 		assert((err_msg != "") && err_code);
 		logger_en(warn, err_msg.c_str(), mthd, subchan, param);
-		if (err_code == NV_PFIFO_CACHE1_PULL0_DEVICE) {
-			wait_for_idle(NV_RAMHT_ENGINE_SW, subchan);
-		}
 		REG_PFIFO(NV_PFIFO_CACHE1_PULL0) |= err_code; // set error code
 		REG_PFIFO(NV_PFIFO_CACHE1_DMA_PUSH) &= ~NV_PFIFO_CACHE1_DMA_PUSH_STATE; // clear pusher busy flag
 		REG_PFIFO(NV_PFIFO_CACHE1_GET) = cache1_get; // restart from the faulting method
