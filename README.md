@@ -7,8 +7,12 @@ The only supported architecture is x86-64.
 
 ## Building
 
-Cmake version 3.25 or higher is required.\
-Visual Studio 2022 (Windows), Visual Studio Code (Linux, optional).
+**Prerequisites**
+
+* [Git](https://git-scm.com)
+* [Cmake](https://cmake.org) version 3.25 or higher is required.
+* [Visual Studio 2022](https://visualstudio.microsoft.com/vs/older-downloads/) (Windows), [Visual Studio Code](https://visualstudio.microsoft.com/downloads/) (Linux, optional).
+* [Qt](https://www.qt.io/development/download-open-source) version 6.10.2
 
 **On Windows:**
 
