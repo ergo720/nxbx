@@ -22,12 +22,16 @@
 
 #define SET_REG(reg, mask, val) (REG_PGRAPH(reg) &= ~(mask)) |= (val)
 #define REG_PGRAPH_ptr(r) (impl->m_regs[REGS_PGRAPH_idx(r)])
+#define IMPL(class_) auto class_impl = impl->class_
 
 // Macros used in InputQueueEntry for ctx switches
 #define CTX_SWITCH_CHID 0x1F // target channel
 #define CTX_SWITCH_STATUS (1 << 31) // switch requested=1
 
 // Object graphics classes
+#define NV01_CONTEXT_DMA_FROM_MEMORY                     0x00000002
+#define NV01_CONTEXT_DMA_TO_MEMORY                       0x00000003
+#define NV01_CONTEXT_DMA_IN_MEMORY                       0x0000003D
 #define NV03_MEMORY_TO_MEMORY_FORMAT                     0x00000039
 #define NV10_CONTEXT_SURFACES_2D                         0x00000062
 #define NV20_KELVIN_PRIMITIVE                            0x00000097
@@ -40,6 +44,7 @@
 enum class nv039 : uint32_t
 {
 	NV039_SET_OBJECT =                                   0x00000000,
+	NV039_SET_CONTEXT_DMA_NOTIFIES =                     0x00000180,
 };
 
 enum class nv062 : uint32_t
@@ -56,6 +61,25 @@ enum class nv09f : uint32_t
 {
 	NV09F_SET_OBJECT =                                   0x00000000,
 };
+
+// Classes declarations
+#define NV039_NOTIFIERS_NOTIFY                           0
+#define NV039_NOTIFIERS_BUFFER_NOTIFY                    1
+#define NV039_NOTIFICATION_STATUS_IN_PROGRESS            0x8000
+#define NV039_NOTIFICATION_STATUS_ERROR_PROTECTION_FAULT 0x4000
+#define NV039_NOTIFICATION_STATUS_ERROR_BAD_ARGUMENT     0x2000
+#define NV039_NOTIFICATION_STATUS_ERROR_INVALID_STATE    0x1000
+#define NV039_NOTIFICATION_STATUS_ERROR_STATE_IN_USE     0x0800
+#define NV039_NOTIFICATION_STATUS_DONE_SUCCESS           0x0000
+
+struct NvNotification
+{
+	uint64_t timestamp; // ns elapsed since January 1st, 1970
+	uint32_t info32; // the active object when the error occurred
+	uint16_t info16; // the method invoked when the error occurred
+	uint16_t status; // the completion status of the method that notified
+};
+static_assert(sizeof(NvNotification) == 16, "sizeof(NvNotification) == 16");
 
 
 /** Private device implementation **/
@@ -87,6 +111,7 @@ public:
 
 	friend void dispatch_nv039(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
 	friend void NV039_SET_OBJECT(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
+	friend void NV039_SET_CONTEXT_DMA_NOTIFIES(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
 
 	friend void dispatch_nv062(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
 	friend void NV062_SET_OBJECT(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
@@ -114,6 +139,7 @@ private:
 	void graphHandler(std::stop_token stok);
 	void submitMethod(uint32_t mthd, uint32_t param, uint32_t subchan, uint32_t ctx_switch);
 
+	uint8_t *m_ram;
 	std::jthread m_jthr; // async graphics worker thread
 	std::atomic_flag m_graph_has_work;
 	std::atomic_flag m_ctx_switch_trig;
@@ -125,27 +151,30 @@ private:
 	struct
 	{
 		// NV03_MEMORY_TO_MEMORY_FORMAT
-		uint32_t instance_addr;
+		uint32_t m_instance_addr;
+		NvNotification *m_notification;
+		bool m_notification_active[2];
 	} m_memcpy;
 	struct
 	{
 		// NV10_CONTEXT_SURFACES_2D
-		uint32_t instance_addr;
+		uint32_t m_instance_addr;
 	} m_ctx_surfaces_2d;
 	struct
 	{
 		// NV20_KELVIN_PRIMITIVE
-		uint32_t instance_addr;
+		uint32_t m_instance_addr;
 	} m_kelvin;
 	struct
 	{
 		// NV15_IMAGE_BLIT
-		uint32_t instance_addr;
+		uint32_t m_instance_addr;
 	} m_img_blit;
 	// connected devices
 	pmc *m_pmc;
 	pramin *m_pramin;
 	cpu_t *m_lc86cpu;
+	nv2a *m_nv2a;
 	// atomic registers
 	std::atomic_uint32_t m_int_status;
 	std::atomic_uint32_t m_int_enabled;
@@ -198,25 +227,40 @@ void unimplemented_class(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param,
 void NV039_SET_OBJECT(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
 {
 	// Binds the engine object to the subchannel
-	impl->m_memcpy.instance_addr = param;
+	impl->m_memcpy.m_instance_addr = param;
+}
+
+void NV039_SET_CONTEXT_DMA_NOTIFIES(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
+{
+	// param is the instance address of an array of two NvNotification structs. The first element is used by NV039_NOTIFY, and the second is used by NV039_BUFFER_NOTIFY.
+	// Both notifications need to be first activated with NV039_NOTIFY and NV039_BUFFER_NOTIFY respectively. Once activated, the first notification is populated by the
+	// gpu following the completion of the next method that is not a notification method itself
+
+	IMPL(m_memcpy);
+	DmaObj notify_obj = impl->m_nv2a->getDmaObj(param);
+	assert((notify_obj.class_type == NV01_CONTEXT_DMA_IN_MEMORY) ||
+		(notify_obj.class_type == NV01_CONTEXT_DMA_TO_MEMORY)); // we expect the class to be a NV_CONTEXT_DMA_IN_MEMORY (r/w) or NV_CONTEXT_DMA_TO_MEMORY (w)
+	assert(notify_obj.limit == 0x1F); // we expect a 32 byte struct
+	class_impl.m_notification = reinterpret_cast<NvNotification *>(impl->m_ram + notify_obj.target_addr);
+	class_impl.m_notification_active[NV039_NOTIFIERS_NOTIFY] = false;
 }
 
 void NV062_SET_OBJECT(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
 {
 	// Binds the engine object to the subchannel
-	impl->m_ctx_surfaces_2d.instance_addr = param;
+	impl->m_ctx_surfaces_2d.m_instance_addr = param;
 }
 
 void NV097_SET_OBJECT(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
 {
 	// Binds the engine object to the subchannel
-	impl->m_kelvin.instance_addr = param;
+	impl->m_kelvin.m_instance_addr = param;
 }
 
 void NV09F_SET_OBJECT(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
 {
 	// Binds the engine object to the subchannel
-	impl->m_img_blit.instance_addr = param;
+	impl->m_img_blit.m_instance_addr = param;
 }
 
 /** Method table declarations **/
@@ -244,6 +288,7 @@ template<typename EnumT>
 constexpr auto dispatch_func_nv039(uint32_t mthd)
 {
 	MTHD_BEGIN(NV039_SET_OBJECT)
+		MTHD_CASE(NV039_SET_CONTEXT_DMA_NOTIFIES)
 	MTHD_END();
 }
 
@@ -670,6 +715,18 @@ void pgraph::Impl::reset()
 	m_busy = 0;
 	std::fill(std::begin(m_regs), std::end(m_regs), 0);
 	m_graph_has_work.clear();
+
+	// Also reset all classes states
+	m_memcpy.m_instance_addr = 0;
+	m_memcpy.m_notification = nullptr;
+	m_memcpy.m_notification_active[NV039_NOTIFIERS_NOTIFY] = false;
+	m_memcpy.m_notification_active[NV039_NOTIFIERS_BUFFER_NOTIFY] = false;
+
+	m_ctx_surfaces_2d.m_instance_addr = 0;
+
+	m_kelvin.m_instance_addr = 0;
+
+	m_img_blit.m_instance_addr = 0;
 }
 
 bool pgraph::Impl::init(cpu *cpu, nv2a *gpu)
@@ -677,12 +734,14 @@ bool pgraph::Impl::init(cpu *cpu, nv2a *gpu)
 	m_pmc = gpu->getPmc();
 	m_pramin = gpu->getPramin();
 	m_lc86cpu = cpu->get86cpu();
+	m_nv2a = gpu;
 	reset();
 
 	if (!updateIo(false)) {
 		return false;
 	}
 
+	m_ram = get_ram_ptr(m_lc86cpu);
 	m_jthr = std::jthread(std::bind_front(&pgraph::Impl::graphHandler, this));
 	return true;
 }
