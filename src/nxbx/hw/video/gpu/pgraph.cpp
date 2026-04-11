@@ -28,7 +28,7 @@
 #define CTX_SWITCH_STATUS (1 << 31) // switch requested=1
 
 // Object graphics classes
-#define NV_MEMORY_TO_MEMORY_FORMAT                       0x00000039
+#define NV03_MEMORY_TO_MEMORY_FORMAT                     0x00000039
 #define NV10_CONTEXT_SURFACES_2D                         0x00000062
 #define NV20_KELVIN_PRIMITIVE                            0x00000097
 #define NV15_IMAGE_BLIT                                  0x0000009F
@@ -124,7 +124,7 @@ private:
 	// classes states
 	struct
 	{
-		// NV_MEMORY_TO_MEMORY_FORMAT
+		// NV03_MEMORY_TO_MEMORY_FORMAT
 		uint32_t instance_addr;
 	} m_memcpy;
 	struct
@@ -353,7 +353,7 @@ static constexpr std::array<mthd_func, HIGHEST_CLASS + 1> s_method_table_classes
 	{
 		std::array<std::pair<mthd_func, unsigned>, 4> class_arr
 		{ {
-			{ &dispatch_nv039, NV_MEMORY_TO_MEMORY_FORMAT },
+			{ &dispatch_nv039, NV03_MEMORY_TO_MEMORY_FORMAT },
 			{ &dispatch_nv062, NV10_CONTEXT_SURFACES_2D },
 			{ &dispatch_nv097, NV20_KELVIN_PRIMITIVE },
 			{ &dispatch_nv09f, NV15_IMAGE_BLIT },
