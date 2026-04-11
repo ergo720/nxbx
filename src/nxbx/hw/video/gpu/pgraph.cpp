@@ -455,7 +455,7 @@ void pgraph::Impl::write32(uint32_t addr, const uint32_t value)
 		if (value & NV_PGRAPH_CHANNEL_CTX_TRIGGER_READ_IN) {
 			m_graph_mtx.lock();
 			uint32_t gr_ctx_addr = (REG_PGRAPH(NV_PGRAPH_CHANNEL_CTX_POINTER) & NV_PGRAPH_CHANNEL_CTX_POINTER_INST) << 4;
-			uint32_t gr_ctx = m_pramin->read32(NV_PRAMIN_BASE + gr_ctx_addr);
+			uint32_t gr_ctx = m_pramin->read32(gr_ctx_addr);
 			REG_PGRAPH(NV_PGRAPH_CTX_USER) = gr_ctx;
 			m_graph_mtx.unlock();
 		}
@@ -574,10 +574,10 @@ void pgraph::Impl::graphHandler(std::stop_token stok)
 
 				// Cache the object context to the appropriate subchannel
 				uint32_t ctx_addr = elem.m_param;
-				uint32_t ctx1 = m_pramin->read32(NV_PRAMIN_BASE + ctx_addr);
-				uint32_t ctx2 = m_pramin->read32(NV_PRAMIN_BASE + ctx_addr + 4);
-				uint32_t ctx3 = m_pramin->read32(NV_PRAMIN_BASE + ctx_addr + 8);
-				uint32_t ctx4 = m_pramin->read32(NV_PRAMIN_BASE + ctx_addr + 12);
+				uint32_t ctx1 = m_pramin->read32(ctx_addr);
+				uint32_t ctx2 = m_pramin->read32(ctx_addr + 4);
+				uint32_t ctx3 = m_pramin->read32(ctx_addr + 8);
+				uint32_t ctx4 = m_pramin->read32(ctx_addr + 12);
 				uint32_t ctx5 = ctx_addr;
 				REG_PGRAPH(NV_PGRAPH_CTX_CACHE1(elem.m_subchan)) = ctx1;
 				REG_PGRAPH(NV_PGRAPH_CTX_CACHE2(elem.m_subchan)) = ctx2;

@@ -22,8 +22,8 @@ public:
 	~pramin();
 	bool init(cpu *cpu, nv2a *gpu);
 	void updateIo();
-	uint32_t read32(uint32_t addr);
-	void write32(uint32_t addr, const uint32_t value);
+	uint32_t read32(uint32_t offset);
+	void write32(uint32_t offset, const uint32_t value);
 
 private:
 	class Impl;

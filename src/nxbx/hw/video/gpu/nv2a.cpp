@@ -145,9 +145,9 @@ DmaObj nv2a::Impl::getDmaObj(uint32_t addr)
 	*/
 
 	// TODO: this should also consider the endianness bit of NV_PFIFO_CACHE1_DMA_FETCH
-	uint32_t flags = m_pramin->read32(NV_PRAMIN_BASE + addr);
-	uint32_t limit = m_pramin->read32(NV_PRAMIN_BASE + addr + 4);
-	uint32_t addr_info = m_pramin->read32(NV_PRAMIN_BASE + addr + 8);
+	uint32_t flags = m_pramin->read32(addr);
+	uint32_t limit = m_pramin->read32(addr + 4);
+	uint32_t addr_info = m_pramin->read32(addr + 8);
 
 	return DmaObj{
 		.class_type = flags & NV_DMA_CLASS,

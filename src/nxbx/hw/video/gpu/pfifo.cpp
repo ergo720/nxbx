@@ -613,8 +613,8 @@ pfifo::Impl::RamhtElement pfifo::Impl::ramhtSearch(uint32_t handle)
 	REG_PFIFO(NV_PFIFO_CACHE1_PULL0) &= ~NV_PFIFO_CACHE1_PULL0_HASH_STATE;
 
 	uint32_t ramht_addr = (REG_PFIFO(NV_PFIFO_RAMHT) & NV_PFIFO_RAMHT_BASE_ADDRESS) << 8;
-	uint32_t entry_handle = m_pramin->read32(NV_PRAMIN_BASE + ramht_addr + hash * 8);
-	uint32_t entry_ctx = m_pramin->read32(NV_PRAMIN_BASE + ramht_addr + 4 + hash * 8);
+	uint32_t entry_handle = m_pramin->read32(ramht_addr + hash * 8);
+	uint32_t entry_ctx = m_pramin->read32(ramht_addr + 4 + hash * 8);
 
 	return RamhtElement{
 		.m_handle = entry_handle,

@@ -18,12 +18,14 @@ class pramin::Impl
 public:
 	bool init(cpu *cpu, nv2a *gpu);
 	void updateIo() { updateIo(true); }
+	uint32_t read32(uint32_t offset);
+	void write32(uint32_t offset, const uint32_t value);
+
+private:
 	template<typename T, bool log = false>
 	T read(uint32_t addr);
 	template<typename T, bool log = false>
 	void write(uint32_t addr, const T value);
-
-private:
 	void logRead(uint32_t addr, uint32_t value);
 	void logWrite(uint32_t addr, uint32_t value);
 	bool updateIo(bool is_update);
@@ -41,7 +43,7 @@ private:
 template<typename T, bool log>
 T pramin::Impl::read(uint32_t addr)
 {
-	uint8_t *ram_ptr = m_ram + ramin_to_ram_addr(addr);
+	uint8_t *ram_ptr = m_ram + ramin_to_ram_addr(addr - NV_PRAMIN_BASE);
 	T value = *(T *)ram_ptr;
 
 	if constexpr (log) {
@@ -58,14 +60,25 @@ void pramin::Impl::write(uint32_t addr, const T value)
 		logWrite(addr, value);
 	}
 
-	uint8_t *ram_ptr = m_ram + ramin_to_ram_addr(addr);
+	uint8_t *ram_ptr = m_ram + ramin_to_ram_addr(addr - NV_PRAMIN_BASE);
 	*(T *)ram_ptr = value;
+}
+
+uint32_t pramin::Impl::read32(uint32_t offset)
+{
+	uint8_t *ram_ptr = m_ram + ramin_to_ram_addr(offset);
+	return *(uint32_t *)ram_ptr;
+}
+
+void pramin::Impl::write32(uint32_t offset, const uint32_t value)
+{
+	uint8_t *ram_ptr = m_ram + ramin_to_ram_addr(offset);
+	*(uint32_t *)ram_ptr = value;
 }
 
 uint32_t
 pramin::Impl::ramin_to_ram_addr(uint32_t ramin_addr)
 {
-	ramin_addr -= NV_PRAMIN_BASE;
 	return m_ramsize - (ramin_addr - (ramin_addr % RAMIN_UNIT_SIZE)) - RAMIN_UNIT_SIZE + (ramin_addr % RAMIN_UNIT_SIZE);
 }
 
@@ -167,14 +180,14 @@ void pramin::updateIo()
 	m_impl->updateIo();
 }
 
-uint32_t pramin::read32(uint32_t addr)
+uint32_t pramin::read32(uint32_t offset)
 {
-	return m_impl->read<uint32_t, false>(addr);
+	return m_impl->read32(offset);
 }
 
-void pramin::write32(uint32_t addr, const uint32_t value)
+void pramin::write32(uint32_t offset, const uint32_t value)
 {
-	m_impl->write<uint32_t, false>(addr, value);
+	m_impl->write32(offset, value);
 }
 
 pramin::pramin() : m_impl{std::make_unique<pramin::Impl>()} {}
