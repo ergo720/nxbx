@@ -181,7 +181,8 @@ private:
 /** Method implementations **/
 void unimplemented_method(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
 {
-	nxbx_fatal("Method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32 " not implemented", mthd, subchan, param);
+	uint32_t gr_class = REG_PGRAPH_ptr(NV_PGRAPH_CTX_SWITCH1) & NV_PGRAPH_CTX_SWITCH1_GRCLASS;
+	nxbx_fatal("%s: class 0x%08" PRIX32 ", method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32, __func__, gr_class, mthd, subchan, param);
 	impl->m_should_exit = 0;
 	impl->m_graph_has_work.test_and_set();
 }
@@ -189,7 +190,7 @@ void unimplemented_method(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param
 void unimplemented_class(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
 {
 	uint32_t gr_class = REG_PGRAPH_ptr(NV_PGRAPH_CTX_SWITCH1) & NV_PGRAPH_CTX_SWITCH1_GRCLASS;
-	nxbx_fatal("Class 0x%08" PRIX32 ", method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32" not implemented", gr_class, mthd, subchan, param);
+	nxbx_fatal("%s: class 0x%08" PRIX32 ", method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32, __func__, gr_class, mthd, subchan, param);
 	impl->m_should_exit = 0;
 	impl->m_graph_has_work.test_and_set();
 }
