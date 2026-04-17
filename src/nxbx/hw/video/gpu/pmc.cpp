@@ -62,7 +62,6 @@ private:
 		{ NV_PMC_BOOT_0, "NV_PMC_BOOT_0" },
 		{ NV_PMC_BOOT_1, "NV_PMC_BOOT_1" },
 		{ NV_PMC_INTR_0, "NV_PMC_INTR_0" },
-		{ NV_PMC_INTR_0, "NV_PMC_INTR_0" },
 		{ NV_PMC_INTR_EN_0, "NV_PMC_INTR_EN_0" },
 		{ NV_PMC_ENABLE, "NV_PMC_ENABLE" }
 	};
