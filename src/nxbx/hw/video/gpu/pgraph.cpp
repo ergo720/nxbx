@@ -66,7 +66,6 @@ public:
 
 	// method friend declarations
 	friend void unimplemented_method(MTHD_HANDLER_ARGS);
-	friend void unimplemented_class(MTHD_HANDLER_ARGS);
 
 	friend void dispatch_nv039(MTHD_HANDLER_ARGS);
 	friend void NV039_SET_OBJECT(MTHD_HANDLER_ARGS);
@@ -170,14 +169,6 @@ private:
 
 /** Method implementations **/
 void unimplemented_method(MTHD_HANDLER_ARGS)
-{
-	uint32_t gr_class = REG_PGRAPH_ptr(NV_PGRAPH_CTX_SWITCH1) & NV_PGRAPH_CTX_SWITCH1_GRCLASS;
-	nxbx_fatal("%s: class 0x%08" PRIX32 ", method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32, __func__, gr_class, mthd, subchan, param);
-	impl->m_should_exit = 0;
-	impl->m_graph_has_work.test_and_set();
-}
-
-void unimplemented_class(MTHD_HANDLER_ARGS)
 {
 	uint32_t gr_class = REG_PGRAPH_ptr(NV_PGRAPH_CTX_SWITCH1) & NV_PGRAPH_CTX_SWITCH1_GRCLASS;
 	nxbx_fatal("%s: class 0x%08" PRIX32 ", method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32, __func__, gr_class, mthd, subchan, param);
@@ -372,7 +363,7 @@ static constexpr std::array<mthd_func, HIGHEST_CLASS + 1> s_method_table_classes
 			{ &dispatch_nv09f, NV15_IMAGE_BLIT },
 		} };
 		std::array<mthd_func, HIGHEST_CLASS + 1> local_arr;
-		std::fill(local_arr.begin(), local_arr.end(), &unimplemented_class);
+		std::fill(local_arr.begin(), local_arr.end(), &unimplemented_method);
 		std::for_each(class_arr.begin(), class_arr.end(), [&local_arr](auto pair)
 			{
 				local_arr[pair.second] = pair.first;
