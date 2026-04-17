@@ -117,6 +117,7 @@ set(HEADERS
  "${NXBX_ROOT_DIR}/src/nxbx/hw/video/conexant.hpp"
  "${NXBX_ROOT_DIR}/src/nxbx/hw/video/vga.hpp"
  "${NXBX_ROOT_DIR}/src/nxbx/hw/video/gpu/nv2a.hpp"
+ "${NXBX_ROOT_DIR}/src/nxbx/hw/video/gpu/nv2a_classes.hpp"
  "${NXBX_ROOT_DIR}/src/nxbx/hw/video/gpu/nv2a_defs.hpp"
  "${NXBX_ROOT_DIR}/src/nxbx/hw/video/gpu/pbus.hpp"
  "${NXBX_ROOT_DIR}/src/nxbx/hw/video/gpu/pcrtc.hpp"
