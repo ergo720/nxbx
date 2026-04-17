@@ -34,6 +34,7 @@ enum class nv097 : uint32_t
 enum class nv09f : uint32_t
 {
 	NV09F_SET_OBJECT =                                   0x00000000,
+	NV09F_SET_OPERATION =                                0x000002FC,
 };
 
 // Classes declarations

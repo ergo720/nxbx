@@ -80,6 +80,7 @@ public:
 
 	friend void dispatch_nv09f(MTHD_HANDLER_ARGS);
 	friend void NV09F_SET_OBJECT(MTHD_HANDLER_ARGS);
+	friend void NV09F_SET_OPERATION(MTHD_HANDLER_ARGS);
 
 private:
 	struct InputQueueEntry
@@ -128,6 +129,7 @@ private:
 	{
 		// NV15_IMAGE_BLIT
 		uint32_t m_instance_addr;
+		uint32_t m_operation;
 	} m_img_blit;
 	// connected devices
 	pmc *m_pmc;
@@ -222,6 +224,12 @@ void NV09F_SET_OBJECT(MTHD_HANDLER_ARGS)
 	impl->m_img_blit.m_instance_addr = param;
 }
 
+void NV09F_SET_OPERATION(MTHD_HANDLER_ARGS)
+{
+	// Sets the operation to use for the blitting between the src and dst surfaces
+	impl->m_img_blit.m_operation = param;
+}
+
 /** Method table declarations **/
 // NOTE: msvc has a hard limit of 128 nesting levels while compiling code, which will be reached if putting all method cases
 // in a single function. To avoid that, we split the if/else statements in multiple functions after 100 methods
@@ -269,6 +277,7 @@ template<typename EnumT>
 constexpr auto dispatch_func_nv09f(uint32_t mthd)
 {
 	MTHD_BEGIN(NV09F_SET_OBJECT)
+		MTHD_CASE(NV09F_SET_OPERATION)
 	MTHD_END();
 }
 
