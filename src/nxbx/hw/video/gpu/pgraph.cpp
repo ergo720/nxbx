@@ -23,6 +23,7 @@
 #define SET_REG(reg, mask, val) (REG_PGRAPH(reg) &= ~(mask)) |= (val)
 #define REG_PGRAPH_ptr(r) (impl->m_regs[REGS_PGRAPH_idx(r)])
 #define IMPL(class_) auto class_impl = impl->class_
+#define MTHD_HANDLER_ARGS pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan
 
 // Macros used in InputQueueEntry for ctx switches
 #define CTX_SWITCH_CHID 0x1F // target channel
@@ -64,21 +65,21 @@ public:
 	}
 
 	// method friend declarations
-	friend void unimplemented_method(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
-	friend void unimplemented_class(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
+	friend void unimplemented_method(MTHD_HANDLER_ARGS);
+	friend void unimplemented_class(MTHD_HANDLER_ARGS);
 
-	friend void dispatch_nv039(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
-	friend void NV039_SET_OBJECT(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
-	friend void NV039_SET_CONTEXT_DMA_NOTIFIES(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
+	friend void dispatch_nv039(MTHD_HANDLER_ARGS);
+	friend void NV039_SET_OBJECT(MTHD_HANDLER_ARGS);
+	friend void NV039_SET_CONTEXT_DMA_NOTIFIES(MTHD_HANDLER_ARGS);
 
-	friend void dispatch_nv062(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
-	friend void NV062_SET_OBJECT(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
+	friend void dispatch_nv062(MTHD_HANDLER_ARGS);
+	friend void NV062_SET_OBJECT(MTHD_HANDLER_ARGS);
 
-	friend void dispatch_nv097(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
-	friend void NV097_SET_OBJECT(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
+	friend void dispatch_nv097(MTHD_HANDLER_ARGS);
+	friend void NV097_SET_OBJECT(MTHD_HANDLER_ARGS);
 
-	friend void dispatch_nv09f(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
-	friend void NV09F_SET_OBJECT(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan);
+	friend void dispatch_nv09f(MTHD_HANDLER_ARGS);
+	friend void NV09F_SET_OBJECT(MTHD_HANDLER_ARGS);
 
 private:
 	struct InputQueueEntry
@@ -166,7 +167,7 @@ private:
 };
 
 /** Method implementations **/
-void unimplemented_method(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
+void unimplemented_method(MTHD_HANDLER_ARGS)
 {
 	uint32_t gr_class = REG_PGRAPH_ptr(NV_PGRAPH_CTX_SWITCH1) & NV_PGRAPH_CTX_SWITCH1_GRCLASS;
 	nxbx_fatal("%s: class 0x%08" PRIX32 ", method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32, __func__, gr_class, mthd, subchan, param);
@@ -174,7 +175,7 @@ void unimplemented_method(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param
 	impl->m_graph_has_work.test_and_set();
 }
 
-void unimplemented_class(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
+void unimplemented_class(MTHD_HANDLER_ARGS)
 {
 	uint32_t gr_class = REG_PGRAPH_ptr(NV_PGRAPH_CTX_SWITCH1) & NV_PGRAPH_CTX_SWITCH1_GRCLASS;
 	nxbx_fatal("%s: class 0x%08" PRIX32 ", method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32, __func__, gr_class, mthd, subchan, param);
@@ -182,13 +183,13 @@ void unimplemented_class(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param,
 	impl->m_graph_has_work.test_and_set();
 }
 
-void NV039_SET_OBJECT(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
+void NV039_SET_OBJECT(MTHD_HANDLER_ARGS)
 {
 	// Binds the engine object to the subchannel
 	impl->m_memcpy.m_instance_addr = param;
 }
 
-void NV039_SET_CONTEXT_DMA_NOTIFIES(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
+void NV039_SET_CONTEXT_DMA_NOTIFIES(MTHD_HANDLER_ARGS)
 {
 	// param is the instance address of an array of two NvNotification structs. The first element is used by NV039_NOTIFY, and the second is used by NV039_BUFFER_NOTIFY.
 	// Both notifications need to be first activated with NV039_NOTIFY and NV039_BUFFER_NOTIFY respectively. Once activated, the first notification is populated by the
@@ -203,19 +204,19 @@ void NV039_SET_CONTEXT_DMA_NOTIFIES(pgraph::ImplAlias *impl, uint32_t mthd, uint
 	class_impl.m_notification_active[NV039_NOTIFIERS_NOTIFY] = false;
 }
 
-void NV062_SET_OBJECT(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
+void NV062_SET_OBJECT(MTHD_HANDLER_ARGS)
 {
 	// Binds the engine object to the subchannel
 	impl->m_ctx_surfaces_2d.m_instance_addr = param;
 }
 
-void NV097_SET_OBJECT(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
+void NV097_SET_OBJECT(MTHD_HANDLER_ARGS)
 {
 	// Binds the engine object to the subchannel
 	impl->m_kelvin.m_instance_addr = param;
 }
 
-void NV09F_SET_OBJECT(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
+void NV09F_SET_OBJECT(MTHD_HANDLER_ARGS)
 {
 	// Binds the engine object to the subchannel
 	impl->m_img_blit.m_instance_addr = param;
@@ -316,7 +317,7 @@ static constexpr std::array<mthd_func, 2048> s_method_table_nv062 = gen_mthd_tab
 static constexpr std::array<mthd_func, 2048> s_method_table_nv097 = gen_mthd_table<2048>(dispatch_func<nv097>);
 static constexpr std::array<mthd_func, 2048> s_method_table_nv09f = gen_mthd_table<2048>(dispatch_func<nv09f>);
 
-void dispatch_nv039(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
+void dispatch_nv039(MTHD_HANDLER_ARGS)
 {
 	uint32_t idx = mthd >> 2;
 	ASSUME(idx < s_method_table_nv039.size());
@@ -325,7 +326,7 @@ void dispatch_nv039(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint
 	func(impl, mthd, param, subchan);
 }
 
-void dispatch_nv062(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
+void dispatch_nv062(MTHD_HANDLER_ARGS)
 {
 	uint32_t idx = mthd >> 2;
 	ASSUME(idx < s_method_table_nv062.size());
@@ -334,7 +335,7 @@ void dispatch_nv062(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint
 	func(impl, mthd, param, subchan);
 }
 
-void dispatch_nv097(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
+void dispatch_nv097(MTHD_HANDLER_ARGS)
 {
 	uint32_t idx = mthd >> 2;
 	ASSUME(idx < s_method_table_nv097.size());
@@ -343,7 +344,7 @@ void dispatch_nv097(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint
 	func(impl, mthd, param, subchan);
 }
 
-void dispatch_nv09f(pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan)
+void dispatch_nv09f(MTHD_HANDLER_ARGS)
 {
 	uint32_t idx = mthd >> 2;
 	ASSUME(idx < s_method_table_nv09f.size());
