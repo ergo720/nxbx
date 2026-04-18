@@ -534,6 +534,7 @@ void pgraph::Impl::graphHandler(std::stop_token stok)
 					if (REG_PGRAPH(NV_PGRAPH_DEBUG_3) & NV_PGRAPH_DEBUG_3_HW_CONTEXT_SWITCH) [[unlikely]] {
 						// Should never happen on xbox
 						nxbx_fatal("Hw context switch not implemented");
+						m_should_exit = 0;
 						break;
 					}
 					m_busy &= ~NV_PGRAPH_STATUS_STATE; // clear the busy flag
