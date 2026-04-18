@@ -24,6 +24,8 @@ enum class nv039 : uint32_t
 enum class nv062 : uint32_t
 {
 	NV062_SET_OBJECT =                                   0x00000000,
+	NV062_SET_CONTEXT_DMA_IMAGE_SOURCE =                 0x00000184,
+	NV062_SET_CONTEXT_DMA_IMAGE_DESTIN =                 0x00000188,
 };
 
 enum class nv097 : uint32_t

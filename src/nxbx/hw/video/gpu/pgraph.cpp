@@ -74,6 +74,8 @@ public:
 
 	friend void dispatch_nv062(MTHD_HANDLER_ARGS);
 	friend void NV062_SET_OBJECT(MTHD_HANDLER_ARGS);
+	friend void NV062_SET_CONTEXT_DMA_IMAGE_SOURCE(MTHD_HANDLER_ARGS);
+	friend void NV062_SET_CONTEXT_DMA_IMAGE_DESTIN(MTHD_HANDLER_ARGS);
 
 	friend void dispatch_nv097(MTHD_HANDLER_ARGS);
 	friend void NV097_SET_OBJECT(MTHD_HANDLER_ARGS);
@@ -119,6 +121,8 @@ private:
 	{
 		// NV10_CONTEXT_SURFACES_2D
 		uint32_t m_instance_addr;
+		uint32_t m_img_src_addr;
+		uint32_t m_img_dst_addr;
 	} m_ctx_surfaces_2d;
 	struct
 	{
@@ -205,6 +209,18 @@ void NV062_SET_OBJECT(MTHD_HANDLER_ARGS)
 	impl->m_ctx_surfaces_2d.m_instance_addr = param;
 }
 
+void NV062_SET_CONTEXT_DMA_IMAGE_SOURCE(MTHD_HANDLER_ARGS)
+{
+	// Sets the address of the dma object that translates the address of the src image used during a blit
+	impl->m_ctx_surfaces_2d.m_img_src_addr = param;
+}
+
+void NV062_SET_CONTEXT_DMA_IMAGE_DESTIN(MTHD_HANDLER_ARGS)
+{
+	// Sets the address of the dma object that translates the address of the dst image used during a blit
+	impl->m_ctx_surfaces_2d.m_img_dst_addr = param;
+}
+
 void NV097_SET_OBJECT(MTHD_HANDLER_ARGS)
 {
 	// Binds the engine object to the subchannel
@@ -219,7 +235,7 @@ void NV09F_SET_OBJECT(MTHD_HANDLER_ARGS)
 
 void NV09F_SET_OPERATION(MTHD_HANDLER_ARGS)
 {
-	// Sets the operation to use for the blitting between the src and dst surfaces
+	// Sets the operation to use for the blitting between the src and dst images
 	impl->m_img_blit.m_operation = param;
 }
 
@@ -256,6 +272,8 @@ template<typename EnumT>
 constexpr auto dispatch_func_nv062(uint32_t mthd)
 {
 	MTHD_BEGIN(NV062_SET_OBJECT)
+		MTHD_CASE(NV062_SET_CONTEXT_DMA_IMAGE_SOURCE)
+		MTHD_CASE(NV062_SET_CONTEXT_DMA_IMAGE_DESTIN)
 	MTHD_END();
 }
 
