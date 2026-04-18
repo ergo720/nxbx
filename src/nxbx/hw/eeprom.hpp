@@ -14,7 +14,7 @@ class eeprom : public smbus_device
 public:
 	eeprom();
 	~eeprom();
-	bool init(machine *machine, log_module log_module) override;
+	void init(machine *machine, log_module log_module) override;
 	void deinit() override;
 	uint8_t read_byte(uint8_t command) override;
 	void write_byte(uint8_t command, uint8_t value) override;

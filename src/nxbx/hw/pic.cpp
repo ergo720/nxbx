@@ -24,7 +24,7 @@
 class pic::Impl
 {
 public:
-	bool init(machine *machine, unsigned idx);
+	void init(machine *machine, unsigned idx);
 	void reset();
 	void updateIoLogging() { updateIo(true); }
 	template<bool log = false>
@@ -42,7 +42,7 @@ public:
 	static inline std::mutex m_mtx;
 
 private:
-	bool updateIo(bool is_update);
+	void updateIo(bool is_update);
 	bool isMaster() { return m_idx == 0; }
 	void updateState();
 	void writeOcw(unsigned idx, uint8_t value);
@@ -370,8 +370,7 @@ uint8_t pic::Impl::read8elcr(uint32_t addr)
 	return value;
 }
 
-bool
-pic::Impl::updateIo(bool is_update)
+void pic::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
 	if (m_idx == 0) {
@@ -381,8 +380,7 @@ pic::Impl::updateIo(bool is_update)
 				.fnw8 = log ? cpu_write<pic::Impl, uint8_t, &pic::Impl::write8<true>> : cpu_write<pic::Impl, uint8_t, &pic::Impl::write8<false>>
 			},
 			this, is_update, is_update))) {
-			logger_en(error, "Failed to update io ports");
-			return false;
+			throw std::runtime_error(lv2str(highest, "Failed to update io ports"));
 		}
 
 		if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, 0x4D0, 1, true,
@@ -391,8 +389,7 @@ pic::Impl::updateIo(bool is_update)
 				.fnw8 = log ? cpu_write<pic::Impl, uint8_t, &pic::Impl::write8elcr<true>> : cpu_write<pic::Impl, uint8_t, &pic::Impl::write8elcr<false>>
 			},
 			this, is_update, is_update))) {
-			logger_en(error, "Failed to update elcr io ports");
-			return false;
+			throw std::runtime_error(lv2str(highest, "Failed to update elcr io ports"));
 		}
 	}
 	else {
@@ -402,8 +399,7 @@ pic::Impl::updateIo(bool is_update)
 				.fnw8 = log ? cpu_write<pic::Impl, uint8_t, &pic::Impl::write8<true>> : cpu_write<pic::Impl, uint8_t, &pic::Impl::write8<false>>
 			},
 			this, is_update, is_update))) {
-			logger_en(error, "Failed to update pic::Impl io ports");
-			return false;
+			throw std::runtime_error(lv2str(highest, "Failed to update pic::Impl io ports"));
 		}
 
 		if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, 0x4D1, 1, true,
@@ -412,12 +408,9 @@ pic::Impl::updateIo(bool is_update)
 				.fnw8 = log ? cpu_write<pic::Impl, uint8_t, &pic::Impl::write8elcr<true>> : cpu_write<pic::Impl, uint8_t, &pic::Impl::write8elcr<false>>
 			},
 			this, is_update, is_update))) {
-			logger_en(error, "Failed to update elcr io ports");
-			return false;
+			throw std::runtime_error(lv2str(highest, "Failed to update elcr io ports"));
 		}
 	}
-
-	return true;
 }
 
 void
@@ -433,8 +426,7 @@ pic::Impl::reset()
 	pin_state = 0;
 }
 
-bool
-pic::Impl::init(machine *machine, unsigned idx)
+void pic::Impl::init(machine *machine, unsigned idx)
 {
 	m_lc86cpu = machine->get86cpu();
 	m_picImpl[idx] = this;
@@ -443,18 +435,14 @@ pic::Impl::init(machine *machine, unsigned idx)
 		cpu_set_int_func(m_lc86cpu, { pic::Impl::getInterruptForCpu, this });
 	}
 
-	if (!updateIo(false)) {
-		return false;
-	}
-
+	updateIo(false);
 	reset();
-	return true;
 }
 
 /** Public interface implementation **/
-bool pic::init(machine *machine, unsigned idx)
+void pic::init(machine *machine, unsigned idx)
 {
-	return m_impl->init(machine, idx);
+	m_impl->init(machine, idx);
 }
 
 void pic::reset()

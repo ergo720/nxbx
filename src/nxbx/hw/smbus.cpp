@@ -11,6 +11,7 @@
 #include "cpu.hpp"
 #include <cstring>
 #include <cinttypes>
+#include <stdexcept>
 
 #define MODULE_NAME smbus
 
@@ -46,7 +47,7 @@
 class smbus::Impl
 {
 public:
-	bool init(machine *machine);
+	void init(machine *machine);
 	void deinit();
 	void reset();
 	void updateIoLogging() { updateIo(true); }
@@ -67,7 +68,7 @@ private:
 		block_command,
 	};
 
-	bool updateIo(bool is_update);
+	void updateIo(bool is_update);
 	void start_cycle();
 	template<cycle_type cmd, bool is_read, typename T = uint8_t>
 	void end_cycle(smbus_device *dev, T value = 0);
@@ -302,7 +303,7 @@ void smbus::Impl::start_cycle()
 	m_regs[SMBUS_REG_off(SMBUS_GS_addr)] |= GS_PRERR_STS;
 }
 
-bool smbus::Impl::updateIo(bool is_update)
+void smbus::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
 	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, 0xC000, 16, true,
@@ -313,11 +314,8 @@ bool smbus::Impl::updateIo(bool is_update)
 			.fnw16 = log ? cpu_write<smbus::Impl, uint16_t, &smbus::Impl::write16<true>> : cpu_write<smbus::Impl, uint16_t, &smbus::Impl::write16<false>>,
 		},
 		this, is_update, is_update))) {
-		logger_en(error, "Failed to update smbus io ports");
-		return false;
+		throw std::runtime_error("Failed to update smbus io ports");
 	}
-
-	return true;
 }
 
 void smbus::Impl::reset()
@@ -334,26 +332,23 @@ void smbus::Impl::deinit()
 	}
 }
 
-bool smbus::Impl::init(machine *machine)
+void smbus::Impl::init(machine *machine)
 {
 	m_lc86cpu = machine->get86cpu();
 	m_machine = machine;
-	if (!updateIo(false)) {
-		return false;
-	}
+	updateIo(false);
 
 	m_devs[0x54] = m_machine->getEeprom(); // eeprom
 	m_devs[0x10] = m_machine->getSmc(); // smc
 	m_devs[0x4C] = m_machine->getAdm1032(); // adm1032
 	m_devs[0x45] = m_machine->getVideoEncoder(); // conexant video encoder
 	reset();
-	return true;
 }
 
 /** Public interface implementation **/
-bool smbus::init(machine *machine)
+void smbus::init(machine *machine)
 {
-	return m_impl->init(machine);
+	m_impl->init(machine);
 }
 
 void smbus::deinit()

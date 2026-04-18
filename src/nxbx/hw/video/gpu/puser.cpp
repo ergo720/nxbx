@@ -8,6 +8,7 @@
 // Must be included last because of the template functions nv2a_read/write, which require a complete definition for the engine objects
 #include "nv2a.hpp"
 #include <cinttypes>
+#include <stdexcept>
 
 #define MODULE_NAME puser
 
@@ -16,7 +17,7 @@
 class puser::Impl
 {
 public:
-	bool init(cpu *cpu, nv2a *gpu);
+	void init(cpu *cpu, nv2a *gpu);
 	void updateIo() { updateIo(true); }
 	template<bool log = false>
 	uint32_t read32(uint32_t addr);
@@ -24,7 +25,7 @@ public:
 	void write32(uint32_t addr, const uint32_t value);
 
 private:
-	bool updateIo(bool is_update);
+	void updateIo(bool is_update);
 	template<bool is_write>
 	auto getIoFunc(bool log, bool is_be);
 
@@ -151,8 +152,7 @@ auto puser::Impl::getIoFunc(bool log, bool is_be)
 	}
 }
 
-bool
-puser::Impl::updateIo(bool is_update)
+void puser::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
 	bool is_be = m_pmc->read32(NV_PMC_BOOT_1) &NV_PMC_BOOT_1_ENDIAN24_BIG;
@@ -162,30 +162,22 @@ puser::Impl::updateIo(bool is_update)
 			.fnw32 = getIoFunc<true>(log, is_be)
 		},
 		this, is_update, is_update))) {
-		logger_en(error, "Failed to update mmio region");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Failed to update mmio region"));
 	}
-
-	return true;
 }
 
-bool
-puser::Impl::init(cpu *cpu, nv2a *gpu)
+void puser::Impl::init(cpu *cpu, nv2a *gpu)
 {
 	m_pmc = gpu->getPmc();
 	m_pfifo = gpu->getPfifo();
 	m_lc86cpu = cpu->get86cpu();
-	if (!updateIo(false)) {
-		return false;
-	}
-
-	return true;
+	updateIo(false);
 }
 
 /** Public interface implementation **/
-bool puser::init(cpu *cpu, nv2a *gpu)
+void puser::init(cpu *cpu, nv2a *gpu)
 {
-	return m_impl->init(cpu, gpu);
+	m_impl->init(cpu, gpu);
 }
 
 void puser::updateIo()

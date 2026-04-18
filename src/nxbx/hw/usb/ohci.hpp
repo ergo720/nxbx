@@ -14,7 +14,7 @@ class usb0
 public:
 	usb0();
 	~usb0();
-	bool init(machine *machine);
+	void init(machine *machine);
 	void reset();
 	void updateIoLogging();
 	uint64_t getNextUpdateTime(uint64_t now);

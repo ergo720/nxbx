@@ -15,7 +15,7 @@
 class pvideo::Impl
 {
 public:
-	bool init(cpu *cpu, nv2a *gpu);
+	void init(cpu *cpu, nv2a *gpu);
 	void reset();
 	void updateIo() { updateIo(true); }
 	template<bool log, engine_enabled enabled>
@@ -24,7 +24,7 @@ public:
 	void write32(uint32_t addr, const uint32_t value);
 
 private:
-	bool updateIo(bool is_update);
+	void updateIo(bool is_update);
 	template<bool is_write>
 	auto getIoFunc(bool log, bool enabled, bool is_be);
 
@@ -189,8 +189,7 @@ auto pvideo::Impl::getIoFunc(bool log, bool enabled, bool is_be)
 	}
 }
 
-bool
-pvideo::Impl::updateIo(bool is_update)
+void pvideo::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
 	bool enabled = m_pmc->read32(NV_PMC_ENABLE) & NV_PMC_ENABLE_PVIDEO;
@@ -201,11 +200,8 @@ pvideo::Impl::updateIo(bool is_update)
 			.fnw32 = getIoFunc<true>(log, enabled, is_be)
 		},
 		this, is_update, is_update))) {
-		logger_en(error, "Failed to update mmio region");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Failed to update mmio region"));
 	}
-
-	return true;
 }
 
 void
@@ -225,24 +221,18 @@ pvideo::Impl::reset()
 	debug[10] = 0x0010026C;
 }
 
-bool
-pvideo::Impl::init(cpu *cpu, nv2a *gpu)
+void pvideo::Impl::init(cpu *cpu, nv2a *gpu)
 {
 	m_pmc = gpu->getPmc();
 	m_lc86cpu = cpu->get86cpu();
 	reset();
-
-	if (!updateIo(false)) {
-		return false;
-	}
-
-	return true;
+	updateIo(false);
 }
 
 /** Public interface implementation **/
-bool pvideo::init(cpu *cpu, nv2a *gpu)
+void pvideo::init(cpu *cpu, nv2a *gpu)
 {
-	return m_impl->init(cpu, gpu);
+	m_impl->init(cpu, gpu);
 }
 
 void pvideo::reset()

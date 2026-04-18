@@ -35,7 +35,7 @@ class ptimer
 public:
 	ptimer();
 	~ptimer();
-	bool init(cpu *cpu, nv2a *gpu);
+	void init(cpu *cpu, nv2a *gpu);
 	void reset();
 	void updateIo();
 	uint64_t getNextAlarmTime(uint64_t now);

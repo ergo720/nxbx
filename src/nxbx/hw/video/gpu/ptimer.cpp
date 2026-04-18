@@ -20,7 +20,7 @@
 class ptimer::Impl
 {
 public:
-	bool init(cpu *cpu, nv2a *gpu);
+	void init(cpu *cpu, nv2a *gpu);
 	void reset();
 	void updateIo() { updateIo(true); }
 	uint64_t getNextAlarmTime(uint64_t now);
@@ -33,7 +33,7 @@ public:
 	uint64_t counterToUs();
 
 private:
-	bool updateIo(bool is_update);
+	void updateIo(bool is_update);
 	template<bool is_write>
 	auto getIoFunc(bool log, bool enabled, bool is_be);
 
@@ -277,8 +277,7 @@ auto ptimer::Impl::getIoFunc(bool log, bool enabled, bool is_be)
 	}
 }
 
-bool
-ptimer::Impl::updateIo(bool is_update)
+void ptimer::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
 	bool enabled = m_pmc->read32(NV_PMC_ENABLE) & NV_PMC_ENABLE_PTIMER;
@@ -289,11 +288,8 @@ ptimer::Impl::updateIo(bool is_update)
 			.fnw32 = getIoFunc<true>(log, enabled, is_be)
 		},
 		this, is_update, is_update))) {
-		logger_en(error, "Failed to update mmio region");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Failed to update mmio region"));
 	}
-
-	return true;
 }
 
 void
@@ -312,26 +308,20 @@ ptimer::Impl::reset()
 	cpu_set_timeout(m_lc86cpu, m_cpu->checkPeriodicEvents(timer::get_now()));
 }
 
-bool
-ptimer::Impl::init(cpu *cpu, nv2a *gpu)
+void ptimer::Impl::init(cpu *cpu, nv2a *gpu)
 {
 	m_pmc = gpu->getPmc();
 	m_pramdac = gpu->getPramdac();
 	m_lc86cpu = cpu->get86cpu();
 	m_cpu = cpu;
 	reset();
-
-	if (!updateIo(false)) {
-		return false;
-	}
-
-	return true;
+	updateIo(false);
 }
 
 /** Public interface implementation **/
-bool ptimer::init(cpu *cpu, nv2a *gpu)
+void ptimer::init(cpu *cpu, nv2a *gpu)
 {
-	return m_impl->init(cpu, gpu);
+	m_impl->init(cpu, gpu);
 }
 
 void ptimer::reset()

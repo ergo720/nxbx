@@ -28,7 +28,7 @@ class pfb
 public:
 	pfb();
 	~pfb();
-	bool init(cpu *cpu, nv2a *gpu);
+	void init(cpu *cpu, nv2a *gpu);
 	void reset();
 	void updateIo();
 	uint32_t read32(uint32_t addr);

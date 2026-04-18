@@ -28,7 +28,7 @@
 class pfifo::Impl
 {
 public:
-	bool init(cpu *cpu, nv2a *gpu);
+	void init(cpu *cpu, nv2a *gpu);
 	void deinit();
 	void reset();
 	void updateIo() { updateIo(true); }
@@ -68,7 +68,7 @@ private:
 
 	void logRead(uint32_t addr, uint32_t value);
 	void logWrite(uint32_t addr, uint32_t value);
-	bool updateIo(bool is_update);
+	void updateIo(bool is_update);
 	template<bool is_write, typename T>
 	auto getIoFunc(bool log, bool enabled, bool is_be);
 	void fifoHandler(std::stop_token stok);
@@ -709,8 +709,7 @@ auto pfifo::Impl::getIoFunc(bool log, bool enabled, bool is_be)
 	}
 }
 
-bool
-pfifo::Impl::updateIo(bool is_update)
+void pfifo::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
 	m_is_enabled = m_pmc->read32(NV_PMC_ENABLE) & NV_PMC_ENABLE_PFIFO;
@@ -722,11 +721,8 @@ pfifo::Impl::updateIo(bool is_update)
 			.fnw32 = getIoFunc<true, uint32_t>(log, m_is_enabled, is_be)
 		},
 		this, is_update, is_update))) {
-		logger_en(error, "Failed to update mmio region");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Failed to update mmio region"));
 	}
-
-	return true;
 }
 
 void
@@ -741,8 +737,7 @@ pfifo::Impl::reset()
 	REG_PFIFO(NV_PFIFO_RAMRO) = 0x00000114;
 }
 
-bool
-pfifo::Impl::init(cpu *cpu, nv2a *gpu)
+void pfifo::Impl::init(cpu *cpu, nv2a *gpu)
 {
 	m_pmc = gpu->getPmc();
 	m_pgraph = gpu->getPgraph();
@@ -750,14 +745,10 @@ pfifo::Impl::init(cpu *cpu, nv2a *gpu)
 	m_lc86cpu = cpu->get86cpu();
 	m_nv2a = gpu;
 	reset();
-
-	if (!updateIo(false)) {
-		return false;
-	}
+	updateIo(false);
 
 	m_ram = get_ram_ptr(m_lc86cpu);
 	m_jthr = std::jthread(std::bind_front(&pfifo::Impl::fifoHandler, this));
-	return true;
 }
 
 void pfifo::Impl::deinit()
@@ -775,9 +766,9 @@ void pfifo::Impl::deinit()
 }
 
 /** Public interface implementation **/
-bool pfifo::init(cpu *cpu, nv2a *gpu)
+void pfifo::init(cpu *cpu, nv2a *gpu)
 {
-	return m_impl->init(cpu, gpu);
+	m_impl->init(cpu, gpu);
 }
 
 void pfifo::deinit()

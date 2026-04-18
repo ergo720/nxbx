@@ -41,7 +41,7 @@
 class smc::Impl
 {
 public:
-	bool init(machine *machine);
+	void init(machine *machine);
 	void reset();
 	uint8_t read_byte(uint8_t addr);
 	void write_byte(uint8_t addr, uint8_t value);
@@ -164,21 +164,19 @@ void smc::Impl::reset()
 	m_version_idx = 0;
 }
 
-bool smc::Impl::init(machine *machine)
+void smc::Impl::init(machine *machine)
 {
 	m_adm1032 = machine->getAdm1032();
 	reset();
 	m_tray_state = SMC_TRAY_STATE_MEDIA_DETECT; // TODO: should change state when the user boots new XBEs/XISOs from the gui
 	m_regs[SMC_VIDEO_MODE] = SMC_VIDEO_MODE_HDTV; // TODO: make configurable
-
-	return true;
 }
 
 /** Public interface implementation **/
-bool smc::init(machine *machine, log_module log_module)
+void smc::init(machine *machine, log_module log_module)
 {
 	m_log_module = log_module;
-	return m_impl->init(machine);
+	m_impl->init(machine);
 }
 
 void smc::deinit()

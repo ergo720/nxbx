@@ -42,7 +42,7 @@ class nv2a
 public:
 	nv2a();
 	~nv2a();
-	bool init(machine *machine);
+	void init(machine *machine);
 	void deinit();
 	uint64_t getNextUpdateTime(uint64_t now);
 	pmc *getPmc();

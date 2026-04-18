@@ -35,7 +35,7 @@
 class cmos::Impl
 {
 public:
-	bool init(machine *machine);
+	void init(machine *machine);
 	void deinit();
 	void reset();
 	void updateIoLogging() { updateIo(true); }
@@ -46,7 +46,7 @@ public:
 	uint64_t getNextUpdateTime(uint64_t now);
 
 private:
-	bool updateIo(bool is_update);
+	void updateIo(bool is_update);
 	void update_clock(uint64_t elapsed_us);
 	uint64_t update_periodic_ticks(uint64_t elapsed_us);
 	void update_timer();
@@ -499,7 +499,7 @@ uint64_t cmos::Impl::getNextUpdateTime(uint64_t now)
 	return std::numeric_limits<uint64_t>::max();
 }
 
-bool cmos::Impl::updateIo(bool is_update)
+void cmos::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
 	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, 0x70, 2, true,
@@ -508,11 +508,8 @@ bool cmos::Impl::updateIo(bool is_update)
 			.fnw8 = log ? cpu_write<cmos::Impl, uint8_t, &cmos::Impl::write8<true>> : cpu_write<cmos::Impl, uint8_t, &cmos::Impl::write8<false>>
 		},
 		this, is_update, is_update))) {
-		logger_en(error, "Failed to update io ports");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Failed to update io ports"));
 	}
-
-	return true;
 }
 
 void cmos::Impl::reset()
@@ -521,14 +518,12 @@ void cmos::Impl::reset()
 	m_ram[0x0C] = 0x00; // clears all interrupt flags
 }
 
-bool cmos::Impl::init(machine *machine)
+void cmos::Impl::init(machine *machine)
 {
 	m_lc86cpu = machine->get86cpu();
 	m_cpu = machine->getCpu();
 	m_machine = machine;
-	if (!updateIo(false)) {
-		return false;
-	}
+	updateIo(false);
 
 	m_ram[0x0A] = 0x26;
 	m_ram[0x0B] = 0x02;
@@ -541,7 +536,6 @@ bool cmos::Impl::init(machine *machine)
 	m_last_int = m_last_clock = timer::get_now();
 	m_sys_time_bias = get_settings()->get_int64_value("core", "sys_time_bias");
 	m_sys_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) + m_sys_time_bias;
-	return true;
 }
 
 void cmos::Impl::deinit()
@@ -550,9 +544,9 @@ void cmos::Impl::deinit()
 }
 
 /** Public interface implementation **/
-bool cmos::init(machine *machine)
+void cmos::init(machine *machine)
 {
-	return m_impl->init(machine);
+	m_impl->init(machine);
 }
 
 void cmos::deinit()

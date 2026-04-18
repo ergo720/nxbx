@@ -17,7 +17,7 @@ protected:
 	void set_cmd_failed() { m_cmd_status |= 1; }
 
 public:
-	virtual bool init(machine *machine, log_module module_name) = 0;
+	virtual void init(machine *machine, log_module module_name) = 0;
 	virtual void deinit() = 0;
 	virtual void quick_command(bool command) { logger<log_lv::warn, true>(m_log_module, "Unhandled quick command"); set_cmd_failed(); }
 	virtual uint8_t receive_byte() { logger<log_lv::warn, true>(m_log_module, "Unhandled receive command"); set_cmd_failed(); return 0; }

@@ -46,7 +46,7 @@ static_assert(sizeof(NvNotification) == 16, "sizeof(NvNotification) == 16");
 class pgraph::Impl
 {
 public:
-	bool init(cpu *cpu, nv2a *gpu);
+	void init(cpu *cpu, nv2a *gpu);
 	void deinit();
 	void reset();
 	void updateIo() { updateIo(true); }
@@ -95,7 +95,7 @@ private:
 
 	void logRead(uint32_t addr, uint32_t value);
 	void logWrite(uint32_t addr, uint32_t value);
-	bool updateIo(bool is_update);
+	void updateIo(bool is_update);
 	template<bool is_write>
 	auto getIoFunc(bool log, bool enabled, bool is_be);
 	void graphHandler(std::stop_token stok);
@@ -667,7 +667,7 @@ auto pgraph::Impl::getIoFunc(bool log, bool enabled, bool is_be)
 	}
 }
 
-bool pgraph::Impl::updateIo(bool is_update)
+void pgraph::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
 	m_is_enabled = (m_pmc->read32(NV_PMC_ENABLE) & NV_PMC_ENABLE_PGRAPH) >> 11;
@@ -678,13 +678,10 @@ bool pgraph::Impl::updateIo(bool is_update)
 			.fnw32 = getIoFunc<true>(log, m_is_enabled, is_be)
 		},
 		this, is_update, is_update))) {
-		logger_en(error, "Failed to update mmio region");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Failed to update mmio region"));
 	}
 	m_graph_has_work.test_and_set();
 	m_graph_has_work.notify_one();
-
-	return true;
 }
 
 void pgraph::Impl::reset()
@@ -703,21 +700,17 @@ void pgraph::Impl::reset()
 	std::memset(&m_img_blit, 0, sizeof(m_img_blit));
 }
 
-bool pgraph::Impl::init(cpu *cpu, nv2a *gpu)
+void pgraph::Impl::init(cpu *cpu, nv2a *gpu)
 {
 	m_pmc = gpu->getPmc();
 	m_pramin = gpu->getPramin();
 	m_lc86cpu = cpu->get86cpu();
 	m_nv2a = gpu;
 	reset();
-
-	if (!updateIo(false)) {
-		return false;
-	}
+	updateIo(false);
 
 	m_ram = get_ram_ptr(m_lc86cpu);
 	m_jthr = std::jthread(std::bind_front(&pgraph::Impl::graphHandler, this));
-	return true;
 }
 
 void pgraph::Impl::deinit()
@@ -732,9 +725,9 @@ void pgraph::Impl::deinit()
 }
 
 /** Public interface implementation **/
-bool pgraph::init(cpu *cpu, nv2a *gpu)
+void pgraph::init(cpu *cpu, nv2a *gpu)
 {
-	return m_impl->init(cpu, gpu);
+	m_impl->init(cpu, gpu);
 }
 
 void pgraph::deinit()

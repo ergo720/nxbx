@@ -43,7 +43,7 @@ enum {
 class vga::Impl
 {
 public:
-	bool init(cpu *cpu, nv2a *gpu);
+	void init(cpu *cpu, nv2a *gpu);
 	void reset();
 	uint8_t ioRead8(uint32_t addr);
 	void ioWrite8(uint32_t addr, const uint8_t value);
@@ -1424,20 +1424,19 @@ void vga::Impl::reset()
 	complete_redraw();
 }
 
-bool vga::Impl::init(cpu *cpu, nv2a *gpu)
+void vga::Impl::init(cpu *cpu, nv2a *gpu)
 {
 	m_pcrtc = gpu->getPcrtc();
 	vram_size = cpu->getRamsize();
 	vram = get_ram_ptr(cpu->get86cpu());
 	
 	reset();
-	return true;
 }
 
 /** Public interface implementation **/
-bool vga::init(cpu *cpu, nv2a *gpu)
+void vga::init(cpu *cpu, nv2a *gpu)
 {
-	return m_impl->init(cpu, gpu);
+	m_impl->init(cpu, gpu);
 }
 
 void vga::reset()

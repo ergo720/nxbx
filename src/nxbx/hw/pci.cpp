@@ -21,7 +21,7 @@
 class pci::Impl
 {
 public:
-	bool init(machine *machine);
+	void init(machine *machine);
 	void reset();
 	void updateIoLogging() { updateIo(true); }
 	template<bool log = false>
@@ -40,7 +40,7 @@ public:
 	void copyDefaultConfiguration(void *confptr, void *area, size_t size);
 
 private:
-	bool updateIo(bool is_update);
+	void updateIo(bool is_update);
 	void *get_configuration_ptr(uint32_t bus, uint32_t device, uint32_t function);
 
 	/// ignore: configuration_address_spaces
@@ -248,7 +248,7 @@ void *pci::Impl::get_configuration_ptr(uint32_t bus, uint32_t device, uint32_t f
 	return (configuration_address_spaces[(bus << 8) | (device << 3) | function]).get();
 }
 
-bool pci::Impl::updateIo(bool is_update)
+void pci::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
 	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, 0xCF8, 8, true,
@@ -261,11 +261,8 @@ bool pci::Impl::updateIo(bool is_update)
 			.fnw32 = log ? cpu_write<pci::Impl, uint32_t, &pci::Impl::write32<true>> : cpu_write<pci::Impl, uint32_t, &pci::Impl::write32<false>>
 		},
 		this, is_update, is_update))) {
-		logger_en(error, "Failed to update io ports");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Failed to update io ports"));
 	}
-
-	return true;
 }
 
 void pci::Impl::reset()
@@ -277,21 +274,17 @@ void pci::Impl::reset()
 	configuration_modification.clear();
 }
 
-bool pci::Impl::init(machine *machine)
+void pci::Impl::init(machine *machine)
 {
 	m_lc86cpu = machine->get86cpu();
-	if (!updateIo(false)) {
-		return false;
-	}
-
+	updateIo(false);
 	reset();
-	return true;
 }
 
 /** Public interface implementation **/
-bool pci::init(machine *machine)
+void pci::init(machine *machine)
 {
-	return m_impl->init(machine);
+	m_impl->init(machine);
 }
 
 void pci::reset()

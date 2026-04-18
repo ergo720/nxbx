@@ -14,7 +14,7 @@
 class pfb::Impl
 {
 public:
-	bool init(cpu *cpu, nv2a *gpu);
+	void init(cpu *cpu, nv2a *gpu);
 	void reset();
 	void updateIo() { updateIo(true); }
 	template<bool log, engine_enabled enabled>
@@ -23,7 +23,7 @@ public:
 	void write32(uint32_t addr, const uint32_t value);
 
 private:
-	bool updateIo(bool is_update);
+	void updateIo(bool is_update);
 	template<bool is_write>
 	auto getIoFunc(bool log, bool enabled, bool is_be);
 
@@ -115,7 +115,7 @@ auto pfb::Impl::getIoFunc(bool log, bool enabled, bool is_be)
 	}
 }
 
-bool pfb::Impl::updateIo(bool is_update)
+void pfb::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
 	bool enabled = m_pmc->read32(NV_PMC_ENABLE) & NV_PMC_ENABLE_PFB;
@@ -126,11 +126,8 @@ bool pfb::Impl::updateIo(bool is_update)
 			.fnw32 = getIoFunc<true>(log, enabled, is_be)
 		},
 		this, is_update, is_update))) {
-		logger_en(error, "Failed to update mmio region");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Failed to update mmio region"));
 	}
-
-	return true;
 }
 
 void pfb::Impl::reset()
@@ -142,24 +139,19 @@ void pfb::Impl::reset()
 	m_regs[REGS_PFB_idx(NV_PFB_CSTATUS)] = m_cpu->getRamsize();
 }
 
-bool pfb::Impl::init(cpu *cpu, nv2a *gpu)
+void pfb::Impl::init(cpu *cpu, nv2a *gpu)
 {
 	m_pmc = gpu->getPmc();
 	m_lc86cpu = cpu->get86cpu();
 	m_cpu = cpu;
 	reset();
-
-	if (!updateIo(false)) {
-		return false;
-	}
-
-	return true;
+	updateIo(false);
 }
 
 /** Public interface implementation **/
-bool pfb::init(cpu *cpu, nv2a *gpu)
+void pfb::init(cpu *cpu, nv2a *gpu)
 {
-	return m_impl->init(cpu, gpu);
+	m_impl->init(cpu, gpu);
 }
 
 void pfb::reset()

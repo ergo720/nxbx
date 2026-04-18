@@ -14,7 +14,7 @@ class conexant : public smbus_device
 public:
 	conexant();
 	~conexant();
-	bool init(machine *machine, log_module log_module) override;
+	void init(machine *machine, log_module log_module) override;
 	void deinit() override;
 	void reset();
 	void quick_command(bool command) override;

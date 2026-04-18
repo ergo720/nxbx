@@ -34,10 +34,9 @@ uint8_t adm1032::Impl::read_byte(uint8_t command)
 }
 
 /** Public interface implementation **/
-bool adm1032::init(machine *machine, log_module log_module)
+void adm1032::init(machine *machine, log_module log_module)
 {
 	m_log_module = log_module;
-	return true;
 }
 
 void adm1032::deinit()

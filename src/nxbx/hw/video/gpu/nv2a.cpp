@@ -21,7 +21,7 @@
 class nv2a::Impl
 {
 public:
-	bool init(nv2a *gpu, machine *machine);
+	void init(nv2a *gpu, machine *machine);
 	void deinit();
 	uint64_t getNextUpdateTime(uint64_t now);
 	pmc *getPmc();
@@ -54,7 +54,7 @@ private:
 	std::unique_ptr<pgraph> m_pgraph;
 };
 
-bool nv2a::Impl::init(nv2a *gpu, machine *machine)
+void nv2a::Impl::init(nv2a *gpu, machine *machine)
 {
 	m_pmc = std::make_unique<pmc>();
 	m_pramdac = std::make_unique<pramdac>();
@@ -71,43 +71,18 @@ bool nv2a::Impl::init(nv2a *gpu, machine *machine)
 
 	cpu *cpu = machine->getCpu();
 
-	if (!m_pmc->init(cpu, gpu, machine)) {
-		return false;
-	}
-	if (!m_pramdac->init(cpu, gpu)) {
-		return false;
-	}
-	if (!m_pbus->init(cpu, gpu, machine->getPci())) {
-		return false;
-	}
-	if (!m_pfb->init(cpu, gpu)) {
-		return false;
-	}
-	if (!m_pcrtc->init(cpu, gpu)) {
-		return false;
-	}
-	if (!m_ptimer->init(cpu, gpu)) {
-		return false;
-	}
-	if (!m_pramin->init(cpu, gpu)) {
-		return false;
-	}
-	if (!m_pfifo->init(cpu, gpu)) {
-		return false;
-	}
-	if (!m_pvga->init(cpu, gpu, machine->getVga())) {
-		return false;
-	}
-	if (!m_pvideo->init(cpu, gpu)) {
-		return false;
-	}
-	if (!m_puser->init(cpu, gpu)) {
-		return false;
-	}
-	if (!m_pgraph->init(cpu, gpu)) {
-		return false;
-	}
-	return true;
+	m_pmc->init(cpu, gpu, machine);
+	m_pramdac->init(cpu, gpu);
+	m_pbus->init(cpu, gpu, machine->getPci());
+	m_pfb->init(cpu, gpu);
+	m_pcrtc->init(cpu, gpu);
+	m_ptimer->init(cpu, gpu);
+	m_pramin->init(cpu, gpu);
+	m_pfifo->init(cpu, gpu);
+	m_pvga->init(cpu, gpu, machine->getVga());
+	m_pvideo->init(cpu, gpu);
+	m_puser->init(cpu, gpu);
+	m_pgraph->init(cpu, gpu);
 }
 
 void nv2a::Impl::deinit()
@@ -174,9 +149,9 @@ void nv2a::Impl::updateIoLogging()
 }
 
 /** Public interface implementation **/
-bool nv2a::init(machine *machine)
+void nv2a::init(machine *machine)
 {
-	return m_impl->init(this, machine);
+	m_impl->init(this, machine);
 }
 
 void nv2a::deinit()

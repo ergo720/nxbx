@@ -11,7 +11,7 @@
 class conexant::Impl
 {
 public:
-	bool init();
+	void init();
 	void reset();
 	void quick_command(bool command);
 	uint8_t receive_byte();
@@ -69,17 +69,16 @@ void conexant::Impl::reset()
 	std::fill(std::begin(m_regs), std::end(m_regs), 0);
 }
 
-bool conexant::Impl::init()
+void conexant::Impl::init()
 {
 	reset();
-	return true;
 }
 
 /** Public interface implementation **/
-bool conexant::init(machine *machine, log_module log_module)
+void conexant::init(machine *machine, log_module log_module)
 {
 	m_log_module = log_module;
-	return m_impl->init();
+	m_impl->init();
 }
 
 void conexant::deinit()

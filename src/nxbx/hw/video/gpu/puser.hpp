@@ -24,7 +24,7 @@ class puser
 public:
 	puser();
 	~puser();
-	bool init(cpu *cpu, nv2a *gpu);
+	void init(cpu *cpu, nv2a *gpu);
 	void updateIo();
 	uint32_t read32(uint32_t addr);
 	void write32(uint32_t addr, const uint32_t value);

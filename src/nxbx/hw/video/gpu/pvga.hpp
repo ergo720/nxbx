@@ -30,7 +30,7 @@ class pvga
 public:
 	pvga();
 	~pvga();
-	bool init(cpu *cpu, nv2a *gpu, vga *vga);
+	void init(cpu *cpu, nv2a *gpu, vga *vga);
 	void reset();
 	void updateIo();
 

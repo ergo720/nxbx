@@ -8,6 +8,7 @@
 #include <expected>
 #include "logger.hpp"
 
+#define nxbx_msg_fatal(msg) do { Host::Fatal(msg); } while(0)
 #define nxbx_mod_fatal(mod, msg, ...) do { Host::Fatal(log_module::mod, msg __VA_OPT__(,) __VA_ARGS__); } while(0)
 #define nxbx_fatal(msg, ...) nxbx_mod_fatal(MODULE_NAME, msg __VA_OPT__(,) __VA_ARGS__)
 
@@ -60,6 +61,7 @@ namespace Host
 
 	// Terminates the emulation
 	void Fatal(log_module name, const char *msg, ...);
+	void Fatal(const char *msg);
 
 	// Requests shut down of the current machine
 	void RequestShutdown(bool allow_confirm, bool allow_save_to_state, bool default_save_to_state);

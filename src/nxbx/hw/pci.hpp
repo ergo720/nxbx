@@ -17,7 +17,7 @@ class pci
 public:
 	pci();
 	~pci();
-	bool init(machine *machine);
+	void init(machine *machine);
 	void reset();
 	void updateIoLogging();
 	void *createDevice(uint32_t bus, uint32_t device, uint32_t function, pci_conf_write_cb cb, void *opaque);

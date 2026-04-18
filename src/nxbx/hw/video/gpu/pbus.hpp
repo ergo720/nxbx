@@ -25,7 +25,7 @@ class pbus {
 public:
 	pbus();
 	~pbus();
-	bool init(cpu *cpu, nv2a *gpu, pci *pci);
+	void init(cpu *cpu, nv2a *gpu, pci *pci);
 	void reset();
 	void updateIo();
 	uint32_t read32(uint32_t addr);

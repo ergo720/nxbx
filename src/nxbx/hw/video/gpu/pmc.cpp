@@ -25,7 +25,7 @@
 class pmc::Impl
 {
 public:
-	bool init(cpu *cpu, nv2a *gpu, machine *machine);
+	void init(cpu *cpu, nv2a *gpu, machine *machine);
 	void reset();
 	void updateIo() { updateIo(true); }
 	void updateIrq();
@@ -35,7 +35,7 @@ public:
 	void write32(uint32_t addr, const uint32_t value);
 
 private:
-	bool updateIo(bool is_update);
+	void updateIo(bool is_update);
 	template<bool is_write>
 	auto getIoFunc(bool log, bool is_be);
 
@@ -85,17 +85,23 @@ void pmc::Impl::write32(uint32_t addr, const uint32_t value)
 		uint32_t new_endianness = (value ^ NV_PMC_BOOT_1_ENDIAN24_BIG) & NV_PMC_BOOT_1_ENDIAN24_BIG;
 		m_endianness = (new_endianness | (new_endianness >> 24));
 		if ((old_state ^ m_endianness) & NV_PMC_BOOT_1_ENDIAN24_BIG) {
-			this->updateIo();
-			m_pbus->updateIo();
-			m_puser->updateIo();
-			m_pramdac->updateIo();
-			m_pramin->updateIo();
-			m_pfifo->updateIo();
-			m_ptimer->updateIo();
-			m_pfb->updateIo();
-			m_pcrtc->updateIo();
-			m_pvideo->updateIo();
-			m_pgraph->updateIo();
+			try {
+				this->updateIo();
+				m_pbus->updateIo();
+				m_puser->updateIo();
+				m_pramdac->updateIo();
+				m_pramin->updateIo();
+				m_pfifo->updateIo();
+				m_ptimer->updateIo();
+				m_pfb->updateIo();
+				m_pcrtc->updateIo();
+				m_pvideo->updateIo();
+				m_pgraph->updateIo();
+			}
+			catch (std::runtime_error e) {
+				nxbx_msg_fatal(e.what());
+				break;
+			}
 			mem_init_region_io(m_lc86cpu, 0, 0, true, {}, m_lc86cpu, true, 3); // trigger the update in lib86cpu too
 		}
 	}
@@ -139,12 +145,18 @@ void pmc::Impl::write32(uint32_t addr, const uint32_t value)
 			m_pvideo->reset();
 		}
 		if ((old_state ^ m_engine_enabled) & NV_PMC_ENABLE_ALL) {
-			m_pfifo->updateIo();
-			m_pgraph->updateIo();
-			m_ptimer->updateIo();
-			m_pfb->updateIo();
-			m_pcrtc->updateIo();
-			m_pvideo->updateIo();
+			try {
+				m_pfifo->updateIo();
+				m_pgraph->updateIo();
+				m_ptimer->updateIo();
+				m_pfb->updateIo();
+				m_pcrtc->updateIo();
+				m_pvideo->updateIo();
+			}
+			catch (std::runtime_error e) {
+				nxbx_msg_fatal(e.what());
+				break;
+			}
 			mem_init_region_io(m_lc86cpu, 0, 0, true, {}, m_lc86cpu, true, 3); // trigger the update in lib86cpu too
 		}
 		if (has_int_state_changed) {
@@ -280,7 +292,7 @@ auto pmc::Impl::getIoFunc(bool log, bool is_be)
 	}
 }
 
-bool pmc::Impl::updateIo(bool is_update)
+void pmc::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
 	bool is_be = m_endianness & NV_PMC_BOOT_1_ENDIAN24_BIG;
@@ -290,11 +302,8 @@ bool pmc::Impl::updateIo(bool is_update)
 			.fnw32 = getIoFunc<true>(log, is_be)
 		},
 		this, is_update, is_update))) {
-		logger_en(error, "Failed to update mmio region");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Failed to update mmio region"));
 	}
-
-	return true;
 }
 
 void pmc::Impl::reset()
@@ -306,7 +315,7 @@ void pmc::Impl::reset()
 	m_engine_enabled = NV_PMC_ENABLE_PTIMER | NV_PMC_ENABLE_PFB | NV_PMC_ENABLE_PCRTC;
 }
 
-bool pmc::Impl::init(cpu *cpu, nv2a *gpu, machine *machine)
+void pmc::Impl::init(cpu *cpu, nv2a *gpu, machine *machine)
 {
 	m_pbus = gpu->getPbus();
 	m_pfb = gpu->getPfb();
@@ -321,18 +330,13 @@ bool pmc::Impl::init(cpu *cpu, nv2a *gpu, machine *machine)
 	m_lc86cpu = cpu->get86cpu();
 	m_machine = machine;
 	reset();
-
-	if (!updateIo(false)) {
-		return false;
-	}
-
-	return true;
+	updateIo(false);
 }
 
 /** Public interface implementation **/
-bool pmc::init(cpu *cpu, nv2a *gpu, machine *machine)
+void pmc::init(cpu *cpu, nv2a *gpu, machine *machine)
 {
-	return m_impl->init(cpu, gpu, machine);
+	m_impl->init(cpu, gpu, machine);
 }
 
 void pmc::reset()

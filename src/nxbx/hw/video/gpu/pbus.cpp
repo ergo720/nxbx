@@ -17,7 +17,7 @@
 class pbus::Impl
 {
 public:
-	bool init(cpu *cpu, nv2a *gpu, pci *pci);
+	void init(cpu *cpu, nv2a *gpu, pci *pci);
 	void reset();
 	void updateIo() { updateIo(true); }
 	template<bool log>
@@ -32,7 +32,7 @@ public:
 private:
 	void pciLogRead(uint32_t addr, uint32_t value);
 	void pciLogWrite(uint32_t addr, uint32_t value);
-	bool updateIo(bool is_update);
+	void updateIo(bool is_update);
 	template<bool is_write, bool is_pci>
 	auto getIoFunc(bool log, bool is_be);
 	void pciInit();
@@ -245,7 +245,7 @@ auto pbus::Impl::getIoFunc(bool log, bool is_be)
 	}
 }
 
-bool pbus::Impl::updateIo(bool is_update)
+void pbus::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
 	bool is_be = m_pmc->read32(NV_PMC_BOOT_1) & NV_PMC_BOOT_1_ENDIAN24_BIG;
@@ -255,8 +255,7 @@ bool pbus::Impl::updateIo(bool is_update)
 			.fnw32 = getIoFunc<true, false>(log, is_be)
 		},
 		this, is_update, is_update))) {
-		logger_en(error, "Failed to update mmio region");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Failed to update mmio region"));
 	}
 
 	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, NV_PBUS_PCI_BASE, sizeof(s_default_pci_configuration), false,
@@ -265,11 +264,8 @@ bool pbus::Impl::updateIo(bool is_update)
 			.fnw32 = getIoFunc<true, true>(log, is_be)
 		},
 		this, is_update, is_update))) {
-		logger_en(error, "Failed to update pci mmio region");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Failed to update pci mmio region"));
 	}
-
-	return true;
 }
 
 void pbus::Impl::reset()
@@ -278,25 +274,20 @@ void pbus::Impl::reset()
 	m_fbio_ram = 0x00010000 | NV_PBUS_FBIO_RAM_TYPE_DDR; // ddr even though is should be sdram?
 }
 
-bool pbus::Impl::init(cpu *cpu, nv2a *gpu, pci *pci)
+void pbus::Impl::init(cpu *cpu, nv2a *gpu, pci *pci)
 {
 	m_pmc = gpu->getPmc();
 	m_lc86cpu = cpu->get86cpu();
 	m_pci = pci;
 	pciInit();
 	reset();
-
-	if (!updateIo(false)) {
-		return false;
-	}
-
-	return true;
+	updateIo(false);
 }
 
 /** Public interface implementation **/
-bool pbus::init(cpu *cpu, nv2a *gpu, pci *pci)
+void pbus::init(cpu *cpu, nv2a *gpu, pci *pci)
 {
-	return m_impl->init(cpu, gpu, pci);
+	m_impl->init(cpu, gpu, pci);
 }
 
 void pbus::reset()

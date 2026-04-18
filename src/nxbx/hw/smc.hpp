@@ -21,7 +21,7 @@ class smc : public smbus_device
 public:
 	smc();
 	~smc();
-	bool init(machine *machine, log_module module_name) override;
+	void init(machine *machine, log_module module_name) override;
 	void deinit() override;
 	void reset();
 	uint8_t read_byte(uint8_t command) override;

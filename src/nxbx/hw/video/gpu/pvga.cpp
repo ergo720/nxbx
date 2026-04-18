@@ -7,6 +7,7 @@
 #include "pmc.hpp"
 // Must be included last because of the template functions nv2a_read/write, which require a complete definition for the engine objects
 #include "nv2a.hpp"
+#include <stdexcept>
 
 #define MODULE_NAME pvga
 
@@ -15,7 +16,7 @@
 class pvga::Impl
 {
 public:
-	bool init(cpu *cpu, nv2a *gpu, vga *vga);
+	void init(cpu *cpu, nv2a *gpu, vga *vga);
 	void reset();
 	void updateIo() { updateIo(true); }
 	template<bool log = false>
@@ -36,7 +37,7 @@ public:
 private:
 	void prmvgaLogRead(uint32_t addr, uint32_t value);
 	void prmvgaLogWrite(uint32_t addr, uint32_t value);
-	bool updateIo(bool is_update);
+	void updateIo(bool is_update);
 	
 	// connected devices
 	pmc *m_pmc;
@@ -132,8 +133,7 @@ pvga::Impl::prmvgaLogWrite(uint32_t addr, uint32_t value)
 	logger<log_lv::debug, log_module::pvga, false>("Write at 0x%08X of value 0x%08X", addr, value);
 }
 
-bool
-pvga::Impl::updateIo(bool is_update)
+void pvga::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
 	// PRMVIO is an alias for the vga sequencer and graphics controller ports
@@ -144,8 +144,8 @@ pvga::Impl::updateIo(bool is_update)
 			.fnw16 = log ? cpu_write<pvga::Impl, uint16_t, &pvga::Impl::ioWrite16<true>, NV_PRMVIO_BASE> : cpu_write<pvga::Impl, uint16_t, &pvga::Impl::ioWrite16<false>, NV_PRMVIO_BASE>
 		},
 		this, is_update, is_update))) {
-		logger_en(error, "Failed to update mmio region");
-		return false;
+		logger_en(error, "Failed to update prmvio region");
+		throw std::runtime_error("");
 	}
 
 	// PRMCIO is an alias for the vga attribute controller and crt controller ports
@@ -156,8 +156,8 @@ pvga::Impl::updateIo(bool is_update)
 			.fnw16 = log ? cpu_write<pvga::Impl, uint16_t, &pvga::Impl::ioWrite16<true>, NV_PRMCIO_BASE> : cpu_write<pvga::Impl, uint16_t, &pvga::Impl::ioWrite16<false>, NV_PRMCIO_BASE>
 		},
 		this, is_update, is_update))) {
-		logger_en(error, "Failed to update mmio region");
-		return false;
+		logger_en(error, "Failed to update prmcio region");
+		throw std::runtime_error("");
 	}
 
 	// PRMDIO is an alias for the vga digital-to-analog converter (DAC) ports
@@ -168,8 +168,8 @@ pvga::Impl::updateIo(bool is_update)
 			.fnw16 = log ? cpu_write<pvga::Impl, uint16_t, &pvga::Impl::ioWrite16<true>, NV_PRMDIO_BASE> : cpu_write<pvga::Impl, uint16_t, &pvga::Impl::ioWrite16<false>, NV_PRMDIO_BASE>
 		},
 		this, is_update, is_update))) {
-		logger_en(error, "Failed to update mmio region");
-		return false;
+		logger_en(error, "Failed to update prmdio region");
+		throw std::runtime_error("");
 	}
 
 	// PRMVGA is an alias for the vga memory window
@@ -181,11 +181,9 @@ pvga::Impl::updateIo(bool is_update)
 			.fnw16 = log ? cpu_write<pvga::Impl, uint16_t, &pvga::Impl::memWrite16<true>, NV_PRMVGA_BASE> : cpu_write<pvga::Impl, uint16_t, &pvga::Impl::memWrite16<false>, NV_PRMVGA_BASE>
 		},
 		this, is_update, is_update))) {
-		logger_en(error, "Failed to update mmio region");
-		return false;
+		logger_en(error, "Failed to update prmvga region");
+		throw std::runtime_error("");
 	}
-
-	return true;
 }
 
 void
@@ -194,24 +192,20 @@ pvga::Impl::reset()
 	m_vga->reset();
 }
 
-bool
-pvga::Impl::init(cpu *cpu, nv2a *gpu, vga *vga)
+void pvga::Impl::init(cpu *cpu, nv2a *gpu, vga *vga)
 {
 	m_pmc = gpu->getPmc();
 	m_lc86cpu = cpu->get86cpu();
 	m_vga = vga;
-	if (!updateIo(false)) {
-		return false;
-	}
+	updateIo(false);
 
 	// Don't reset here, because vga will be reset when it's initialized later
-	return true;
 }
 
 /** Public interface implementation **/
-bool pvga::init(cpu *cpu, nv2a *gpu, vga *vga)
+void pvga::init(cpu *cpu, nv2a *gpu, vga *vga)
 {
-	return m_impl->init(cpu, gpu, vga);
+	m_impl->init(cpu, gpu, vga);
 }
 
 void pvga::reset()

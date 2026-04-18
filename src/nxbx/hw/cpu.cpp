@@ -27,7 +27,7 @@
 class cpu::Impl
 {
 public:
-	bool init(const boot_params &params, machine *machine);
+	void init(const boot_params &params, machine *machine);
 	void deinit();
 	void reset();
 	void start();
@@ -38,7 +38,7 @@ public:
 	uint32_t getRamsize() { return m_ramsize; }
 
 private:
-	bool updateIo(bool is_update);
+	void updateIo(bool is_update);
 	uint64_t checkPeriodicEvents();
 	static void cpu_logger(log_level lv, const unsigned count, const char *msg, ...);
 
@@ -72,18 +72,15 @@ void cpu::Impl::cpu_logger(log_level lv, const unsigned count, const char *msg, 
 	va_end(args);
 }
 
-bool cpu::Impl::updateIo(bool is_update)
+void cpu::Impl::updateIo(bool is_update)
 {
 	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, kernel::IO_BASE, kernel::IO_SIZE, true,
 		{
 			.fnr32 = kernel::read32,
 			.fnw32 = kernel::write32
 		}, m_lc86cpu, is_update, is_update))) {
-		logger_en(error, "Failed to update kernel communication io ports");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Failed to update kernel communication io ports"));
 	}
-
-	return true;
 }
 
 void cpu::Impl::reset()
@@ -91,7 +88,7 @@ void cpu::Impl::reset()
 	// TODO: lib86cpu doesn't support resetting the cpu yet
 }
 
-bool cpu::Impl::init(const boot_params &params, machine *machine)
+void cpu::Impl::init(const boot_params &params, machine *machine)
 {
 	m_pic = machine->getPic(0);
 	m_pit = machine->getPit();
@@ -103,8 +100,7 @@ bool cpu::Impl::init(const boot_params &params, machine *machine)
 	// Load the nboxkrnl exe file
 	std::ifstream ifs(emu_path::g_krnl_path.c_str(), std::ios_base::in | std::ios_base::binary);
 	if (!ifs.is_open()) {
-		log_init_failure("Could not open kernel file");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Could not open kernel file"));
 	}
 	ifs.seekg(0, ifs.end);
 	std::streampos length = ifs.tellg();
@@ -112,26 +108,22 @@ bool cpu::Impl::init(const boot_params &params, machine *machine)
 
 	// Sanity checks on the kernel exe size
 	if (length == 0) {
-		log_init_failure("Size of kernel file detected as zero");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Size of kernel file detected as zero"));
 	}
 	else if (length > m_ramsize) {
-		log_init_failure("Kernel file doesn't fit inside ram");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Kernel file doesn't fit inside ram"));
 	}
 
 	std::unique_ptr<char[]> krnl_buff{ new char[static_cast<unsigned>(length)] };
 	if (!krnl_buff) {
-		log_init_failure("Could not allocate kernel buffer");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Could not allocate kernel buffer"));
 	}
 	ifs.read(krnl_buff.get(), length);
 
 	// Sanity checks on the kernel exe file
 	PIMAGE_DOS_HEADER dosHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(krnl_buff.get());
 	if (dosHeader->e_magic != IMAGE_DOS_SIGNATURE) {
-		log_init_failure("Kernel image has an invalid dos header signature");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Kernel image has an invalid dos header signature"));
 	}
 
 	PIMAGE_NT_HEADERS32 peHeader = reinterpret_cast<PIMAGE_NT_HEADERS32>(reinterpret_cast<uint8_t *>(dosHeader) + dosHeader->e_lfanew);
@@ -139,19 +131,16 @@ bool cpu::Impl::init(const boot_params &params, machine *machine)
 		peHeader->FileHeader.Machine != IMAGE_FILE_MACHINE_I386 ||
 		peHeader->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR32_MAGIC ||
 		peHeader->OptionalHeader.Subsystem != IMAGE_SUBSYSTEM_NATIVE) {
-		log_init_failure("Kernel image has an invalid nt header signature");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Kernel image has an invalid nt header signature"));
 	}
 
 	if (peHeader->OptionalHeader.ImageBase != KERNEL_BASE) {
-		log_init_failure("Kernel image has an incorrect image base address");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Kernel image has an incorrect image base address"));
 	}
 
 	// Init lib86cpu
 	if (!LC86_SUCCESS(cpu_new(m_ramsize, m_lc86cpu))) {
-		log_init_failure("Failed to create cpu instance");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Failed to create cpu instance"));
 	}
 
 	register_log_func(cpu_logger);
@@ -160,23 +149,18 @@ bool cpu::Impl::init(const boot_params &params, machine *machine)
 	cpu_set_flags(m_lc86cpu, static_cast<uint32_t>(params.syntax) | (m_is_dbg_present ? CPU_DBG_PRESENT : 0));
 
 	if (!LC86_SUCCESS(mem_init_region_ram(m_lc86cpu, 0, m_ramsize))) {
-		log_init_failure("Failed to initialize ram memory");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Failed to initialize ram memory"));
 	}
 
 	if (!LC86_SUCCESS(mem_init_region_alias(m_lc86cpu, CONTIGUOUS_MEMORY_BASE, 0, m_ramsize))) {
-		log_init_failure("Failed to initialize contiguous memory");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Failed to initialize contiguous memory"));
 	}
 
 	if (!LC86_SUCCESS(mem_init_region_alias(m_lc86cpu, NV2A_VRAM_BASE, 0, m_ramsize))) {
-		log_init_failure("Failed to initialize vram memory for nv2a");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Failed to initialize vram memory for nv2a"));
 	}
 
-	if (!updateIo(false)) {
-		return false;
-	}
+	updateIo(false);
 
 	// Load kernel exe into ram
 	uint8_t *ram = get_ram_ptr(m_lc86cpu);
@@ -212,8 +196,7 @@ bool cpu::Impl::init(const boot_params &params, machine *machine)
 				ExpectedNboxkrnlVersion = ExpectedNboxkrnlVersion.substr(0, pos);
 			}
 			if (ExpectedNboxkrnlVersion.compare(FoundNboxkrnlVersion)) {
-				log_init_failure("Kernel image has an incorrect version, expected %s, got %s", ExpectedNboxkrnlVersion.c_str(), FoundNboxkrnlVersion.c_str());
-				return false;
+				throw std::runtime_error(lv2str(highest, ("Kernel image has an incorrect version, expected " + ExpectedNboxkrnlVersion + ", got " + FoundNboxkrnlVersion).c_str()));
 			}
 			KernelVersionFound = true;
 			break;
@@ -221,8 +204,7 @@ bool cpu::Impl::init(const boot_params &params, machine *machine)
 	}
 
 	if (!KernelVersionFound) {
-		log_init_failure("Kernel image version not found in export table");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Kernel image version not found in export table"));
 	}
 
 	mem_fill_block_virt(m_lc86cpu, 0xF000, 0x1000, 0);
@@ -340,8 +322,6 @@ bool cpu::Impl::init(const boot_params &params, machine *machine)
 		}
 		g_dbg_opt.lock.unlock();
 	}
-
-	return true;
 }
 
 uint64_t cpu::Impl::checkPeriodicEvents(uint64_t now)
@@ -433,9 +413,9 @@ void cpu::Impl::deinit()
 }
 
 /** Public interface implementation **/
-bool cpu::init(const boot_params &params, machine *machine)
+void cpu::init(const boot_params &params, machine *machine)
 {
-	return m_impl->init(params, machine);
+	m_impl->init(params, machine);
 }
 
 void cpu::deinit()

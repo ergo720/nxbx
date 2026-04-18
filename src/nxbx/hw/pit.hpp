@@ -15,7 +15,7 @@ class pit
 public:
 	pit();
 	~pit();
-	bool init(machine *machine);
+	void init(machine *machine);
 	void reset();
 	void updateIoLogging();
 	uint64_t getNextIrqTime(uint64_t now);

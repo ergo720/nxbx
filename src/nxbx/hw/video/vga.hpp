@@ -15,7 +15,7 @@ class vga
 public:
 	vga();
 	~vga();
-	bool init(cpu *cpu, nv2a *gpu);
+	void init(cpu *cpu, nv2a *gpu);
 	void reset();
 	uint8_t ioRead8(uint32_t addr);
 	void ioWrite8(uint32_t addr, const uint8_t value);

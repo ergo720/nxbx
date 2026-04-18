@@ -54,7 +54,7 @@ static_assert(sizeof(s_default_eeprom) == 256);
 class eeprom::Impl
 {
 public:
-	bool init(machine *machine);
+	void init(machine *machine);
 	void deinit();
 	uint8_t read_byte(uint8_t command);
 	void write_byte(uint8_t command, uint8_t value);
@@ -62,7 +62,7 @@ public:
 	void write_word(uint8_t command, uint16_t value);
 
 private:
-	bool createDefault();
+	std::optional<std::fstream> createDefault(std::filesystem::path eeprom_dir, uint8_t *buff);
 
 	std::fstream m_fs;
 	uint8_t m_eeprom[256];
@@ -98,54 +98,57 @@ void eeprom::Impl::deinit()
 	}
 }
 
-bool eeprom::Impl::init(machine *machine)
+void eeprom::Impl::init(machine *machine)
 {
 	uintmax_t size;
+	std::optional<std::fstream> opt;
 	std::filesystem::path eeprom_dir = combine_file_paths(emu_path::g_nxbx_dir, "eeprom.bin");
-	if (auto opt = open_file(eeprom_dir, &size); !opt) {
-		if (auto opt = create_file(eeprom_dir); !opt) {
-			log_init_failure("Failed to create eeprom file");
-			return false;
-		}
-		else {
-			m_fs = std::move(*opt);
-			return createDefault();
+	if (opt = open_file(eeprom_dir, &size); !opt) {
+		if (opt = createDefault(eeprom_dir, m_eeprom); !opt) {
+			throw std::runtime_error(lv2str(highest, "Failed to create new eeprom file"));
 		}
 	}
 	else {
-		m_fs = std::move(*opt);
-		if (size != 256) {
-			if (size == 0) {
-				return createDefault();
+		if (size == 256) {
+			opt->read((char *)m_eeprom, 256);
+			if (!opt->good()) {
+				throw std::runtime_error(lv2str(highest, "Failed to copy eeprom file to memory"));
 			}
-			log_init_failure("Unexpected eeprom file size (it was %" PRIuMAX ")", size);
-			return false;
 		}
-		m_fs.read((char *)m_eeprom, 256);
-		if (!m_fs.good()) {
-			log_init_failure("Failed to copy eeprom file to memory");
-			return false;
+		else if (size == 0) {
+			if (opt = createDefault(eeprom_dir, m_eeprom); !opt) {
+				throw std::runtime_error(lv2str(highest, "Failed to overwrite eeprom file of size zero"));
+			}
 		}
-		return true;
+		else {
+			throw std::runtime_error(lv2str(highest, ("Unexpected eeprom file size (it was " + std::to_string(size) + " bytes vs 256 expected)").c_str()));
+		}
 	}
+	m_fs = std::move(*opt);
 }
 
-bool eeprom::Impl::createDefault()
+std::optional<std::fstream> eeprom::Impl::createDefault(std::filesystem::path eeprom_dir, uint8_t *buff)
 {
-	m_fs.write((const char *)s_default_eeprom, 256);
-	if (!m_fs.good()) {
-		log_init_failure("Failed to update eeprom file");
-		return false;
+	if (auto opt = create_file(eeprom_dir); !opt) {
+		logger_en(error, "Failed to create eeprom file");
+		return std::nullopt;
 	}
-	std::memcpy(m_eeprom, s_default_eeprom, 256);
-	return true;
+	else {
+		opt->write((const char *)s_default_eeprom, 256);
+		if (!opt->good()) {
+			logger_en(error, "Failed to create default eeprom file");
+			return std::nullopt;
+		}
+		std::memcpy(buff, s_default_eeprom, 256);
+		return opt;
+	}
 }
 
 /** Public interface implementation **/
-bool eeprom::init(machine *machine, log_module log_module)
+void eeprom::init(machine *machine, log_module log_module)
 {
 	m_log_module = log_module;
-	return m_impl->init(machine);
+	m_impl->init(machine);
 }
 
 void eeprom::deinit()

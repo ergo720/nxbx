@@ -15,6 +15,15 @@
 
 namespace Host
 {
+	void Fatal(const char *msg)
+	{
+		if (!g_shutdown_requested) {
+			g_shutdown_requested = true;
+			logger(msg);
+			g_console->exit();
+		}
+	}
+
 	void Fatal(log_module name, const char *msg, ...)
 	{
 		if (!g_shutdown_requested) {

@@ -14,7 +14,7 @@ class pic
 public:
 	pic();
 	~pic();
-	bool init(machine *machine, unsigned idx);
+	void init(machine *machine, unsigned idx);
 	void reset();
 	void updateIoLogging();
 	void raiseIrq(uint8_t a);

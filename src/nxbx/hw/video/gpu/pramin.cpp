@@ -16,7 +16,7 @@
 class pramin::Impl
 {
 public:
-	bool init(cpu *cpu, nv2a *gpu);
+	void init(cpu *cpu, nv2a *gpu);
 	void updateIo() { updateIo(true); }
 	uint32_t read32(uint32_t offset);
 	void write32(uint32_t offset, const uint32_t value);
@@ -28,7 +28,7 @@ private:
 	void write(uint32_t addr, const T value);
 	void logRead(uint32_t addr, uint32_t value);
 	void logWrite(uint32_t addr, uint32_t value);
-	bool updateIo(bool is_update);
+	void updateIo(bool is_update);
 	template<bool is_write, typename T>
 	auto getIoFunc(bool log, bool is_be);
 	uint32_t ramin_to_ram_addr(uint32_t ramin_addr);
@@ -115,8 +115,7 @@ auto pramin::Impl::getIoFunc(bool log, bool is_be)
 	}
 }
 
-bool
-pramin::Impl::updateIo(bool is_update)
+void pramin::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
 	bool is_be = m_pmc->read32(NV_PMC_BOOT_1) & NV_PMC_BOOT_1_ENDIAN24_BIG;
@@ -130,15 +129,11 @@ pramin::Impl::updateIo(bool is_update)
 			.fnw32 = getIoFunc<true, uint32_t>(log, is_be),
 		},
 		this, is_update, is_update))) {
-		logger_en(error, "Failed to update mmio region");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Failed to update mmio region"));
 	}
-
-	return true;
 }
 
-bool
-pramin::Impl::init(cpu *cpu, nv2a *gpu)
+void pramin::Impl::init(cpu *cpu, nv2a *gpu)
 {
 	// Tested and confirmed with a Retail 1.0 xbox. The ramin starts from the end of vram, and it's the last MiB of it. It's also addressed in reverse order,
 	// with block units of 64 bytes each.
@@ -161,18 +156,13 @@ pramin::Impl::init(cpu *cpu, nv2a *gpu)
 	// Store ram size in this object. This way, we don't need to query NV_PFB_CSTATUS in ramin_to_ram_addr (which is accessed from the fifo thread from getDmaObj)
 	m_ram = get_ram_ptr(m_lc86cpu);
 	m_ramsize = cpu->getRamsize();
-
-	if (!updateIo(false)) {
-		return false;
-	}
-
-	return true;
+	updateIo(false);
 }
 
 /** Public interface implementation **/
-bool pramin::init(cpu *cpu, nv2a *gpu)
+void pramin::init(cpu *cpu, nv2a *gpu)
 {
-	return m_impl->init(cpu, gpu);
+	m_impl->init(cpu, gpu);
 }
 
 void pramin::updateIo()

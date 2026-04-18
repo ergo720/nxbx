@@ -48,7 +48,7 @@ class pmc
 public:
 	pmc();
 	~pmc();
-	bool init(cpu *cpu, nv2a *gpu, machine *machine);
+	void init(cpu *cpu, nv2a *gpu, machine *machine);
 	void reset();
 	void updateIo();
 	void updateIrq();

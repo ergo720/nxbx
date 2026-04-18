@@ -56,7 +56,7 @@ class pgraph
 public:
 	pgraph();
 	~pgraph();
-	bool init(cpu *cpu, nv2a *gpu);
+	void init(cpu *cpu, nv2a *gpu);
 	void deinit();
 	void reset();
 	void updateIo();

@@ -98,7 +98,7 @@ class pfifo
 public:
 	pfifo();
 	~pfifo();
-	bool init(cpu *cpu, nv2a *gpu);
+	void init(cpu *cpu, nv2a *gpu);
 	void deinit();
 	void reset();
 	void updateIo();

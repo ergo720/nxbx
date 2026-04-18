@@ -18,7 +18,7 @@ class cpu
 public:
 	cpu();
 	~cpu();
-	bool init(const boot_params &params, machine *machine);
+	void init(const boot_params &params, machine *machine);
 	void deinit();
 	void reset();
 	void start();

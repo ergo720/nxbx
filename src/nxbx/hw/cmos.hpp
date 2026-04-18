@@ -15,7 +15,7 @@ class cmos
 public:
 	cmos();
 	~cmos();
-	bool init(machine *machine);
+	void init(machine *machine);
 	void deinit();
 	void reset();
 	void updateIoLogging();

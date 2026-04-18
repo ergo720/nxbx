@@ -28,7 +28,7 @@ struct PitChannel
 class pit::Impl
 {
 public:
-	bool init(machine *machine);
+	void init(machine *machine);
 	void reset();
 	void updateIoLogging() { updateIo(true); }
 	uint64_t getNextIrqTime(uint64_t now);
@@ -36,7 +36,7 @@ public:
 	void write8(uint32_t addr, const uint8_t value);
 
 private:
-	bool updateIo(bool is_update);
+	void updateIo(bool is_update);
 	uint64_t counterToUs();
 	void startTimer(uint8_t channel);
 	void channelReset(uint8_t channel);
@@ -173,7 +173,7 @@ void pit::Impl::channelReset(uint8_t channel)
 	m_chan[channel].timer_running = 0;
 }
 
-bool pit::Impl::updateIo(bool is_update)
+void pit::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
 	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, 0x40, 4, true,
@@ -181,11 +181,8 @@ bool pit::Impl::updateIo(bool is_update)
 		.fnw8 = log ? cpu_write<pit::Impl, uint8_t, &pit::Impl::write8<true>> : cpu_write<pit::Impl, uint8_t, &pit::Impl::write8<false>>
 		},
 		this, is_update, is_update))) {
-		logger_en(error, "Failed to update io ports");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Failed to update io ports"));
 	}
-
-	return true;
 }
 
 void pit::Impl::reset()
@@ -195,23 +192,19 @@ void pit::Impl::reset()
 	}
 }
 
-bool pit::Impl::init(machine *machine)
+void pit::Impl::init(machine *machine)
 {
 	m_lc86cpu = machine->get86cpu();
 	m_cpu = machine->getCpu();
 	m_machine = machine;
-	if (!updateIo(false)) {
-		return false;
-	}
-
+	updateIo(false);
 	reset();
-	return true;
 }
 
 /** Public interface implementation **/
-bool pit::init(machine *machine)
+void pit::init(machine *machine)
 {
-	return m_impl->init(machine);
+	m_impl->init(machine);
 }
 
 void pit::reset()

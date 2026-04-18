@@ -77,48 +77,27 @@ bool machine::Impl::init(const boot_params &params, machine *machine)
 	m_conexant = std::make_unique<conexant>();
 	m_usb0 = std::make_unique<usb0>();
 
-	if (!m_cpu->init(params, machine)) {
+	try {
+		m_cpu->init(params, machine);
+		m_pic[0]->init(machine, 0);
+		m_pic[1]->init(machine, 1);
+		m_pit->init(machine);
+		m_cmos->init(machine);
+		m_pci->init(machine);
+		m_nv2a->init(machine);
+		m_vga->init(m_cpu.get(), m_nv2a.get());
+		m_smbus->init(machine);
+		m_eeprom->init(machine, log_module::eeprom);
+		m_smc->init(machine, log_module::smc);
+		m_adm1032->init(machine, log_module::adm1032);
+		m_conexant->init(machine, log_module::conexant);
+		m_usb0->init(machine);
+	}
+	catch (std::runtime_error e) {
+		logger(e.what());
 		return false;
 	}
-	if (!m_pic[0]->init(machine, 0)) {
-		return false;
-	}
-	if (!m_pic[1]->init(machine, 1)) {
-		return false;
-	}
-	if (!m_pit->init(machine)) {
-		return false;
-	}
-	if (!m_cmos->init(machine)) {
-		return false;
-	}
-	if (!m_pci->init(machine)) {
-		return false;
-	}
-	if (!m_nv2a->init(machine)) {
-		return false;
-	}
-	if (!m_vga->init(m_cpu.get(), m_nv2a.get())) {
-		return false;
-	}
-	if (!m_smbus->init(machine)) {
-		return false;
-	}
-	if (!m_eeprom->init(machine, log_module::eeprom)) {
-		return false;
-	}
-	if (!m_smc->init(machine, log_module::smc)) {
-		return false;
-	}
-	if (!m_adm1032->init(machine, log_module::adm1032)) {
-		return false;
-	}
-	if (!m_conexant->init(machine, log_module::conexant)) {
-		return false;
-	}
-	if (!m_usb0->init(machine)) {
-		return false;
-	}
+
 	return true;
 }
 
@@ -152,15 +131,20 @@ void machine::Impl::lower_irq(uint8_t a)
 
 void machine::Impl::updateIoLogging()
 {
-	m_cpu->updateIoLogging();
-	m_pit->updateIoLogging();
-	m_pic[0]->updateIoLogging();
-	m_pic[1]->updateIoLogging();
-	m_pci->updateIoLogging();
-	m_cmos->updateIoLogging();
-	m_nv2a->updateIoLogging();
-	m_smbus->updateIoLogging();
-	m_usb0->updateIoLogging();
+	try {
+		m_cpu->updateIoLogging();
+		m_pit->updateIoLogging();
+		m_pic[0]->updateIoLogging();
+		m_pic[1]->updateIoLogging();
+		m_pci->updateIoLogging();
+		m_cmos->updateIoLogging();
+		m_nv2a->updateIoLogging();
+		m_smbus->updateIoLogging();
+		m_usb0->updateIoLogging();
+	}
+	catch (std::runtime_error e) {
+		logger_mod_en(error, nxbx, "Failed to update logging settings of mmio handlers");
+	}
 	mem_init_region_io(m_cpu->get86cpu(), 0, 0, true, {}, m_cpu->get86cpu(), true, 3); // trigger the update in lib86cpu too
 }
 

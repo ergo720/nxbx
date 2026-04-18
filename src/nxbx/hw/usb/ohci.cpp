@@ -31,7 +31,7 @@ struct port_status {
 class usb0::Impl
 {
 public:
-	bool init(machine *machine);
+	void init(machine *machine);
 	void reset();
 	void updateIoLogging() { updateIo(true); }
 	template<bool log>
@@ -52,7 +52,7 @@ private:
 	static constexpr uint32_t state_operational = std::to_underlying(state::operational);
 	static constexpr uint32_t state_suspend = std::to_underlying(state::suspend);
 	static constexpr uint64_t m_usb_freq = 12000000; // 12 MHz
-	bool updateIo(bool is_update);
+	void updateIo(bool is_update);
 	template<typename T>
 	void update_port_status(T &&f);
 	void update_state(uint32_t value);
@@ -355,7 +355,7 @@ uint64_t usb0::Impl::getNextUpdateTime(uint64_t now)
 	return std::numeric_limits<uint64_t>::max();
 }
 
-bool usb0::Impl::updateIo(bool is_update)
+void usb0::Impl::updateIo(bool is_update)
 {
 	bool log = module_enabled();
 	if (!LC86_SUCCESS(mem_init_region_io(m_lc86cpu, USB0_BASE, USB0_SIZE, false,
@@ -364,11 +364,8 @@ bool usb0::Impl::updateIo(bool is_update)
 			.fnw32 = log ? cpu_write<usb0::Impl, uint32_t, &usb0::Impl::write<true>> : cpu_write<usb0::Impl, uint32_t, &usb0::Impl::write<false>>
 		},
 		this, is_update, is_update))) {
-		logger_en(error, "Failed to update mmio region");
-		return false;
+		throw std::runtime_error(lv2str(highest, "Failed to update mmio region"));
 	}
-
-	return true;
 }
 
 void usb0::Impl::reset()
@@ -376,22 +373,18 @@ void usb0::Impl::reset()
 	hw_reset();
 }
 
-bool usb0::Impl::init(machine *machine)
+void usb0::Impl::init(machine *machine)
 {
 	m_lc86cpu = machine->get86cpu();
 	m_machine = machine;
-	if (!updateIo(false)) {
-		return false;
-	}
-
+	updateIo(false);
 	reset();
-	return true;
 }
 
 /** Public interface implementation **/
-bool usb0::init(machine *machine)
+void usb0::init(machine *machine)
 {
-	return m_impl->init(machine);
+	m_impl->init(machine);
 }
 
 void usb0::reset()
