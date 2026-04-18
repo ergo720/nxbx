@@ -13,6 +13,7 @@
 #include <mutex>
 #include <cassert>
 #include <cinttypes>
+#include <cstring>
 #ifdef _WIN32
 #undef max
 #endif
@@ -130,6 +131,11 @@ private:
 		uint32_t m_instance_addr;
 		uint32_t m_operation;
 	} m_img_blit;
+	// Make sure we can safely use memset on the method classes structs
+	static_assert(std::is_trivially_copyable_v<decltype(m_memcpy)>);
+	static_assert(std::is_trivially_copyable_v<decltype(m_ctx_surfaces_2d)>);
+	static_assert(std::is_trivially_copyable_v<decltype(m_kelvin)>);
+	static_assert(std::is_trivially_copyable_v<decltype(m_img_blit)>);
 	// connected devices
 	pmc *m_pmc;
 	pramin *m_pramin;
@@ -672,16 +678,10 @@ void pgraph::Impl::reset()
 	m_graph_has_work.clear();
 
 	// Also reset all classes states
-	m_memcpy.m_instance_addr = 0;
-	m_memcpy.m_notification_addr = 0;
-	m_memcpy.m_notification_active[NV039_NOTIFIERS_NOTIFY] = false;
-	m_memcpy.m_notification_active[NV039_NOTIFIERS_BUFFER_NOTIFY] = false;
-
-	m_ctx_surfaces_2d.m_instance_addr = 0;
-
-	m_kelvin.m_instance_addr = 0;
-
-	m_img_blit.m_instance_addr = 0;
+	std::memset(&m_memcpy, 0, sizeof(m_memcpy));
+	std::memset(&m_ctx_surfaces_2d, 0, sizeof(m_ctx_surfaces_2d));
+	std::memset(&m_kelvin, 0, sizeof(m_kelvin));
+	std::memset(&m_img_blit, 0, sizeof(m_img_blit));
 }
 
 bool pgraph::Impl::init(cpu *cpu, nv2a *gpu)
