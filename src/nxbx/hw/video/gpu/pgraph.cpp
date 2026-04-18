@@ -22,7 +22,7 @@
 
 #define SET_REG(reg, mask, val) (REG_PGRAPH(reg) &= ~(mask)) |= (val)
 #define REG_PGRAPH_ptr(r) (impl->m_regs[REGS_PGRAPH_idx(r)])
-#define IMPL(class_) auto class_impl = impl->class_
+#define IMPL(class_) auto class_impl = &impl->class_
 #define MTHD_HANDLER_ARGS pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan
 
 // Macros used in InputQueueEntry for ctx switches
@@ -111,7 +111,7 @@ private:
 	{
 		// NV03_MEMORY_TO_MEMORY_FORMAT
 		uint32_t m_instance_addr;
-		NvNotification *m_notification;
+		uint32_t m_notification_addr;
 		bool m_notification_active[2];
 	} m_memcpy;
 	struct
@@ -189,12 +189,8 @@ void NV039_SET_CONTEXT_DMA_NOTIFIES(MTHD_HANDLER_ARGS)
 	// gpu following the completion of the next method that is not a notification method itself
 
 	IMPL(m_memcpy);
-	DmaObj notify_obj = impl->m_nv2a->getDmaObj(param);
-	assert((notify_obj.class_type == NV01_CONTEXT_DMA_IN_MEMORY) ||
-		(notify_obj.class_type == NV01_CONTEXT_DMA_TO_MEMORY)); // we expect the class to be a NV_CONTEXT_DMA_IN_MEMORY (r/w) or NV_CONTEXT_DMA_TO_MEMORY (w)
-	assert(notify_obj.limit == 0x1F); // we expect a 32 byte struct
-	class_impl.m_notification = reinterpret_cast<NvNotification *>(impl->m_ram + notify_obj.target_addr);
-	class_impl.m_notification_active[NV039_NOTIFIERS_NOTIFY] = false;
+	class_impl->m_notification_addr = param;
+	class_impl->m_notification_active[NV039_NOTIFIERS_NOTIFY] = false;
 }
 
 void NV062_SET_OBJECT(MTHD_HANDLER_ARGS)
@@ -677,7 +673,7 @@ void pgraph::Impl::reset()
 
 	// Also reset all classes states
 	m_memcpy.m_instance_addr = 0;
-	m_memcpy.m_notification = nullptr;
+	m_memcpy.m_notification_addr = 0;
 	m_memcpy.m_notification_active[NV039_NOTIFIERS_NOTIFY] = false;
 	m_memcpy.m_notification_active[NV039_NOTIFIERS_BUFFER_NOTIFY] = false;
 
