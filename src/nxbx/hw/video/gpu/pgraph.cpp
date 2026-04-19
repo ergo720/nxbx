@@ -26,6 +26,14 @@
 #define IMPL(class_) auto class_impl = &impl->class_
 #define MTHD_HANDLER_ARGS pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan
 #define UNBOUND_OBJ_ADDR -1U
+#define NV09F_OBJ_NOTIFIES_idx 0
+#define NV09F_OBJ_COLOR_KEY_idx 1
+#define NV09F_OBJ_CLIP_RECTANGLE_idx 2
+#define NV09F_OBJ_PATTERN_idx 3
+#define NV09F_OBJ_ROP_idx 4
+#define NV09F_OBJ_BETA1_idx 5
+#define NV09F_OBJ_BETA4_idx 6
+#define NV09F_OBJ_SURFACES_idx 7
 
 // Macros used in InputQueueEntry for ctx switches
 #define CTX_SWITCH_CHID 0x1F // target channel
@@ -82,8 +90,8 @@ public:
 	friend void NV097_SET_OBJECT(MTHD_HANDLER_ARGS);
 
 	friend void dispatch_nv09f(MTHD_HANDLER_ARGS);
+	friend void nv09f_set_dma_obj(pgraph::ImplAlias *impl, uint32_t param, uint32_t gr_class, uint32_t idx);
 	friend void NV09F_SET_OBJECT(MTHD_HANDLER_ARGS);
-	friend void NV09F_SET_CONTEXT_COLOR_KEY(MTHD_HANDLER_ARGS);
 	friend void NV09F_SET_OPERATION(MTHD_HANDLER_ARGS);
 
 private:
@@ -135,7 +143,7 @@ private:
 	{
 		// NV15_IMAGE_BLIT
 		uint32_t m_instance_addr;
-		uint32_t m_color_key_instance_addr;
+		uint32_t m_dma_obj_instance_addr[8];
 		uint32_t m_operation;
 	} m_img_blit;
 	// Make sure we can safely use memset on the method classes structs
@@ -230,6 +238,13 @@ void NV097_SET_OBJECT(MTHD_HANDLER_ARGS)
 	impl->m_kelvin.m_instance_addr = param;
 }
 
+void nv09f_set_dma_obj(pgraph::ImplAlias *impl, uint32_t param, uint32_t gr_class, uint32_t idx)
+{
+	DmaObj obj = impl->m_nv2a->getDmaObj(param);
+	assert((obj.class_type == gr_class) || (obj.class_type == NV01_NULL));
+	impl->m_img_blit.m_dma_obj_instance_addr[idx] = obj.class_type == gr_class ? param : UNBOUND_OBJ_ADDR;
+}
+
 void NV09F_SET_OBJECT(MTHD_HANDLER_ARGS)
 {
 	// Binds the engine object to the subchannel
@@ -238,10 +253,44 @@ void NV09F_SET_OBJECT(MTHD_HANDLER_ARGS)
 
 void NV09F_SET_CONTEXT_COLOR_KEY(MTHD_HANDLER_ARGS)
 {
-	// (Un)binds an instance of NV04_CONTEXT_COLOR_KEY to the subchannel. Basically, enables/disables color keying used in a blit
-	DmaObj obj = impl->m_nv2a->getDmaObj(param);
-	assert((obj.class_type == NV04_CONTEXT_COLOR_KEY) || (obj.class_type == NV01_NULL));
-	impl->m_img_blit.m_color_key_instance_addr = obj.class_type == NV04_CONTEXT_COLOR_KEY ? param : UNBOUND_OBJ_ADDR;
+	// (Un)binds an instance of NV04_CONTEXT_COLOR_KEY to the subchannel. Basically, enables/disables color keying in a blit
+	nv09f_set_dma_obj(impl, param, NV04_CONTEXT_COLOR_KEY, NV09F_OBJ_COLOR_KEY_idx);
+}
+
+void NV09F_SET_CONTEXT_CLIP_RECTANGLE(MTHD_HANDLER_ARGS)
+{
+	// (Un)binds an instance of NV01_CONTEXT_CLIP_RECTANGLE to the subchannel. Basically, enables/disables clip rectangles in a blit
+	nv09f_set_dma_obj(impl, param, NV01_CONTEXT_CLIP_RECTANGLE, NV09F_OBJ_CLIP_RECTANGLE_idx);
+}
+
+void NV09F_SET_CONTEXT_PATTERN(MTHD_HANDLER_ARGS)
+{
+	// (Un)binds an instance of NV04_CONTEXT_PATTERN to the subchannel. Basically, enables/disables color bitmap patterns in a blit
+	nv09f_set_dma_obj(impl, param, NV04_CONTEXT_PATTERN, NV09F_OBJ_PATTERN_idx);
+}
+
+void NV09F_SET_CONTEXT_ROP(MTHD_HANDLER_ARGS)
+{
+	// (Un)binds an instance of NV03_CONTEXT_ROP to the subchannel. Basically, enables/disables rop operations in a blit
+	nv09f_set_dma_obj(impl, param, NV03_CONTEXT_ROP, NV09F_OBJ_ROP_idx);
+}
+
+void NV09F_SET_CONTEXT_BETA1(MTHD_HANDLER_ARGS)
+{
+	// (Un)binds an instance of NV01_CONTEXT_BETA to the subchannel. Basically, enables/disables the blend factor in a blit
+	nv09f_set_dma_obj(impl, param, NV01_CONTEXT_BETA, NV09F_OBJ_BETA1_idx);
+}
+
+void NV09F_SET_CONTEXT_BETA4(MTHD_HANDLER_ARGS)
+{
+	// (Un)binds an instance of NV04_CONTEXT_BETA to the subchannel. Basically, enables/disables pre-multiplied alpha blending in a blit
+	nv09f_set_dma_obj(impl, param, NV04_CONTEXT_BETA, NV09F_OBJ_BETA4_idx);
+}
+
+void NV09F_SET_CONTEXT_SURFACES(MTHD_HANDLER_ARGS)
+{
+	// (Un)binds an instance of NV10_CONTEXT_SURFACES_2D to the subchannel. Used to set src/dst color format, pitch and offsets
+	nv09f_set_dma_obj(impl, param, NV10_CONTEXT_SURFACES_2D, NV09F_OBJ_SURFACES_idx);
 }
 
 void NV09F_SET_OPERATION(MTHD_HANDLER_ARGS)
@@ -300,6 +349,12 @@ constexpr auto dispatch_func_nv09f(uint32_t mthd)
 {
 	MTHD_BEGIN(NV09F_SET_OBJECT)
 		MTHD_CASE(NV09F_SET_CONTEXT_COLOR_KEY)
+		MTHD_CASE(NV09F_SET_CONTEXT_CLIP_RECTANGLE)
+		MTHD_CASE(NV09F_SET_CONTEXT_PATTERN)
+		MTHD_CASE(NV09F_SET_CONTEXT_ROP)
+		MTHD_CASE(NV09F_SET_CONTEXT_BETA1)
+		MTHD_CASE(NV09F_SET_CONTEXT_BETA4)
+		MTHD_CASE(NV09F_SET_CONTEXT_SURFACES)
 		MTHD_CASE(NV09F_SET_OPERATION)
 	MTHD_END();
 }
@@ -715,7 +770,7 @@ void pgraph::Impl::reset()
 	m_ctx_surfaces_2d.m_instance_addr = UNBOUND_OBJ_ADDR;
 	m_kelvin.m_instance_addr = UNBOUND_OBJ_ADDR;
 	m_img_blit.m_instance_addr = UNBOUND_OBJ_ADDR;
-	m_img_blit.m_color_key_instance_addr = UNBOUND_OBJ_ADDR;
+	std::fill(std::begin(m_img_blit.m_dma_obj_instance_addr), std::end(m_img_blit.m_dma_obj_instance_addr), UNBOUND_OBJ_ADDR);
 }
 
 void pgraph::Impl::init(cpu *cpu, nv2a *gpu)
