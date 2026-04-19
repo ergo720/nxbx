@@ -25,6 +25,7 @@
 #define REG_PGRAPH_ptr(r) (impl->m_regs[REGS_PGRAPH_idx(r)])
 #define IMPL(class_) auto class_impl = &impl->class_
 #define MTHD_HANDLER_ARGS pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan
+#define UNBOUND_OBJ_ADDR -1U
 
 // Macros used in InputQueueEntry for ctx switches
 #define CTX_SWITCH_CHID 0x1F // target channel
@@ -82,6 +83,7 @@ public:
 
 	friend void dispatch_nv09f(MTHD_HANDLER_ARGS);
 	friend void NV09F_SET_OBJECT(MTHD_HANDLER_ARGS);
+	friend void NV09F_SET_CONTEXT_COLOR_KEY(MTHD_HANDLER_ARGS);
 	friend void NV09F_SET_OPERATION(MTHD_HANDLER_ARGS);
 
 private:
@@ -133,6 +135,7 @@ private:
 	{
 		// NV15_IMAGE_BLIT
 		uint32_t m_instance_addr;
+		uint32_t m_color_key_instance_addr;
 		uint32_t m_operation;
 	} m_img_blit;
 	// Make sure we can safely use memset on the method classes structs
@@ -233,6 +236,14 @@ void NV09F_SET_OBJECT(MTHD_HANDLER_ARGS)
 	impl->m_img_blit.m_instance_addr = param;
 }
 
+void NV09F_SET_CONTEXT_COLOR_KEY(MTHD_HANDLER_ARGS)
+{
+	// (Un)binds an instance of NV04_CONTEXT_COLOR_KEY to the subchannel. Basically, enables/disables color keying used in a blit
+	DmaObj obj = impl->m_nv2a->getDmaObj(param);
+	assert((obj.class_type == NV04_CONTEXT_COLOR_KEY) || (obj.class_type == NV01_NULL));
+	impl->m_img_blit.m_color_key_instance_addr = obj.class_type == NV04_CONTEXT_COLOR_KEY ? param : UNBOUND_OBJ_ADDR;
+}
+
 void NV09F_SET_OPERATION(MTHD_HANDLER_ARGS)
 {
 	// Sets the operation to use for the blitting between the src and dst images
@@ -288,6 +299,7 @@ template<typename EnumT>
 constexpr auto dispatch_func_nv09f(uint32_t mthd)
 {
 	MTHD_BEGIN(NV09F_SET_OBJECT)
+		MTHD_CASE(NV09F_SET_CONTEXT_COLOR_KEY)
 		MTHD_CASE(NV09F_SET_OPERATION)
 	MTHD_END();
 }
@@ -698,6 +710,12 @@ void pgraph::Impl::reset()
 	std::memset(&m_ctx_surfaces_2d, 0, sizeof(m_ctx_surfaces_2d));
 	std::memset(&m_kelvin, 0, sizeof(m_kelvin));
 	std::memset(&m_img_blit, 0, sizeof(m_img_blit));
+	// All classes are unbound at the beginning
+	m_memcpy.m_instance_addr = UNBOUND_OBJ_ADDR;
+	m_ctx_surfaces_2d.m_instance_addr = UNBOUND_OBJ_ADDR;
+	m_kelvin.m_instance_addr = UNBOUND_OBJ_ADDR;
+	m_img_blit.m_instance_addr = UNBOUND_OBJ_ADDR;
+	m_img_blit.m_color_key_instance_addr = UNBOUND_OBJ_ADDR;
 }
 
 void pgraph::Impl::init(cpu *cpu, nv2a *gpu)

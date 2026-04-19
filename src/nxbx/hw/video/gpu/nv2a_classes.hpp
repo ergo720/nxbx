@@ -5,8 +5,10 @@
 // Object graphics classes
 #define NV01_CONTEXT_DMA_FROM_MEMORY                     0x00000002
 #define NV01_CONTEXT_DMA_TO_MEMORY                       0x00000003
+#define NV01_NULL                                        0x00000030
 #define NV01_CONTEXT_DMA_IN_MEMORY                       0x0000003D
 #define NV03_MEMORY_TO_MEMORY_FORMAT                     0x00000039
+#define NV04_CONTEXT_COLOR_KEY                           0x00000057
 #define NV10_CONTEXT_SURFACES_2D                         0x00000062
 #define NV20_KELVIN_PRIMITIVE                            0x00000097
 #define NV15_IMAGE_BLIT                                  0x0000009F
@@ -36,6 +38,7 @@ enum class nv097 : uint32_t
 enum class nv09f : uint32_t
 {
 	NV09F_SET_OBJECT =                                   0x00000000,
+	NV09F_SET_CONTEXT_COLOR_KEY =                        0x00000184,
 	NV09F_SET_OPERATION =                                0x000002FC,
 };
 
