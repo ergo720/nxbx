@@ -88,6 +88,7 @@ public:
 
 	friend void dispatch_nv097(MTHD_HANDLER_ARGS);
 	friend void NV097_SET_OBJECT(MTHD_HANDLER_ARGS);
+	friend void NV097_SET_CONTEXT_DMA_NOTIFIES(MTHD_HANDLER_ARGS);
 
 	friend void dispatch_nv09f(MTHD_HANDLER_ARGS);
 	friend void nv09f_set_dma_obj(pgraph::ImplAlias *impl, uint32_t param, uint32_t gr_class, uint32_t idx);
@@ -138,6 +139,8 @@ private:
 	{
 		// NV20_KELVIN_PRIMITIVE
 		uint32_t m_instance_addr;
+		uint32_t m_notification_addr;
+		bool m_notification_active;
 	} m_kelvin;
 	struct
 	{
@@ -236,6 +239,15 @@ void NV097_SET_OBJECT(MTHD_HANDLER_ARGS)
 {
 	// Binds the engine object to the subchannel
 	impl->m_kelvin.m_instance_addr = param;
+}
+
+void NV097_SET_CONTEXT_DMA_NOTIFIES(MTHD_HANDLER_ARGS)
+{
+	// Same as NV039_SET_CONTEXT_DMA_NOTIFIES, but for nv97
+
+	IMPL(m_kelvin);
+	class_impl->m_notification_addr = param;
+	class_impl->m_notification_active = false;
 }
 
 void nv09f_set_dma_obj(pgraph::ImplAlias *impl, uint32_t param, uint32_t gr_class, uint32_t idx)
@@ -341,6 +353,7 @@ template<typename EnumT>
 constexpr auto dispatch_func_nv097(uint32_t mthd)
 {
 	MTHD_BEGIN(NV097_SET_OBJECT)
+		MTHD_CASE(NV097_SET_CONTEXT_DMA_NOTIFIES)
 	MTHD_END();
 }
 
