@@ -101,6 +101,7 @@ public:
 	friend void NV097_SET_OBJECT(MTHD_HANDLER_ARGS);
 	friend void NV097_SET_CONTEXT_DMA_NOTIFIES(MTHD_HANDLER_ARGS);
 	friend void NV097_SET_CONTEXT_DMA_SEMAPHORE(MTHD_HANDLER_ARGS);
+	friend void NV097_SET_FLAT_SHADE_OP(MTHD_HANDLER_ARGS);
 	friend void NV097_SET_SEMAPHORE_OFFSET(MTHD_HANDLER_ARGS);
 	friend void NV097_BACK_END_WRITE_SEMAPHORE_RELEASE(MTHD_HANDLER_ARGS);
 
@@ -161,6 +162,7 @@ private:
 			uint32_t limit;
 			uint32_t offset;
 		} m_dma_semaphore;
+		uint32_t m_flat_shade_vtx;
 	} m_kelvin;
 	struct
 	{
@@ -329,6 +331,14 @@ void NV097_SET_CONTEXT_DMA_REPORT(MTHD_HANDLER_ARGS)
 	nv097_set_dma_obj(impl, param, NV097_OBJ_REPORT_idx);
 }
 
+void NV097_SET_FLAT_SHADE_OP(MTHD_HANDLER_ARGS)
+{
+	// Specify which vertex to use for flat shading mode (either the first or last). Xbox d3d always uses the first
+
+	assert(param == NV097_SET_FLAT_SHADE_OP_V_LAST_VTX || param == NV097_SET_FLAT_SHADE_OP_V_FIRST_VTX);
+	impl->m_kelvin.m_flat_shade_vtx = param;
+}
+
 void NV097_SET_SEMAPHORE_OFFSET(MTHD_HANDLER_ARGS)
 {
 	// Sets the offset, from the base of the semaphore dma object, to write the DWORD that signals the semaphore
@@ -462,6 +472,7 @@ constexpr auto dispatch_func_nv097(uint32_t mthd)
 		MTHD_CASE(NV097_SET_CONTEXT_DMA_VERTEX_B)
 		MTHD_CASE(NV097_SET_CONTEXT_DMA_SEMAPHORE)
 		MTHD_CASE(NV097_SET_CONTEXT_DMA_REPORT)
+		MTHD_CASE(NV097_SET_FLAT_SHADE_OP)
 		MTHD_CASE(NV097_SET_SEMAPHORE_OFFSET)
 		MTHD_CASE(NV097_BACK_END_WRITE_SEMAPHORE_RELEASE)
 	MTHD_END();
