@@ -39,6 +39,17 @@ enum class nv097 : uint32_t
 {
 	NV097_SET_OBJECT =                                   0x00000000,
 	NV097_SET_CONTEXT_DMA_NOTIFIES =                     0x00000180,
+	NV097_SET_CONTEXT_DMA_A =                            0x00000184,
+	NV097_SET_CONTEXT_DMA_B =                            0x00000188,
+	NV097_SET_CONTEXT_DMA_STATE =                        0x00000190,
+	NV097_SET_CONTEXT_DMA_COLOR =                        0x00000194,
+	NV097_SET_CONTEXT_DMA_ZETA =                         0x00000198,
+	NV097_SET_CONTEXT_DMA_VERTEX_A =                     0x0000019C,
+	NV097_SET_CONTEXT_DMA_VERTEX_B =                     0x000001A0,
+	NV097_SET_CONTEXT_DMA_SEMAPHORE =                    0x000001A4,
+	NV097_SET_CONTEXT_DMA_REPORT =                       0x000001A8,
+	NV097_SET_SEMAPHORE_OFFSET =                         0x00001D6C,
+	NV097_BACK_END_WRITE_SEMAPHORE_RELEASE =             0x00001D70,
 };
 
 enum class nv09f : uint32_t

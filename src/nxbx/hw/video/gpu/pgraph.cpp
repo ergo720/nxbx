@@ -26,14 +26,24 @@
 #define IMPL(class_) auto class_impl = &impl->class_
 #define MTHD_HANDLER_ARGS pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan
 #define UNBOUND_OBJ_ADDR -1U
-#define NV09F_OBJ_NOTIFIES_idx 0
-#define NV09F_OBJ_COLOR_KEY_idx 1
-#define NV09F_OBJ_CLIP_RECTANGLE_idx 2
-#define NV09F_OBJ_PATTERN_idx 3
-#define NV09F_OBJ_ROP_idx 4
-#define NV09F_OBJ_BETA1_idx 5
-#define NV09F_OBJ_BETA4_idx 6
-#define NV09F_OBJ_SURFACES_idx 7
+#define NV09F_OBJ_NOTIFIES_idx               0
+#define NV09F_OBJ_COLOR_KEY_idx              1
+#define NV09F_OBJ_CLIP_RECTANGLE_idx         2
+#define NV09F_OBJ_PATTERN_idx                3
+#define NV09F_OBJ_ROP_idx                    4
+#define NV09F_OBJ_BETA1_idx                  5
+#define NV09F_OBJ_BETA4_idx                  6
+#define NV09F_OBJ_SURFACES_idx               7
+#define NV097_OBJ_NOTIFIES_idx               0
+#define NV097_OBJ_A_idx                      1
+#define NV097_OBJ_B_idx                      2
+#define NV097_OBJ_STATE_idx                  3
+#define NV097_OBJ_COLOR_idx                  4
+#define NV097_OBJ_ZETA_idx                   5
+#define NV097_OBJ_VTXA_idx                   6
+#define NV097_OBJ_VTXB_idx                   7
+#define NV097_OBJ_SEMAPHORE_idx              8
+#define NV097_OBJ_REPORT_idx                 9
 
 // Macros used in InputQueueEntry for ctx switches
 #define CTX_SWITCH_CHID 0x1F // target channel
@@ -87,8 +97,12 @@ public:
 	friend void NV062_SET_CONTEXT_DMA_IMAGE_DESTIN(MTHD_HANDLER_ARGS);
 
 	friend void dispatch_nv097(MTHD_HANDLER_ARGS);
+	friend void nv097_set_dma_obj(pgraph::ImplAlias *impl, uint32_t param, uint32_t idx);
 	friend void NV097_SET_OBJECT(MTHD_HANDLER_ARGS);
 	friend void NV097_SET_CONTEXT_DMA_NOTIFIES(MTHD_HANDLER_ARGS);
+	friend void NV097_SET_CONTEXT_DMA_SEMAPHORE(MTHD_HANDLER_ARGS);
+	friend void NV097_SET_SEMAPHORE_OFFSET(MTHD_HANDLER_ARGS);
+	friend void NV097_BACK_END_WRITE_SEMAPHORE_RELEASE(MTHD_HANDLER_ARGS);
 
 	friend void dispatch_nv09f(MTHD_HANDLER_ARGS);
 	friend void nv09f_set_dma_obj(pgraph::ImplAlias *impl, uint32_t param, uint32_t gr_class, uint32_t idx);
@@ -139,8 +153,14 @@ private:
 	{
 		// NV20_KELVIN_PRIMITIVE
 		uint32_t m_instance_addr;
-		uint32_t m_notification_addr;
 		bool m_notification_active;
+		uint32_t m_dma_obj_instance_addr[10];
+		struct
+		{
+			uint8_t *base;
+			uint32_t limit;
+			uint32_t offset;
+		} m_dma_semaphore;
 	} m_kelvin;
 	struct
 	{
@@ -235,6 +255,11 @@ void NV062_SET_CONTEXT_DMA_IMAGE_DESTIN(MTHD_HANDLER_ARGS)
 	impl->m_ctx_surfaces_2d.m_img_dst_addr = param;
 }
 
+void nv097_set_dma_obj(pgraph::ImplAlias *impl, uint32_t param, uint32_t idx)
+{
+	impl->m_kelvin.m_dma_obj_instance_addr[idx] = param;
+}
+
 void NV097_SET_OBJECT(MTHD_HANDLER_ARGS)
 {
 	// Binds the engine object to the subchannel
@@ -246,8 +271,82 @@ void NV097_SET_CONTEXT_DMA_NOTIFIES(MTHD_HANDLER_ARGS)
 	// Same as NV039_SET_CONTEXT_DMA_NOTIFIES, but for nv97
 
 	IMPL(m_kelvin);
-	class_impl->m_notification_addr = param;
+	class_impl->m_dma_obj_instance_addr[NV097_OBJ_NOTIFIES_idx] = param;
 	class_impl->m_notification_active = false;
+}
+
+void NV097_SET_CONTEXT_DMA_A(MTHD_HANDLER_ARGS)
+{
+	nv097_set_dma_obj(impl, param, NV097_OBJ_A_idx);
+}
+
+void NV097_SET_CONTEXT_DMA_B(MTHD_HANDLER_ARGS)
+{
+	nv097_set_dma_obj(impl, param, NV097_OBJ_B_idx);
+}
+
+void NV097_SET_CONTEXT_DMA_STATE(MTHD_HANDLER_ARGS)
+{
+	nv097_set_dma_obj(impl, param, NV097_OBJ_STATE_idx);
+}
+
+void NV097_SET_CONTEXT_DMA_COLOR(MTHD_HANDLER_ARGS)
+{
+	// TODO: rendering stuff here
+	nv097_set_dma_obj(impl, param, NV097_OBJ_COLOR_idx);
+}
+
+void NV097_SET_CONTEXT_DMA_ZETA(MTHD_HANDLER_ARGS)
+{
+	// TODO: rendering stuff here
+	nv097_set_dma_obj(impl, param, NV097_OBJ_ZETA_idx);
+}
+
+void NV097_SET_CONTEXT_DMA_VERTEX_A(MTHD_HANDLER_ARGS)
+{
+	nv097_set_dma_obj(impl, param, NV097_OBJ_VTXA_idx);
+}
+
+void NV097_SET_CONTEXT_DMA_VERTEX_B(MTHD_HANDLER_ARGS)
+{
+	nv097_set_dma_obj(impl, param, NV097_OBJ_VTXB_idx);
+}
+
+void NV097_SET_CONTEXT_DMA_SEMAPHORE(MTHD_HANDLER_ARGS)
+{
+	// Sets up the semaphore dma object of pgraph
+
+	IMPL(m_kelvin);
+	DmaObj obj = impl->m_nv2a->getDmaObj(param);
+	class_impl->m_dma_semaphore.base = impl->m_ram + obj.target_addr;
+	class_impl->m_dma_semaphore.limit = obj.limit;
+	class_impl->m_dma_obj_instance_addr[NV097_OBJ_SEMAPHORE_idx] = param;
+}
+
+void NV097_SET_CONTEXT_DMA_REPORT(MTHD_HANDLER_ARGS)
+{
+	// TODO: rendering stuff here
+	nv097_set_dma_obj(impl, param, NV097_OBJ_REPORT_idx);
+}
+
+void NV097_SET_SEMAPHORE_OFFSET(MTHD_HANDLER_ARGS)
+{
+	// Sets the offset, from the base of the semaphore dma object, to write the DWORD that signals the semaphore
+
+	IMPL(m_kelvin);
+	assert(param <= class_impl->m_dma_semaphore.limit);
+	class_impl->m_dma_semaphore.offset = param;
+}
+
+void NV097_BACK_END_WRITE_SEMAPHORE_RELEASE(MTHD_HANDLER_ARGS)
+{
+	// Writes param at the offset of the semaphore dma object
+
+	IMPL(m_kelvin);
+	assert(class_impl->m_dma_obj_instance_addr[NV097_OBJ_SEMAPHORE_idx] != UNBOUND_OBJ_ADDR);
+	uint8_t *addr = class_impl->m_dma_semaphore.base;
+	uint32_t offset = class_impl->m_dma_semaphore.offset;
+	*(uint32_t *)(addr + offset) = param;
 }
 
 void nv09f_set_dma_obj(pgraph::ImplAlias *impl, uint32_t param, uint32_t gr_class, uint32_t idx)
@@ -354,6 +453,17 @@ constexpr auto dispatch_func_nv097(uint32_t mthd)
 {
 	MTHD_BEGIN(NV097_SET_OBJECT)
 		MTHD_CASE(NV097_SET_CONTEXT_DMA_NOTIFIES)
+		MTHD_CASE(NV097_SET_CONTEXT_DMA_A)
+		MTHD_CASE(NV097_SET_CONTEXT_DMA_B)
+		MTHD_CASE(NV097_SET_CONTEXT_DMA_STATE)
+		MTHD_CASE(NV097_SET_CONTEXT_DMA_COLOR)
+		MTHD_CASE(NV097_SET_CONTEXT_DMA_ZETA)
+		MTHD_CASE(NV097_SET_CONTEXT_DMA_VERTEX_A)
+		MTHD_CASE(NV097_SET_CONTEXT_DMA_VERTEX_B)
+		MTHD_CASE(NV097_SET_CONTEXT_DMA_SEMAPHORE)
+		MTHD_CASE(NV097_SET_CONTEXT_DMA_REPORT)
+		MTHD_CASE(NV097_SET_SEMAPHORE_OFFSET)
+		MTHD_CASE(NV097_BACK_END_WRITE_SEMAPHORE_RELEASE)
 	MTHD_END();
 }
 
@@ -782,6 +892,7 @@ void pgraph::Impl::reset()
 	m_memcpy.m_instance_addr = UNBOUND_OBJ_ADDR;
 	m_ctx_surfaces_2d.m_instance_addr = UNBOUND_OBJ_ADDR;
 	m_kelvin.m_instance_addr = UNBOUND_OBJ_ADDR;
+	std::fill(std::begin(m_kelvin.m_dma_obj_instance_addr), std::end(m_kelvin.m_dma_obj_instance_addr), UNBOUND_OBJ_ADDR);
 	m_img_blit.m_instance_addr = UNBOUND_OBJ_ADDR;
 	std::fill(std::begin(m_img_blit.m_dma_obj_instance_addr), std::end(m_img_blit.m_dma_obj_instance_addr), UNBOUND_OBJ_ADDR);
 }
