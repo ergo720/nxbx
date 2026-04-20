@@ -264,6 +264,11 @@ static void qtMessageHandler(QtMsgType type, const QMessageLogContext &context, 
 int
 main(int argc, char **argv)
 {
+	// Logging the cpu module causes a ton of overhead on a Windows Console Host, so switch to full buffering and increase the buffer size
+	// Here, we are using the size that POSIX fstat usually retuns
+	[[maybe_unused]] int setvbuf_ret = std::setvbuf(stdout, nullptr, _IOFBF, 65536);
+	assert(setvbuf_ret == 0);
+
 	// Timestamps in some locales showed up wrong on Windows.
 	// Qt already applies the user locale on Unix-like systems.
 #ifdef _WIN32

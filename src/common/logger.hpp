@@ -172,6 +172,7 @@ inline void logger(const char *msg, std::va_list vlist)
 	std::string str(msg);
 	str += '\n';
 	std::vprintf(str.c_str(), vlist);
+	std::fflush(stdout);
 }
 
 inline void logger(const char *msg, ...)
@@ -196,6 +197,9 @@ inline void logger(const char *msg, std::va_list vlist)
 		str += msg;
 		str += '\n';
 		std::vprintf(str.c_str(), vlist);
+		if constexpr (lv == log_lv::highest) {
+			std::fflush(stdout);
+		}
 	}
 	else {
 		throw std::logic_error("Out of range log_lv and/or log_module used");
@@ -226,6 +230,9 @@ inline void logger(log_lv lv, const char *msg, std::va_list vlist)
 			str += msg;
 			str += '\n';
 			std::vprintf(str.c_str(), vlist);
+			if (lv == log_lv::highest) {
+				std::fflush(stdout);
+			}
 		}
 		else {
 			logger("Out of range log_lv used");
@@ -260,6 +267,9 @@ inline void logger(log_module name, const char *msg, std::va_list vlist)
 			str += msg;
 			str += '\n';
 			std::vprintf(str.c_str(), vlist);
+			if constexpr (lv == log_lv::highest) {
+				std::fflush(stdout);
+			}
 		}
 		else {
 			logger("Out of range log_module used");
