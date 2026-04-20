@@ -36,12 +36,12 @@ private:
 	std::atomic_uint32_t m_int_enabled;
 	// registers
 	uint32_t m_fb_addr;
-	uint32_t m_unknown;
+	uint32_t m_config;
 	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
 		{ NV_PCRTC_INTR_0, "NV_PCRTC_INTR_0" },
 		{ NV_PCRTC_INTR_EN_0, "NV_PCRTC_INTR_EN_0" },
 		{ NV_PCRTC_START, "NV_PCRTC_START" },
-		{ NV_PCRTC_UNKNOWN0, "NV_PCRTC_UNKNOWN0" },
+		{ NV_PCRTC_CONFIG, "NV_PCRTC_CONFIG" },
 	};
 };
 
@@ -71,8 +71,8 @@ void pcrtc::Impl::write32(uint32_t addr, const uint32_t value)
 		m_fb_addr = value & 0x7FFFFFC; // fb is 4 byte aligned
 		break;
 
-	case NV_PCRTC_UNKNOWN0:
-		m_unknown = value;
+	case NV_PCRTC_CONFIG:
+		m_config = value;
 		break;
 
 	default:
@@ -103,8 +103,8 @@ uint32_t pcrtc::Impl::read32(uint32_t addr)
 		value = m_fb_addr;
 		break;
 
-	case NV_PCRTC_UNKNOWN0:
-		value = m_unknown;
+	case NV_PCRTC_CONFIG:
+		value = m_config;
 		break;
 
 	default:
@@ -169,7 +169,7 @@ void pcrtc::Impl::reset()
 	m_int_status = NV_PCRTC_INTR_0_VBLANK_NOT_PENDING;
 	m_int_enabled = NV_PCRTC_INTR_EN_0_VBLANK_DISABLED;
 	m_fb_addr = 0;
-	m_unknown = 0;
+	m_config = 0;
 }
 
 void pcrtc::Impl::init(cpu *cpu, nv2a *gpu)

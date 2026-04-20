@@ -16,7 +16,7 @@
 #define NV_PCRTC_INTR_EN_0 (NV2A_REGISTER_BASE + 0x00600140) // Enable/disable vblank interrupt
 #define NV_PCRTC_INTR_EN_0_VBLANK_DISABLED 0x00000000
 #define NV_PCRTC_START (NV2A_REGISTER_BASE + 0x00600800) // The address of the framebuffer
-#define NV_PCRTC_UNKNOWN0 (NV2A_REGISTER_BASE + 0x00600804) // Unknown
+#define NV_PCRTC_CONFIG (NV2A_REGISTER_BASE + 0x00600804) // Unknown
 
 
 class cpu;
