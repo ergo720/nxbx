@@ -320,9 +320,14 @@ void NV097_SET_CONTEXT_DMA_SEMAPHORE(MTHD_HANDLER_ARGS)
 
 	IMPL(m_kelvin);
 	DmaObj obj = impl->m_nv2a->getDmaObj(param);
-	class_impl->m_dma_semaphore.base = impl->m_ram + obj.target_addr;
-	class_impl->m_dma_semaphore.limit = obj.limit;
-	class_impl->m_dma_obj_instance_addr[NV097_OBJ_SEMAPHORE_idx] = param;
+	if (obj.class_type != NV01_NULL) {
+		class_impl->m_dma_semaphore.base = impl->m_ram + obj.target_addr;
+		class_impl->m_dma_semaphore.limit = obj.limit;
+		class_impl->m_dma_obj_instance_addr[NV097_OBJ_SEMAPHORE_idx] = param;
+		return;
+	}
+
+	class_impl->m_dma_obj_instance_addr[NV097_OBJ_SEMAPHORE_idx] = UNBOUND_OBJ_ADDR;
 }
 
 void NV097_SET_CONTEXT_DMA_REPORT(MTHD_HANDLER_ARGS)
@@ -333,7 +338,7 @@ void NV097_SET_CONTEXT_DMA_REPORT(MTHD_HANDLER_ARGS)
 
 void NV097_SET_FLAT_SHADE_OP(MTHD_HANDLER_ARGS)
 {
-	// Specify which vertex to use for flat shading mode (either the first or last). Xbox d3d always uses the first
+	// Specifies which vertex to use for flat shading mode (either the first or the last). Xbox d3d always uses the first
 
 	assert(param == NV097_SET_FLAT_SHADE_OP_V_LAST_VTX || param == NV097_SET_FLAT_SHADE_OP_V_FIRST_VTX);
 	impl->m_kelvin.m_flat_shade_vtx = param;
