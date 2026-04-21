@@ -64,19 +64,16 @@ uint64_t pit::Impl::counterToUs()
 uint64_t pit::Impl::getNextIrqTime(uint64_t now)
 {
 	if (m_chan[0].timer_running) {
-		uint64_t next_time, pit_period = counterToUs();
-		if (now - m_chan[0].last_irq_time >= pit_period) {
-			m_chan[0].last_irq_time = now;
-			next_time = pit_period;
+		uint64_t pit_period = counterToUs(), next_time = m_chan[0].last_irq_time + pit_period;
+		if (now >= next_time) {
+			m_chan[0].last_irq_time = next_time; // next_time is a time in the past now!
 
 			m_machine->lower_irq(PIT_IRQ_NUM);
 			m_machine->raise_irq(PIT_IRQ_NUM);
-		}
-		else {
-			next_time = m_chan[0].last_irq_time + pit_period - now;
+			return pit_period;
 		}
 
-		return next_time;
+		return next_time - now;
 	}
 
 	return std::numeric_limits<uint64_t>::max();

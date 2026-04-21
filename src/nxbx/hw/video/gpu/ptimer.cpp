@@ -80,24 +80,20 @@ ptimer::Impl::counterToUs()
 	return util::muldiv128(util::muldiv128(max_alarm, timer::g_ticks_per_second, m_pramdac->getCoreFreq()), divider, multiplier);
 }
 
-uint64_t
-ptimer::Impl::getNextAlarmTime(uint64_t now)
+uint64_t ptimer::Impl::getNextAlarmTime(uint64_t now)
 {
 	if (((m_int_enabled & NV_PTIMER_INTR_EN_0_ALARM_ENABLED) | counter_active) == (NV_PTIMER_INTR_EN_0_ALARM_ENABLED | COUNTER_ON)) {
-		uint64_t next_time, ptimer_period = counter_period;
-		if (int64_t(now - last_alarm_time) >= ((int64_t)ptimer_period + counter_bias)) {
+		uint64_t ptimer_period = (int64_t)counter_period + counter_bias, next_time = last_alarm_time + ptimer_period;
+		if (now >= next_time) {
 			counter_bias = 0;
-			last_alarm_time = now;
-			next_time = ptimer_period;
+			last_alarm_time = next_time; // next_time is a time in the past now!
 
 			m_int_status |= NV_PTIMER_INTR_0_ALARM_PENDING;
 			m_pmc->updateIrq();
-		}
-		else {
-			next_time = last_alarm_time + ptimer_period - now;
+			return counter_period;
 		}
 
-		return next_time;
+		return next_time - now;
 	}
 
 	return std::numeric_limits<uint64_t>::max();
@@ -175,9 +171,9 @@ void ptimer::Impl::write32(uint32_t addr, const uint32_t value)
 		   a1                       a1                  n bias- (period smaller for one cycle)
 		                    a1                          n bias+ (period larger for one cycle)
 		*/
-		uint32_t old_alarm = alarm >> 5;
+		int64_t old_alarm = alarm >> 5;
 		alarm = value & ~0x1F; // tested on hw: writes of 1s to the first five bits have no impact
-		uint32_t new_alarm = alarm >> 5;
+		int64_t new_alarm = alarm >> 5;
 		counter_bias = new_alarm - old_alarm;
 		if (counter_active) {
 			cpu_set_timeout(m_lc86cpu, m_cpu->checkPeriodicEvents(timer::get_now()));

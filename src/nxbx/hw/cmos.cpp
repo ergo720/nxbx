@@ -443,7 +443,7 @@ uint64_t cmos::Impl::getNextUpdateTime(uint64_t now)
 					// Every Nth periodic interrupt, we will cause an alarm/UIP interrupt.
 					m_periodic_ticks = update_periodic_ticks(now - m_last_int);
 					if (m_periodic_ticks != m_periodic_ticks_max) {
-						m_last_int = now; // No, we haven't reached the Nth tick yet
+						m_last_int = next_int; // No, we haven't reached the Nth tick yet; next_int is a time in the past now!
 						raiseIrq(why);
 						return m_period_int;
 					}
@@ -472,7 +472,7 @@ uint64_t cmos::Impl::getNextUpdateTime(uint64_t now)
 				}
 
 				update_clock(now - m_last_clock);
-				m_last_clock = now; // we just updated the seconds
+				m_last_clock = next_int; // we just updated the seconds; next_int is a time in the past now!
 
 				if (why) {
 					raiseIrq(why);
@@ -487,7 +487,7 @@ uint64_t cmos::Impl::getNextUpdateTime(uint64_t now)
 			uint64_t next_clock = m_last_clock + timer::g_ticks_per_second;
 			if (now >= next_clock) {
 				update_clock(now - m_last_clock);
-				m_last_clock = now; // we just updated the seconds
+				m_last_clock = next_clock; // we just updated the seconds; next_clock is a time in the past now!
 
 				return timer::g_ticks_per_second;
 			}

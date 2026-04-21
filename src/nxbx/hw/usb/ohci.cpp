@@ -338,18 +338,16 @@ void usb0::Impl::hw_reset()
 
 uint64_t usb0::Impl::getNextUpdateTime(uint64_t now)
 {
+	// FIXME: eof_worker should be running continuously instead of just once per usb frame
 	if (m_frame_running) {
-		uint64_t next_time;
-		if ((now - m_sof_time) >= timer::g_ticks_per_millisecond) { // frame length of ohci is 1 ms
-			m_sof_time = now;
-			next_time = timer::g_ticks_per_millisecond;
+		uint64_t next_time = m_sof_time + timer::g_ticks_per_millisecond; // frame length of ohci is 1 ms
+		if (now >= next_time) {
+			m_sof_time = next_time; // next_time is a time in the past now!
 			eof_worker();
-		}
-		else {
-			next_time = m_sof_time + timer::g_ticks_per_millisecond - now;
+			return timer::g_ticks_per_millisecond;
 		}
 
-		return next_time;
+		return next_time - now;
 	}
 
 	return std::numeric_limits<uint64_t>::max();
