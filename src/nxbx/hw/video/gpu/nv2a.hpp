@@ -42,9 +42,9 @@ class nv2a
 public:
 	nv2a();
 	~nv2a();
+	void allocEngines();
 	void init(machine *machine);
 	void deinit();
-	uint64_t getNextUpdateTime(uint64_t now);
 	pmc *getPmc();
 	pcrtc *getPcrtc();
 	pramdac *getPramdac();

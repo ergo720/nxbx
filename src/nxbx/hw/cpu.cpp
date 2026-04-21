@@ -15,7 +15,8 @@
 #include "cmos.hpp"
 #include "usb/ohci.hpp"
 #include "video/gpu/nv2a.hpp"
-#include "video/gpu/nv2a_defs.hpp"
+#include "video/gpu/ptimer.hpp"
+#include "video/gpu/pcrtc.hpp"
 #include <fstream>
 #include <cinttypes>
 #include <cstring>
@@ -48,7 +49,8 @@ private:
 	pic *m_pic;
 	pit *m_pit;
 	cmos *m_cmos;
-	nv2a *m_nv2a;
+	ptimer *m_ptimer;
+	pcrtc *m_pcrtc;
 	usb0 *m_usb0;
 	cpu_t *m_lc86cpu;
 };	
@@ -93,7 +95,8 @@ void cpu::Impl::init(const boot_params &params, machine *machine)
 	m_pic = machine->getPic(0);
 	m_pit = machine->getPit();
 	m_cmos = machine->getCmos();
-	m_nv2a = machine->getGpu();
+	m_ptimer = machine->getGpu()->getPtimer();
+	m_pcrtc = machine->getGpu()->getPcrtc();
 	m_usb0 = machine->getUsb(0);
 	m_ramsize = params.console_type == console_t::xbox ? RAM_SIZE64 : RAM_SIZE128;
 
@@ -326,11 +329,12 @@ void cpu::Impl::init(const boot_params &params, machine *machine)
 
 uint64_t cpu::Impl::checkPeriodicEvents(uint64_t now)
 {
-	std::array<uint64_t, 4> dev_timeout;
+	std::array<uint64_t, 5> dev_timeout;
 	dev_timeout[0] = m_pit->getNextIrqTime(now);
 	dev_timeout[1] = m_cmos->getNextUpdateTime(now);
-	dev_timeout[2] = m_nv2a->getNextUpdateTime(now);
-	dev_timeout[3] = m_usb0->getNextUpdateTime(now);
+	dev_timeout[2] = m_ptimer->getNextAlarmTime(now);
+	dev_timeout[3] = m_pcrtc->getNextVblankTime(now);
+	dev_timeout[4] = m_usb0->getNextUpdateTime(now);
 
 	return *std::min_element(dev_timeout.begin(), dev_timeout.end());
 }

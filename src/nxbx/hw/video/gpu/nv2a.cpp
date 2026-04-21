@@ -21,9 +21,9 @@
 class nv2a::Impl
 {
 public:
+	void allocEngines();
 	void init(nv2a *gpu, machine *machine);
 	void deinit();
-	uint64_t getNextUpdateTime(uint64_t now);
 	pmc *getPmc();
 	pcrtc *getPcrtc();
 	pramdac *getPramdac();
@@ -54,7 +54,7 @@ private:
 	std::unique_ptr<pgraph> m_pgraph;
 };
 
-void nv2a::Impl::init(nv2a *gpu, machine *machine)
+void nv2a::Impl::allocEngines()
 {
 	m_pmc = std::make_unique<pmc>();
 	m_pramdac = std::make_unique<pramdac>();
@@ -68,7 +68,10 @@ void nv2a::Impl::init(nv2a *gpu, machine *machine)
 	m_pvideo = std::make_unique<pvideo>();
 	m_puser = std::make_unique<puser>();
 	m_pgraph = std::make_unique<pgraph>();
+}
 
+void nv2a::Impl::init(nv2a *gpu, machine *machine)
+{
 	cpu *cpu = machine->getCpu();
 
 	m_pmc->init(cpu, gpu, machine);
@@ -90,11 +93,6 @@ void nv2a::Impl::deinit()
 	if (m_pfifo) {
 		m_pfifo->deinit();
 	}
-}
-
-uint64_t nv2a::Impl::getNextUpdateTime(uint64_t now)
-{
-	return m_ptimer->getNextAlarmTime(now);
 }
 
 pmc *nv2a::Impl::getPmc() { return m_pmc.get(); }
@@ -149,6 +147,11 @@ void nv2a::Impl::updateIoLogging()
 }
 
 /** Public interface implementation **/
+void nv2a::allocEngines()
+{
+	m_impl->allocEngines();
+}
+
 void nv2a::init(machine *machine)
 {
 	m_impl->init(this, machine);
@@ -167,11 +170,6 @@ DmaObj nv2a::getDmaObj(uint32_t addr)
 void nv2a::updateIoLogging()
 {
 	m_impl->updateIoLogging();
-}
-
-uint64_t nv2a::getNextUpdateTime(uint64_t now)
-{
-	return m_impl->getNextUpdateTime(now);
 }
 
 pmc *nv2a::getPmc() { return m_impl->getPmc(); }

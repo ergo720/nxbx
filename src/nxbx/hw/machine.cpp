@@ -78,6 +78,7 @@ bool machine::Impl::init(const boot_params &params, machine *machine)
 	m_usb0 = std::make_unique<usb0>();
 
 	try {
+		m_nv2a->allocEngines();
 		m_cpu->init(params, machine);
 		m_pic[0]->init(machine, 0);
 		m_pic[1]->init(machine, 1);

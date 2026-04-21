@@ -13,8 +13,10 @@
 
 #define NV_PCRTC_INTR_0 (NV2A_REGISTER_BASE + 0x00600100) // Pending vblank interrupt. Writing a 0 has no effect, and writing a 1 clears the interrupt
 #define NV_PCRTC_INTR_0_VBLANK_NOT_PENDING 0x00000000
+#define NV_PCRTC_INTR_0_VBLANK_PENDING 0x00000001
 #define NV_PCRTC_INTR_EN_0 (NV2A_REGISTER_BASE + 0x00600140) // Enable/disable vblank interrupt
 #define NV_PCRTC_INTR_EN_0_VBLANK_DISABLED 0x00000000
+#define NV_PCRTC_INTR_EN_0_VBLANK_ENABLED 0x00000001
 #define NV_PCRTC_START (NV2A_REGISTER_BASE + 0x00600800) // The address of the framebuffer
 #define NV_PCRTC_CONFIG (NV2A_REGISTER_BASE + 0x00600804) // Unknown
 
@@ -30,6 +32,7 @@ public:
 	void init(cpu *cpu, nv2a *gpu);
 	void reset();
 	void updateIo();
+	uint64_t getNextVblankTime(uint64_t now);
 	uint32_t read32(uint32_t addr);
 	void write32(uint32_t addr, const uint32_t value);
 

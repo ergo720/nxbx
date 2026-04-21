@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2024 ergo720
 
 #include "lib86cpu.hpp"
+#include "clock.hpp"
 #include "pmc.hpp"
 #include "pcrtc.hpp"
 // Must be included last because of the template functions nv2a_read/write, which require a complete definition for the engine objects
@@ -18,6 +19,7 @@ public:
 	void init(cpu *cpu, nv2a *gpu);
 	void reset();
 	void updateIo() { updateIo(true); }
+	uint64_t getNextVblankTime(uint64_t now);
 	template<bool log, engine_enabled enabled>
 	uint32_t read32(uint32_t addr);
 	template<bool log, engine_enabled enabled>
@@ -28,6 +30,8 @@ private:
 	template<bool is_write>
 	auto getIoFunc(bool log, bool enabled, bool is_be);
 
+	static constexpr double s_vblank_ntsc_period = 16.6666666667 * 1000;
+	uint64_t m_vblank_last;
 	// connected devices
 	pmc *m_pmc;
 	cpu_t *m_lc86cpu;
@@ -44,6 +48,24 @@ private:
 		{ NV_PCRTC_CONFIG, "NV_PCRTC_CONFIG" },
 	};
 };
+
+uint64_t pcrtc::Impl::getNextVblankTime(uint64_t now)
+{
+	if (m_int_enabled & NV_PCRTC_INTR_EN_0_VBLANK_ENABLED) {
+		uint64_t next_time = m_vblank_last + s_vblank_ntsc_period;
+		if (now >= next_time) {
+			m_vblank_last = next_time; // next_time is a time in the past now!
+
+			m_int_status |= NV_PCRTC_INTR_0_VBLANK_PENDING;
+			m_pmc->updateIrq();
+			return s_vblank_ntsc_period;
+		}
+
+		return next_time - now; // time remaining until next vblank
+	}
+
+	return std::numeric_limits<uint64_t>::max();
+}
 
 template<bool log, engine_enabled enabled>
 void pcrtc::Impl::write32(uint32_t addr, const uint32_t value)
@@ -63,9 +85,15 @@ void pcrtc::Impl::write32(uint32_t addr, const uint32_t value)
 		break;
 
 	case NV_PCRTC_INTR_EN_0:
+	{
+		uint32_t old_state = m_int_enabled;
 		m_int_enabled = value;
+		if (m_int_enabled & NV_PCRTC_INTR_EN_0_VBLANK_ENABLED && (old_state ^ value) & NV_PCRTC_INTR_EN_0_VBLANK_ENABLED) {
+			m_vblank_last = timer::get_now(); // triggers only on disabled -> enabled state change
+		}
 		m_pmc->updateIrq();
-		break;
+	}
+	break;
 
 	case NV_PCRTC_START:
 		m_fb_addr = value & 0x7FFFFFC; // fb is 4 byte aligned
@@ -194,6 +222,11 @@ void pcrtc::reset()
 void pcrtc::updateIo()
 {
 	m_impl->updateIo();
+}
+
+uint64_t pcrtc::getNextVblankTime(uint64_t now)
+{
+	return m_impl->getNextVblankTime(now);
 }
 
 uint32_t pcrtc::read32(uint32_t addr)
