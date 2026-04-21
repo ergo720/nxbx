@@ -31,6 +31,9 @@ private:
 	// connected devices
 	pmc *m_pmc;
 	cpu_t *m_lc86cpu;
+	// atomic registers
+	std::atomic_uint32_t m_int_status;
+	std::atomic_uint32_t m_int_enabled;
 	// registers
 	uint32_t debug[11];
 	uint32_t m_regs[24];
@@ -87,6 +90,16 @@ void pvideo::Impl::write32(uint32_t addr, const uint32_t value)
 		debug[(addr - NV_PVIDEO_DEBUG_0) >> 2] = value;
 		break;
 
+	case NV_PVIDEO_INTR:
+		m_int_status &= ~value;
+		m_pmc->updateIrq();
+		break;
+
+	case NV_PVIDEO_INTR_EN:
+		m_int_enabled = value;
+		m_pmc->updateIrq();
+		break;
+
 	case NV_PVIDEO_LUMINANCE(0):
 	case NV_PVIDEO_LUMINANCE(1):
 	case NV_PVIDEO_CHROMINANCE(0):
@@ -130,6 +143,14 @@ uint32_t pvideo::Impl::read32(uint32_t addr)
 	case NV_PVIDEO_DEBUG_9:
 	case NV_PVIDEO_DEBUG_10:
 		value = debug[(addr - NV_PVIDEO_DEBUG_0) >> 2];
+		break;
+
+	case NV_PVIDEO_INTR:
+		value = m_int_status;
+		break;
+
+	case NV_PVIDEO_INTR_EN:
+		value = m_int_enabled;
 		break;
 
 	case NV_PVIDEO_LUMINANCE(0):
@@ -207,6 +228,8 @@ void pvideo::Impl::updateIo(bool is_update)
 void
 pvideo::Impl::reset()
 {
+	m_int_status = 0;
+	m_int_enabled = 0;
 	// Values dumped from a Retail 1.0 xbox
 	debug[0] = 0x00000010;
 	debug[1] = 0x00000064;

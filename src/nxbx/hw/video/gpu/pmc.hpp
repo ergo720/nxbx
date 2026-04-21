@@ -21,6 +21,7 @@
 #define NV_PMC_INTR_0 (NV2A_REGISTER_BASE + 0x00000100) // Pending interrupts of all engines
 #define NV_PMC_INTR_0_PFIFO 8
 #define NV_PMC_INTR_0_PGRAPH 12
+#define NV_PMC_INTR_0_PVIDEO 16
 #define NV_PMC_INTR_0_PTIMER 20
 #define NV_PMC_INTR_0_PCRTC 24
 #define NV_PMC_INTR_0_SOFTWARE 31

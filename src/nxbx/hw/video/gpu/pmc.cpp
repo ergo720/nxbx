@@ -244,6 +244,14 @@ void pmc::Impl::updateIrq()
 		m_int_status &= ~(1 << NV_PMC_INTR_0_PGRAPH);
 	}
 
+	// Check for pending PVIDEO interrupts
+	if (m_pvideo->read32(NV_PVIDEO_INTR) & m_pvideo->read32(NV_PVIDEO_INTR_EN)) {
+		m_int_status |= (1 << NV_PMC_INTR_0_PVIDEO);
+	}
+	else {
+		m_int_status &= ~(1 << NV_PMC_INTR_0_PVIDEO);
+	}
+
 	switch (m_int_enabled)
 	{
 	default:
