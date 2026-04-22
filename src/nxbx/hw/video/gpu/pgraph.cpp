@@ -25,6 +25,8 @@
 #define REG_PGRAPH_ptr(r) (impl->m_regs[REGS_PGRAPH_idx(r)])
 #define IMPL(class_) auto class_impl = &impl->class_
 #define MTHD_HANDLER_ARGS pgraph::ImplAlias *impl, uint32_t mthd, uint32_t param, uint32_t subchan
+#define LOG_MTHD() logger_en(debug, "%s, method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32,\
+__func__, mthd, subchan, param)
 #define UNBOUND_OBJ_ADDR -1U
 #define NV09F_OBJ_NOTIFIES_idx               0
 #define NV09F_OBJ_COLOR_KEY_idx              1
@@ -235,6 +237,8 @@ void unimplemented_method(MTHD_HANDLER_ARGS)
 void NV039_SET_OBJECT(MTHD_HANDLER_ARGS)
 {
 	// Binds the engine object to the subchannel
+
+	LOG_MTHD();
 	impl->m_memcpy.m_instance_addr = param;
 }
 
@@ -244,6 +248,7 @@ void NV039_SET_CONTEXT_DMA_NOTIFIES(MTHD_HANDLER_ARGS)
 	// Both notifications need to be first activated with NV039_NOTIFY and NV039_BUFFER_NOTIFY respectively. Once activated, the first notification is populated by the
 	// gpu following the completion of the next method that is not a notification method itself
 
+	LOG_MTHD();
 	IMPL(m_memcpy);
 	class_impl->m_notification_addr = param;
 	class_impl->m_notification_active[NV039_NOTIFIERS_NOTIFY] = false;
@@ -252,18 +257,24 @@ void NV039_SET_CONTEXT_DMA_NOTIFIES(MTHD_HANDLER_ARGS)
 void NV062_SET_OBJECT(MTHD_HANDLER_ARGS)
 {
 	// Binds the engine object to the subchannel
+
+	LOG_MTHD();
 	impl->m_ctx_surfaces_2d.m_instance_addr = param;
 }
 
 void NV062_SET_CONTEXT_DMA_IMAGE_SOURCE(MTHD_HANDLER_ARGS)
 {
 	// Sets the address of the dma object that translates the address of the src image used during a blit
+
+	LOG_MTHD();
 	impl->m_ctx_surfaces_2d.m_img_src_addr = param;
 }
 
 void NV062_SET_CONTEXT_DMA_IMAGE_DESTIN(MTHD_HANDLER_ARGS)
 {
 	// Sets the address of the dma object that translates the address of the dst image used during a blit
+
+	LOG_MTHD();
 	impl->m_ctx_surfaces_2d.m_img_dst_addr = param;
 }
 
@@ -275,6 +286,8 @@ void nv097_set_dma_obj(pgraph::ImplAlias *impl, uint32_t param, uint32_t idx)
 void NV097_SET_OBJECT(MTHD_HANDLER_ARGS)
 {
 	// Binds the engine object to the subchannel
+
+	LOG_MTHD();
 	impl->m_kelvin.m_instance_addr = param;
 }
 
@@ -282,6 +295,7 @@ void NV097_SET_CONTEXT_DMA_NOTIFIES(MTHD_HANDLER_ARGS)
 {
 	// Same as NV039_SET_CONTEXT_DMA_NOTIFIES, but for nv97
 
+	LOG_MTHD();
 	IMPL(m_kelvin);
 	class_impl->m_dma_obj_instance_addr[NV097_OBJ_NOTIFIES_idx] = param;
 	class_impl->m_notification_active = false;
@@ -289,38 +303,45 @@ void NV097_SET_CONTEXT_DMA_NOTIFIES(MTHD_HANDLER_ARGS)
 
 void NV097_SET_CONTEXT_DMA_A(MTHD_HANDLER_ARGS)
 {
+	LOG_MTHD();
 	nv097_set_dma_obj(impl, param, NV097_OBJ_A_idx);
 }
 
 void NV097_SET_CONTEXT_DMA_B(MTHD_HANDLER_ARGS)
 {
+	LOG_MTHD();
 	nv097_set_dma_obj(impl, param, NV097_OBJ_B_idx);
 }
 
 void NV097_SET_CONTEXT_DMA_STATE(MTHD_HANDLER_ARGS)
 {
+	LOG_MTHD();
 	nv097_set_dma_obj(impl, param, NV097_OBJ_STATE_idx);
 }
 
 void NV097_SET_CONTEXT_DMA_COLOR(MTHD_HANDLER_ARGS)
 {
 	// TODO: rendering stuff here
+	LOG_MTHD();
 	nv097_set_dma_obj(impl, param, NV097_OBJ_COLOR_idx);
 }
 
 void NV097_SET_CONTEXT_DMA_ZETA(MTHD_HANDLER_ARGS)
 {
 	// TODO: rendering stuff here
+	LOG_MTHD();
 	nv097_set_dma_obj(impl, param, NV097_OBJ_ZETA_idx);
 }
 
 void NV097_SET_CONTEXT_DMA_VERTEX_A(MTHD_HANDLER_ARGS)
 {
+	LOG_MTHD();
 	nv097_set_dma_obj(impl, param, NV097_OBJ_VTXA_idx);
 }
 
 void NV097_SET_CONTEXT_DMA_VERTEX_B(MTHD_HANDLER_ARGS)
 {
+	LOG_MTHD();
 	nv097_set_dma_obj(impl, param, NV097_OBJ_VTXB_idx);
 }
 
@@ -328,6 +349,7 @@ void NV097_SET_CONTEXT_DMA_SEMAPHORE(MTHD_HANDLER_ARGS)
 {
 	// Sets up the semaphore dma object of pgraph
 
+	LOG_MTHD();
 	IMPL(m_kelvin);
 	DmaObj obj = impl->m_nv2a->getDmaObj(param);
 	if (obj.class_type != NV01_NULL) {
@@ -343,6 +365,7 @@ void NV097_SET_CONTEXT_DMA_SEMAPHORE(MTHD_HANDLER_ARGS)
 void NV097_SET_CONTEXT_DMA_REPORT(MTHD_HANDLER_ARGS)
 {
 	// TODO: rendering stuff here
+	LOG_MTHD();
 	nv097_set_dma_obj(impl, param, NV097_OBJ_REPORT_idx);
 }
 
@@ -350,6 +373,7 @@ void NV097_SET_EYE_POSITION(MTHD_HANDLER_ARGS)
 {
 	// Sets a single component of the eye position vector in the constant register file (fixed function pipeline only)
 
+	LOG_MTHD();
 	uint32_t component = (mthd - std::to_underlying(nv097::NV097_SET_EYE_POSITION)) >> 2;
 	assert(component < 4);
 	impl->m_kelvin.m_vtx_shader.m_const[NV_IGRAPH_XF_XFCTX_EYEP][component] = param;
@@ -359,6 +383,7 @@ void NV097_SET_FLAT_SHADE_OP(MTHD_HANDLER_ARGS)
 {
 	// Specifies which vertex to use for flat shading mode (either the first or the last). Xbox d3d always uses the first
 
+	LOG_MTHD();
 	assert(param == NV097_SET_FLAT_SHADE_OP_V_LAST_VTX || param == NV097_SET_FLAT_SHADE_OP_V_FIRST_VTX);
 	impl->m_kelvin.m_flat_shade_vtx = param;
 }
@@ -367,6 +392,7 @@ void NV097_SET_SEMAPHORE_OFFSET(MTHD_HANDLER_ARGS)
 {
 	// Sets the offset, from the base of the semaphore dma object, to write the DWORD that signals the semaphore
 
+	LOG_MTHD();
 	IMPL(m_kelvin);
 	assert(param <= class_impl->m_dma_semaphore.limit);
 	class_impl->m_dma_semaphore.offset = param;
@@ -376,6 +402,7 @@ void NV097_BACK_END_WRITE_SEMAPHORE_RELEASE(MTHD_HANDLER_ARGS)
 {
 	// Writes param at the offset of the semaphore dma object
 
+	LOG_MTHD();
 	IMPL(m_kelvin);
 	assert(class_impl->m_dma_obj_instance_addr[NV097_OBJ_SEMAPHORE_idx] != UNBOUND_OBJ_ADDR);
 	uint8_t *addr = class_impl->m_dma_semaphore.base;
@@ -393,54 +420,63 @@ void nv09f_set_dma_obj(pgraph::ImplAlias *impl, uint32_t param, uint32_t gr_clas
 void NV09F_SET_OBJECT(MTHD_HANDLER_ARGS)
 {
 	// Binds the engine object to the subchannel
+	LOG_MTHD();
 	impl->m_img_blit.m_instance_addr = param;
 }
 
 void NV09F_SET_CONTEXT_COLOR_KEY(MTHD_HANDLER_ARGS)
 {
 	// (Un)binds an instance of NV04_CONTEXT_COLOR_KEY to the subchannel. Basically, enables/disables color keying in a blit
+	LOG_MTHD();
 	nv09f_set_dma_obj(impl, param, NV04_CONTEXT_COLOR_KEY, NV09F_OBJ_COLOR_KEY_idx);
 }
 
 void NV09F_SET_CONTEXT_CLIP_RECTANGLE(MTHD_HANDLER_ARGS)
 {
 	// (Un)binds an instance of NV01_CONTEXT_CLIP_RECTANGLE to the subchannel. Basically, enables/disables clip rectangles in a blit
+	LOG_MTHD();
 	nv09f_set_dma_obj(impl, param, NV01_CONTEXT_CLIP_RECTANGLE, NV09F_OBJ_CLIP_RECTANGLE_idx);
 }
 
 void NV09F_SET_CONTEXT_PATTERN(MTHD_HANDLER_ARGS)
 {
 	// (Un)binds an instance of NV04_CONTEXT_PATTERN to the subchannel. Basically, enables/disables color bitmap patterns in a blit
+	LOG_MTHD();
 	nv09f_set_dma_obj(impl, param, NV04_CONTEXT_PATTERN, NV09F_OBJ_PATTERN_idx);
 }
 
 void NV09F_SET_CONTEXT_ROP(MTHD_HANDLER_ARGS)
 {
 	// (Un)binds an instance of NV03_CONTEXT_ROP to the subchannel. Basically, enables/disables rop operations in a blit
+	LOG_MTHD();
 	nv09f_set_dma_obj(impl, param, NV03_CONTEXT_ROP, NV09F_OBJ_ROP_idx);
 }
 
 void NV09F_SET_CONTEXT_BETA1(MTHD_HANDLER_ARGS)
 {
 	// (Un)binds an instance of NV01_CONTEXT_BETA to the subchannel. Basically, enables/disables the blend factor in a blit
+	LOG_MTHD();
 	nv09f_set_dma_obj(impl, param, NV01_CONTEXT_BETA, NV09F_OBJ_BETA1_idx);
 }
 
 void NV09F_SET_CONTEXT_BETA4(MTHD_HANDLER_ARGS)
 {
 	// (Un)binds an instance of NV04_CONTEXT_BETA to the subchannel. Basically, enables/disables pre-multiplied alpha blending in a blit
+	LOG_MTHD();
 	nv09f_set_dma_obj(impl, param, NV04_CONTEXT_BETA, NV09F_OBJ_BETA4_idx);
 }
 
 void NV09F_SET_CONTEXT_SURFACES(MTHD_HANDLER_ARGS)
 {
 	// (Un)binds an instance of NV10_CONTEXT_SURFACES_2D to the subchannel. Used to set src/dst color format, pitch and offsets
+	LOG_MTHD();
 	nv09f_set_dma_obj(impl, param, NV10_CONTEXT_SURFACES_2D, NV09F_OBJ_SURFACES_idx);
 }
 
 void NV09F_SET_OPERATION(MTHD_HANDLER_ARGS)
 {
 	// Sets the operation to use for the blitting between the src and dst images
+	LOG_MTHD();
 	impl->m_img_blit.m_operation = param;
 }
 
@@ -800,8 +836,6 @@ void pgraph::Impl::graphHandler(std::stop_token stok)
 			REG_PGRAPH(NV_PGRAPH_CTX_SWITCH5) = REG_PGRAPH(NV_PGRAPH_CTX_CACHE5(elem.m_subchan));
 
 			uint32_t gr_class = REG_PGRAPH(NV_PGRAPH_CTX_SWITCH1) & NV_PGRAPH_CTX_SWITCH1_GRCLASS;
-			logger_en(debug, "Class 0x%08" PRIX32 ", method 0x%08" PRIX32 ", subchannel %" PRIu32 ", parameter 0x%08" PRIX32, gr_class, elem.m_mthd, elem.m_subchan, elem.m_param);
-
 			ASSUME(gr_class < s_method_table_classes.size());
 			mthd_func func = s_method_table_classes[gr_class];
 			ASSUME(func);
