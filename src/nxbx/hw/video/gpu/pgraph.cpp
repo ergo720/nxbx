@@ -49,6 +49,9 @@
 #define CTX_SWITCH_CHID 0x1F // target channel
 #define CTX_SWITCH_STATUS (1 << 31) // switch requested=1
 
+// Constant register offsets of the vertex processor when using the fixed function pipeline
+#define NV_IGRAPH_XF_XFCTX_EYEP              0x38
+
 #include "nv2a_classes.hpp"
 
 struct NvNotification
@@ -101,6 +104,7 @@ public:
 	friend void NV097_SET_OBJECT(MTHD_HANDLER_ARGS);
 	friend void NV097_SET_CONTEXT_DMA_NOTIFIES(MTHD_HANDLER_ARGS);
 	friend void NV097_SET_CONTEXT_DMA_SEMAPHORE(MTHD_HANDLER_ARGS);
+	friend void NV097_SET_EYE_POSITION(MTHD_HANDLER_ARGS);
 	friend void NV097_SET_FLAT_SHADE_OP(MTHD_HANDLER_ARGS);
 	friend void NV097_SET_SEMAPHORE_OFFSET(MTHD_HANDLER_ARGS);
 	friend void NV097_BACK_END_WRITE_SEMAPHORE_RELEASE(MTHD_HANDLER_ARGS);
@@ -163,6 +167,12 @@ private:
 			uint32_t offset;
 		} m_dma_semaphore;
 		uint32_t m_flat_shade_vtx;
+		struct
+		{
+			// Contain four 32bit floats each. Read-only from the vertex shader. Addressed either with an absolute address -> c[n] where n is the reg number,
+			// or with a relative address from the address register -> c[a0.x + n], where a0.x is a signed offset. Out of range reads always return (0.0, 0.0, 0.0, 0.0).
+			uint32_t m_const[NV2A_NUM_VTX_SHADER_CONST_REGS][4];
+		} m_vtx_shader;
 	} m_kelvin;
 	struct
 	{
@@ -336,6 +346,15 @@ void NV097_SET_CONTEXT_DMA_REPORT(MTHD_HANDLER_ARGS)
 	nv097_set_dma_obj(impl, param, NV097_OBJ_REPORT_idx);
 }
 
+void NV097_SET_EYE_POSITION(MTHD_HANDLER_ARGS)
+{
+	// Sets a single component of the eye position vector in the constant register file (fixed function pipeline only)
+
+	uint32_t component = (mthd - std::to_underlying(nv097::NV097_SET_EYE_POSITION)) >> 2;
+	assert(component < 4);
+	impl->m_kelvin.m_vtx_shader.m_const[NV_IGRAPH_XF_XFCTX_EYEP][component] = param;
+}
+
 void NV097_SET_FLAT_SHADE_OP(MTHD_HANDLER_ARGS)
 {
 	// Specifies which vertex to use for flat shading mode (either the first or the last). Xbox d3d always uses the first
@@ -435,11 +454,11 @@ return &func;\
 #define MTHD_CASE(func) else if (mthd == (std::to_underlying(EnumT::func) / 4)) {\
 return &func;\
 }
-#define MTHD_RANGE(func, start, end) else if ((mthd >= (std::to_underlying(EnumT::func ## start) / 4)) && (mthd <= (std::to_underlying(EnumT::func ## end) / 4))) {\
+#define MTHD_RANGE(func, count) else if ((mthd >= (std::to_underlying(EnumT::func) / 4)) && (mthd <= (std::to_underlying(EnumT::func) + (count - 1) * 4) / 4)) {\
 return &func;\
 }
 #define MTHD_END() \
-return unimplemented_method
+return &unimplemented_method
 
 #define MTHD_CALL(func) \
 return func(mthd)
@@ -477,6 +496,7 @@ constexpr auto dispatch_func_nv097(uint32_t mthd)
 		MTHD_CASE(NV097_SET_CONTEXT_DMA_VERTEX_B)
 		MTHD_CASE(NV097_SET_CONTEXT_DMA_SEMAPHORE)
 		MTHD_CASE(NV097_SET_CONTEXT_DMA_REPORT)
+		MTHD_RANGE(NV097_SET_EYE_POSITION, 4)
 		MTHD_CASE(NV097_SET_FLAT_SHADE_OP)
 		MTHD_CASE(NV097_SET_SEMAPHORE_OFFSET)
 		MTHD_CASE(NV097_BACK_END_WRITE_SEMAPHORE_RELEASE)

@@ -48,6 +48,7 @@ enum class nv097 : uint32_t
 	NV097_SET_CONTEXT_DMA_VERTEX_B =                     0x000001A0,
 	NV097_SET_CONTEXT_DMA_SEMAPHORE =                    0x000001A4,
 	NV097_SET_CONTEXT_DMA_REPORT =                       0x000001A8,
+	NV097_SET_EYE_POSITION =                             0x00000A50,
 	NV097_SET_FLAT_SHADE_OP =                            0x000009FC,
 	NV097_SET_SEMAPHORE_OFFSET =                         0x00001D6C,
 	NV097_BACK_END_WRITE_SEMAPHORE_RELEASE =             0x00001D70,

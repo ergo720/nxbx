@@ -12,6 +12,7 @@
 #define NV2A_VRAM_SIZE64 0x4000000 // = 64 MiB
 #define NV2A_VRAM_SIZE128 0x8000000 // = 128 MiB
 #define NV2A_MAX_NUM_CHANNELS 32 // max num of fifo queues
+#define NV2A_NUM_VTX_SHADER_CONST_REGS 192
 
 // DMA object masks
 #define NV_DMA_CLASS 0x00000FFF
