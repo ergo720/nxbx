@@ -13,6 +13,7 @@ The only supported architecture is x86-64.
 * [Cmake](https://cmake.org) version 3.25 or higher is required.
 * [Visual Studio 2022](https://visualstudio.microsoft.com/vs/older-downloads/) (Windows), [Visual Studio Code](https://visualstudio.microsoft.com/downloads/) (Linux, optional).
 * [Qt](https://www.qt.io/development/download-open-source) version 6.10.2
+* [Vulkan SDK](https://www.vulkan.org/tools#download-these-essential-development-tools) version 1.4.341
 
 **On Windows:**
 

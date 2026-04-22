@@ -61,6 +61,12 @@ jobs:
         uses: jurplel/install-qt-action@v4
         with:
           version: '6.10.2'
+      - name: Install Vulkan SDK
+        uses: humbletim/setup-vulkan-sdk@v1.2.1
+        with:
+          vulkan-query-version: '1.4.341.0'
+          vulkan-components: Vulkan-Headers, Vulkan-Loader
+          vulkan-use-cache: true
       - name: Generate CMake Files
         # NOTES:
         # -Werror=dev is used to validate CMakeLists.txt for any faults.

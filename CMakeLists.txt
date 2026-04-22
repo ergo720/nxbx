@@ -23,6 +23,8 @@ if(${WINDEPLOYQT_EXECUTABLE} STREQUAL "")
 endif()
 endif()
 
+find_package(Vulkan REQUIRED)
+
 find_package(Git)
 if(Git_FOUND)
  execute_process(
@@ -78,6 +80,7 @@ include_directories(
  ${NXBX_ROOT_DIR}/src/qt
  ${NXBX_ROOT_DIR}/src/nxbx/fs
  ${NXBX_ROOT_DIR}/src/nxbx/hw
+ ${Vulkan_INCLUDE_DIRS}
 )
 
 set(HEADERS
@@ -188,6 +191,7 @@ target_link_libraries(nxbx
 	PRIVATE Qt6::Core
 	PRIVATE Qt6::Gui
 	PRIVATE Qt6::Widgets
+	PRIVATE ${Vulkan_LIBRARIES}
 )
 
 target_compile_definitions(nxbx PRIVATE QT_UI_BUILD QT_NO_EXCEPTIONS)
