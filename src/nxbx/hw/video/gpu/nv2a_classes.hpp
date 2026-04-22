@@ -50,6 +50,7 @@ enum class nv097 : uint32_t
 	NV097_SET_CONTEXT_DMA_REPORT =                       0x000001A8,
 	NV097_SET_EYE_POSITION =                             0x00000A50,
 	NV097_SET_FLAT_SHADE_OP =                            0x000009FC,
+	NV097_SET_EDGE_FLAG =                                0x000016BC,
 	NV097_SET_SEMAPHORE_OFFSET =                         0x00001D6C,
 	NV097_BACK_END_WRITE_SEMAPHORE_RELEASE =             0x00001D70,
 };
@@ -86,3 +87,5 @@ enum class nv09f : uint32_t
 
 #define NV097_SET_FLAT_SHADE_OP_V_LAST_VTX               0x00000000
 #define NV097_SET_FLAT_SHADE_OP_V_FIRST_VTX              0x00000001
+#define NV097_SET_EDGE_FLAG_V_FALSE                      0x00000000
+#define NV097_SET_EDGE_FLAG_V_TRUE                       0x00000001

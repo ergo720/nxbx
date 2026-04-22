@@ -108,6 +108,7 @@ public:
 	friend void NV097_SET_CONTEXT_DMA_SEMAPHORE(MTHD_HANDLER_ARGS);
 	friend void NV097_SET_EYE_POSITION(MTHD_HANDLER_ARGS);
 	friend void NV097_SET_FLAT_SHADE_OP(MTHD_HANDLER_ARGS);
+	friend void NV097_SET_EDGE_FLAG(MTHD_HANDLER_ARGS);
 	friend void NV097_SET_SEMAPHORE_OFFSET(MTHD_HANDLER_ARGS);
 	friend void NV097_BACK_END_WRITE_SEMAPHORE_RELEASE(MTHD_HANDLER_ARGS);
 
@@ -169,6 +170,7 @@ private:
 			uint32_t offset;
 		} m_dma_semaphore;
 		uint32_t m_flat_shade_vtx;
+		uint32_t m_edge_flag;
 		struct
 		{
 			// Contain four 32bit floats each. Read-only from the vertex shader. Addressed either with an absolute address -> c[n] where n is the reg number,
@@ -389,6 +391,15 @@ void NV097_SET_FLAT_SHADE_OP(MTHD_HANDLER_ARGS)
 	impl->m_kelvin.m_flat_shade_vtx = param;
 }
 
+void NV097_SET_EDGE_FLAG(MTHD_HANDLER_ARGS)
+{
+	// Toggles edge flag to hide specific lines of triangles, quads, and polygons -> same as glEdgeFlag
+
+	LOG_MTHD();
+	assert(param == NV097_SET_EDGE_FLAG_V_FALSE || param == NV097_SET_EDGE_FLAG_V_TRUE);
+	impl->m_kelvin.m_edge_flag = param;
+}
+
 void NV097_SET_SEMAPHORE_OFFSET(MTHD_HANDLER_ARGS)
 {
 	// Sets the offset, from the base of the semaphore dma object, to write the DWORD that signals the semaphore
@@ -535,6 +546,7 @@ constexpr auto dispatch_func_nv097(uint32_t mthd)
 		MTHD_CASE(NV097_SET_CONTEXT_DMA_REPORT)
 		MTHD_RANGE(NV097_SET_EYE_POSITION, 4)
 		MTHD_CASE(NV097_SET_FLAT_SHADE_OP)
+		MTHD_CASE(NV097_SET_EDGE_FLAG)
 		MTHD_CASE(NV097_SET_SEMAPHORE_OFFSET)
 		MTHD_CASE(NV097_BACK_END_WRITE_SEMAPHORE_RELEASE)
 	MTHD_END();
