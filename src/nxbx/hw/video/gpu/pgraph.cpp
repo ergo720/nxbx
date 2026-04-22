@@ -280,7 +280,8 @@ void NV062_SET_CONTEXT_DMA_IMAGE_DESTIN(MTHD_HANDLER_ARGS)
 
 void nv097_set_dma_obj(pgraph::ImplAlias *impl, uint32_t param, uint32_t idx)
 {
-	impl->m_kelvin.m_dma_obj_instance_addr[idx] = param;
+	DmaObj obj = impl->m_nv2a->getDmaObj(param);
+	impl->m_kelvin.m_dma_obj_instance_addr[idx] = obj.class_type != NV01_NULL ? param : UNBOUND_OBJ_ADDR;
 }
 
 void NV097_SET_OBJECT(MTHD_HANDLER_ARGS)
