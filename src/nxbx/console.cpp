@@ -4,6 +4,8 @@
 #include "console.hpp"
 #include "io.hpp"
 #include "clock.hpp"
+#include "cpu.hpp"
+#include "vk/init.hpp"
 #include <functional>
 
 
@@ -30,12 +32,24 @@ console::console(const boot_params &params)
 		m_machine.deinit();
 		return;
 	}
+	// We only support Vulkan for now
+	try {
+		m_renderer = new Vulkan;
+		dynamic_cast<Vulkan *>(m_renderer)->setValidationLayers(params.vkdbg);
+		m_renderer->init(params.nxbx_dir, m_machine.getCpu()->getRamPtr(), m_machine.getCpu()->getRamsize());
+	}
+	catch (std::runtime_error e) {
+		logger(e.what());
+		return;
+	}
 	io::init(m_machine.get86cpu());
 	m_state = console_state::initialized;
 }
 
 void console::deinit()
 {
+	m_renderer->deinit();
+	delete m_renderer;
 	io::stop();
 	m_machine.deinit();
 	m_state = console_state::shut_down;

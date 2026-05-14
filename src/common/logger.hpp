@@ -22,6 +22,7 @@
 #define module_enabled() check_if_enabled<log_module::MODULE_NAME>()
 #define mod_lv2str(lv, mod, msg) mod_lv_to_string<log_lv::lv, log_module::mod>(msg)
 #define lv2str(lv, msg) mod_lv_to_string<log_lv::lv, log_module::MODULE_NAME>(msg)
+#define highestlv2str(msg) mod_lv_to_string<log_lv::highest, log_module::MODULE_NAME>(msg)
 
 #define NUM_OF_LOG_MODULES32 std::to_underlying(log_module::max) / 32 + 1
 
@@ -68,6 +69,7 @@ enum class log_module : int32_t
 	adm1032,
 	conexant,
 	usb0,
+	vulkan,
 	max,
 };
 
@@ -100,7 +102,8 @@ inline constexpr std::array module_to_str =
 	"SMC -> ",
 	"ADM -> ",
 	"CONEXANT -> ",
-	"USB0 -> "
+	"USB0 -> ",
+	"VULKAN -> "
 };
 static_assert(module_to_str.size() == (uint32_t)(log_module::max));
 

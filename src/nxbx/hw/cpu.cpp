@@ -37,12 +37,14 @@ public:
 	uint64_t checkPeriodicEvents(uint64_t now);
 	cpu_t *get86cpu() { return m_lc86cpu; }
 	uint32_t getRamsize() { return m_ramsize; }
+	uint8_t *getRamPtr() { return m_ram; }
 
 private:
 	void updateIo(bool is_update);
 	uint64_t checkPeriodicEvents();
 	static void cpu_logger(log_level lv, const unsigned count, const char *msg, ...);
 
+	uint8_t *m_ram;
 	uint32_t m_ramsize;
 	bool m_is_dbg_present;
 	// connected devices
@@ -142,7 +144,8 @@ void cpu::Impl::init(const boot_params &params, machine *machine)
 	}
 
 	// Init lib86cpu
-	if (!LC86_SUCCESS(cpu_new(m_ramsize, m_lc86cpu))) {
+	// The ram pointer must have a proper alignment to be imported in Vulkan. Here, we are using the same value used in parallel-rdp
+	if (!LC86_SUCCESS(cpu_new(m_ramsize, m_lc86cpu, { nullptr, nullptr }, 64 * 1024))) {
 		throw std::runtime_error(lv2str(highest, "Failed to create cpu instance"));
 	}
 
@@ -166,13 +169,13 @@ void cpu::Impl::init(const boot_params &params, machine *machine)
 	updateIo(false);
 
 	// Load kernel exe into ram
-	uint8_t *ram = get_ram_ptr(m_lc86cpu);
+	m_ram = get_ram_ptr(m_lc86cpu);
 	uint32_t ImageAddress = peHeader->OptionalHeader.ImageBase - CONTIGUOUS_MEMORY_BASE; // =0x10000
-	std::memcpy(&ram[ImageAddress], dosHeader, peHeader->OptionalHeader.SizeOfHeaders);
+	std::memcpy(&m_ram[ImageAddress], dosHeader, peHeader->OptionalHeader.SizeOfHeaders);
 
 	PIMAGE_SECTION_HEADER sections = reinterpret_cast<PIMAGE_SECTION_HEADER>(reinterpret_cast<uint8_t *>(peHeader) + sizeof(IMAGE_NT_HEADERS32));
 	for (uint16_t i = 0; i < peHeader->FileHeader.NumberOfSections; ++i) {
-		uint8_t *dest = &ram[ImageAddress + sections[i].VirtualAddress];
+		uint8_t *dest = &m_ram[ImageAddress + sections[i].VirtualAddress];
 		std::memcpy(dest, reinterpret_cast<uint8_t *>(dosHeader) + sections[i].PointerToRawData, sections[i].SizeOfRawData);
 		if (sections[i].SizeOfRawData < sections[i].Misc.VirtualSize) {
 			std::memset(dest + sections[i].SizeOfRawData, 0, sections[i].Misc.VirtualSize - sections[i].SizeOfRawData);
@@ -182,17 +185,17 @@ void cpu::Impl::init(const boot_params &params, machine *machine)
 	// Make sure that we run the latest version of the kernel
 	// NOTE: this must happen after the kernel has been loaded in the guest virtual memory, because the export table is given with guest relative virtual addresses
 	bool KernelVersionFound = false;
-	PIMAGE_EXPORT_DIRECTORY ImageExportDirectory = (PIMAGE_EXPORT_DIRECTORY)(&ram[ImageAddress + peHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress]);
+	PIMAGE_EXPORT_DIRECTORY ImageExportDirectory = (PIMAGE_EXPORT_DIRECTORY)(&m_ram[ImageAddress + peHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress]);
 	uint32_t NumOfNames = ImageExportDirectory->NumberOfNames;
-	uint32_t *ExportAddressTable = (uint32_t *)(&ram[ImageAddress + ImageExportDirectory->AddressOfFunctions]);
-	uint16_t *NameOrdinalsPointer = (uint16_t *)(&ram[ImageAddress + ImageExportDirectory->AddressOfNameOrdinals]);
-	uint32_t *ExportNamePointerTable = (uint32_t *)(&ram[ImageAddress + ImageExportDirectory->AddressOfNames]);
+	uint32_t *ExportAddressTable = (uint32_t *)(&m_ram[ImageAddress + ImageExportDirectory->AddressOfFunctions]);
+	uint16_t *NameOrdinalsPointer = (uint16_t *)(&m_ram[ImageAddress + ImageExportDirectory->AddressOfNameOrdinals]);
+	uint32_t *ExportNamePointerTable = (uint32_t *)(&m_ram[ImageAddress + ImageExportDirectory->AddressOfNames]);
 
 	for (uint32_t i = 0; i < NumOfNames; i++) {
-		char *ExportName = (char *)(&ram[ImageAddress + ExportNamePointerTable[i]]);
+		char *ExportName = (char *)(&m_ram[ImageAddress + ExportNamePointerTable[i]]);
 		if (std::strcmp("NboxkrnlVersion", ExportName) == 0) {
-			uint32_t *NboxkrnlVersionAddress = (uint32_t *)(&ram[ImageAddress + ExportAddressTable[NameOrdinalsPointer[i]]]);
-			std::string FoundNboxkrnlVersion((const char *)&ram[(*NboxkrnlVersionAddress) - CONTIGUOUS_MEMORY_BASE]);
+			uint32_t *NboxkrnlVersionAddress = (uint32_t *)(&m_ram[ImageAddress + ExportAddressTable[NameOrdinalsPointer[i]]]);
+			std::string FoundNboxkrnlVersion((const char *)&m_ram[(*NboxkrnlVersionAddress) - CONTIGUOUS_MEMORY_BASE]);
 			std::string ExpectedNboxkrnlVersion(_NBOXKRNL_HEAD_REF);
 			auto pos = ExpectedNboxkrnlVersion.find_first_of('\t');
 			if (pos != std::string::npos) {
@@ -455,6 +458,11 @@ cpu_t *cpu::get86cpu()
 uint32_t cpu::getRamsize()
 {
 	return m_impl->getRamsize();
+}
+
+uint8_t *cpu::getRamPtr()
+{
+	return m_impl->getRamPtr();
 }
 
 uint64_t cpu::checkPeriodicEvents(uint64_t now)

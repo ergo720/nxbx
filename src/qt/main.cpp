@@ -24,8 +24,7 @@ static bool s_nogui_mode = false;
 static std::fstream s_qt_log_file;
 static std::mutex s_qt_log_mtx;
 
-static void
-print_help()
+static void print_help()
 {
 	static const char *help =
 		"usage: nxbx [options]\n\
@@ -38,13 +37,13 @@ options:\n\
 -sync_hdd <num> Synchronize hard disk partition metadata with partition folder\n\
 -no_gui         Start with no gui\n\
 -debug          Start with debugger\n\
+-vkdbg          Activate Vulkan validation layers\n\
 -help           Print this message";
 
 	logger("%s", help);
 }
 
-static std::optional<int>
-parse_cmd_line_opt(const QStringList &args, init_info_t &init_info)
+static std::optional<int> parse_cmd_line_opt(const QStringList &args, init_info_t &init_info)
 {
 	const auto print_unk_opt = [](QStringList::ConstIterator it) {
 		log_init_failure("Unknown option %s", qPrintable(*it));
@@ -134,6 +133,9 @@ parse_cmd_line_opt(const QStringList &args, init_info_t &init_info)
 				}
 				else if (*it == QStringLiteral("-debug")) {
 					init_info.use_dbg = 1;
+				}
+				else if (*it == QStringLiteral("-vkdbg")) {
+					init_info.vkdbg = 1;
 				}
 				else if (*it == QStringLiteral("-help")) {
 					print_help();
@@ -284,6 +286,7 @@ main(int argc, char **argv)
 	init_info.console_type = console_t::xbox;
 	init_info.input_type = input_t::invalid;
 	init_info.use_dbg = 0;
+	init_info.vkdbg = 0;
 	init_info.sync_part = -1; // -1=don't sync, 0=sync all partitions, [1-7]=sync that partition
 
 	// Parameter parsing
@@ -319,6 +322,8 @@ main(int argc, char **argv)
 	params.console_type = init_info.console_type;
 	params.syntax = init_info.syntax;
 	params.use_dbg = init_info.use_dbg;
+	params.nxbx_dir = init_info.nxbx_dir;
+	params.vkdbg = init_info.vkdbg;
 
 	g_console = new console(params);
 	if (g_console->get_state() == console_state::shut_down) {

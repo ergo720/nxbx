@@ -7,6 +7,7 @@
 #include "machine.hpp"
 #include "smc.hpp"
 #include "host.hpp"
+#include "graphics_api.hpp"
 #include <atomic>
 #include <thread>
 
@@ -45,6 +46,7 @@ private:
 	std::atomic<console_state> m_state;
 	boot_params m_params;
 	std::jthread m_cpu_thr;
+	GraphicsAPI *m_renderer;
 };
 
 extern console* g_console;

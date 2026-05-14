@@ -27,6 +27,7 @@ public:
 	uint64_t checkPeriodicEvents(uint64_t now);
 	cpu_t *get86cpu();
 	uint32_t getRamsize();
+	uint8_t *getRamPtr();
 
 private:
 	class Impl;

@@ -34,6 +34,7 @@ struct init_info_t {
 	std::string keys_path;
 	disas_syntax syntax;
 	uint32_t use_dbg;
+	uint32_t vkdbg;
 	console_t console_type;
 	input_t input_type;
 	int32_t sync_part;
@@ -43,6 +44,8 @@ struct boot_params {
 	disas_syntax syntax;
 	uint32_t use_dbg;
 	console_t console_type;
+	std::string nxbx_dir;
+	uint32_t vkdbg;
 };
 
 namespace Host

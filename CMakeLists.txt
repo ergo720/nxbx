@@ -23,7 +23,7 @@ if(${WINDEPLOYQT_EXECUTABLE} STREQUAL "")
 endif()
 endif()
 
-find_package(Vulkan REQUIRED)
+find_package(Vulkan REQUIRED COMPONENTS glslang)
 
 find_package(Git)
 if(Git_FOUND)
@@ -44,10 +44,6 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-option(LIB86CPU_BUILD_SHARED_LIB "Build shared libraries" OFF)
-option(LIB86CPU_XBOX_BUILD "Building Xbox version" ON)
-add_subdirectory("import/lib86cpu")
-
 if(CMAKE_GENERATOR MATCHES "Visual Studio")
  set(GENERATOR_IS_VS TRUE)
 elseif(CMAKE_GENERATOR MATCHES "Unix Makefiles")
@@ -61,6 +57,43 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 else()
 message(FATAL_ERROR "Unsupported compiler")
 endif()
+
+set(SHADER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
+file(GLOB_RECURSE SHADERS CONFIGURE_DEPENDS
+ ${SHADER_DIR}/*.comp
+)
+
+if(${GENERATOR_IS_VS})
+ set(SPIRV_BIN "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>/shaders")
+else()
+ set(SPIRV_BIN "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders")
+endif()
+
+function(compile_shader shader)
+ get_filename_component(FILE_NAME ${shader} NAME)
+ set(SPIRV_OUTPUT "${SPIRV_BIN}/${FILE_NAME}.spv")
+
+ add_custom_command(
+	OUTPUT ${SPIRV_OUTPUT}
+	COMMAND glslang --target-env vulkan1.1 ${shader} -o ${SPIRV_OUTPUT}
+	COMMENT "Compiling ${shader} to SPIR-V"
+	DEPENDS ${shader}
+	VERBATIM
+ )
+
+ list(APPEND SPIRV_SHADERS ${SPIRV_OUTPUT})
+ set(SPIRV_SHADERS ${SPIRV_SHADERS} PARENT_SCOPE)
+endfunction()
+
+foreach(SHADER ${SHADERS})
+ compile_shader(${SHADER})
+endforeach()
+
+add_custom_target(Shaders ALL DEPENDS ${SPIRV_SHADERS})
+
+option(LIB86CPU_BUILD_SHARED_LIB "Build shared libraries" OFF)
+option(LIB86CPU_XBOX_BUILD "Building Xbox version" ON)
+add_subdirectory("import/lib86cpu")
 
 if(${GENERATOR_IS_UMAKE})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Debug")
@@ -80,6 +113,7 @@ include_directories(
  ${NXBX_ROOT_DIR}/src/qt
  ${NXBX_ROOT_DIR}/src/nxbx/fs
  ${NXBX_ROOT_DIR}/src/nxbx/hw
+ ${NXBX_ROOT_DIR}/src/nxbx/hw/video/renderer
  ${Vulkan_INCLUDE_DIRS}
 )
 
@@ -134,6 +168,8 @@ set(HEADERS
  "${NXBX_ROOT_DIR}/src/nxbx/hw/video/gpu/pvga.hpp"
  "${NXBX_ROOT_DIR}/src/nxbx/hw/video/gpu/pvideo.hpp"
  "${NXBX_ROOT_DIR}/src/nxbx/hw/video/gpu/puser.hpp"
+ "${NXBX_ROOT_DIR}/src/nxbx/hw/video/renderer/graphics_api.hpp"
+ "${NXBX_ROOT_DIR}/src/nxbx/hw/video/renderer/vk/init.hpp"
 )
 
 set(SOURCES
@@ -180,12 +216,14 @@ set(SOURCES
  "${NXBX_ROOT_DIR}/src/nxbx/hw/video/gpu/pvga.cpp"
  "${NXBX_ROOT_DIR}/src/nxbx/hw/video/gpu/pvideo.cpp"
  "${NXBX_ROOT_DIR}/src/nxbx/hw/video/gpu/puser.cpp"
+ "${NXBX_ROOT_DIR}/src/nxbx/hw/video/renderer/vk/init.cpp"
 )
 
 source_group(TREE ${NXBX_ROOT_DIR} PREFIX header FILES ${HEADERS})
 source_group(TREE ${NXBX_ROOT_DIR} PREFIX source FILES ${SOURCES})
 
 add_executable(nxbx ${HEADERS} ${SOURCES})
+add_dependencies(nxbx Shaders)
 target_link_libraries(nxbx
 	PRIVATE cpu
 	PRIVATE Qt6::Core
