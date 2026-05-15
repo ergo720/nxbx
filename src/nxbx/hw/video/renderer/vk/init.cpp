@@ -11,6 +11,7 @@
 #include <set>
 #include <cinttypes>
 #include <optional>
+#include <cstring>
 
 #define MODULE_NAME vulkan
 
