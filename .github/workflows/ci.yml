@@ -62,11 +62,10 @@ jobs:
         with:
           version: '6.10.2'
       - name: Install Vulkan SDK
-        uses: humbletim/setup-vulkan-sdk@v1.2.1
+        uses: ergo720/install-vulkan-sdk@v1.3
         with:
-          vulkan-query-version: '1.4.341.0'
-          vulkan-components: Vulkan-Headers, Vulkan-Loader, Glslang, SPIRV-Tools
-          vulkan-use-cache: true
+          version: 1.4.341.1
+          cache: true
       - name: Generate CMake Files
         # NOTES:
         # -Werror=dev is used to validate CMakeLists.txt for any faults.

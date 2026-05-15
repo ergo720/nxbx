@@ -23,7 +23,7 @@ if(${WINDEPLOYQT_EXECUTABLE} STREQUAL "")
 endif()
 endif()
 
-find_package(Vulkan REQUIRED COMPONENTS glslang)
+find_package(Vulkan REQUIRED COMPONENTS glslc)
 
 find_package(Git)
 if(Git_FOUND)
@@ -67,6 +67,7 @@ if(${GENERATOR_IS_VS})
  set(SPIRV_BIN "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>/shaders")
 else()
  set(SPIRV_BIN "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders")
+ file(MAKE_DIRECTORY ${SPIRV_BIN})
 endif()
 
 function(compile_shader shader)
@@ -75,7 +76,7 @@ function(compile_shader shader)
 
  add_custom_command(
 	OUTPUT ${SPIRV_OUTPUT}
-	COMMAND glslang --target-env vulkan1.1 ${shader} -o ${SPIRV_OUTPUT}
+	COMMAND glslc -O --target-env=vulkan1.1 ${shader} -o ${SPIRV_OUTPUT}
 	COMMENT "Compiling ${shader} to SPIR-V"
 	DEPENDS ${shader}
 	VERBATIM
