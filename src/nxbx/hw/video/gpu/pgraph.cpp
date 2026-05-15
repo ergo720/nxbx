@@ -995,13 +995,15 @@ void pgraph::Impl::init(cpu *cpu, nv2a *gpu)
 
 void pgraph::Impl::deinit()
 {
-	assert(m_jthr.joinable());
-	m_jthr.request_stop();
-	m_ctx_switch_trig.clear();
-	m_ctx_switch_trig.notify_one();
-	m_graph_has_work.test_and_set();
-	m_graph_has_work.notify_one();
-	m_jthr.join();
+	// Might not be joinable if pfifo initializes successfully but pgraph fails
+	if (m_jthr.joinable()) {
+		m_jthr.request_stop();
+		m_ctx_switch_trig.clear();
+		m_ctx_switch_trig.notify_one();
+		m_graph_has_work.test_and_set();
+		m_graph_has_work.notify_one();
+		m_jthr.join();
+	}
 }
 
 /** Public interface implementation **/

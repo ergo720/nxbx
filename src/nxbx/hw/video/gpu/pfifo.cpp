@@ -753,16 +753,18 @@ void pfifo::Impl::init(cpu *cpu, nv2a *gpu)
 
 void pfifo::Impl::deinit()
 {
-	assert(m_jthr.joinable());
-	m_jthr.request_stop();
-	if (m_pgraph) {
-		m_pgraph->deinit();
+	// Might not be joinable if pfifo wasn't initialized successfully (e.g. nboxkrnl version check failed)
+	if (m_jthr.joinable()) {
+		m_jthr.request_stop();
+		if (m_pgraph) {
+			m_pgraph->deinit();
+		}
+		m_puller_has_err.clear();
+		m_puller_has_err.notify_one();
+		m_fifo_has_work.test_and_set();
+		m_fifo_has_work.notify_one();
+		m_jthr.join();
 	}
-	m_puller_has_err.clear();
-	m_puller_has_err.notify_one();
-	m_fifo_has_work.test_and_set();
-	m_fifo_has_work.notify_one();
-	m_jthr.join();
 }
 
 /** Public interface implementation **/
