@@ -5,7 +5,7 @@
 #include "machine.hpp"
 #include "console.hpp"
 #include "kernel.hpp"
-#include "kernel_head_ref.hpp"
+#include "kernel_version.hpp"
 #include "pe.hpp"
 #include "clock.hpp"
 #include "isettings.hpp"
@@ -196,11 +196,7 @@ void cpu::Impl::init(const boot_params &params, machine *machine)
 		if (std::strcmp("NboxkrnlVersion", ExportName) == 0) {
 			uint32_t *NboxkrnlVersionAddress = (uint32_t *)(&m_ram[ImageAddress + ExportAddressTable[NameOrdinalsPointer[i]]]);
 			std::string FoundNboxkrnlVersion((const char *)&m_ram[(*NboxkrnlVersionAddress) - CONTIGUOUS_MEMORY_BASE]);
-			std::string ExpectedNboxkrnlVersion(_NBOXKRNL_HEAD_REF);
-			auto pos = ExpectedNboxkrnlVersion.find_first_of('\t');
-			if (pos != std::string::npos) {
-				ExpectedNboxkrnlVersion = ExpectedNboxkrnlVersion.substr(0, pos);
-			}
+			std::string ExpectedNboxkrnlVersion(_NBOXKRNL_VERSION);
 			if (ExpectedNboxkrnlVersion.compare(FoundNboxkrnlVersion)) {
 				throw std::runtime_error(lv2str(highest, ("Kernel image has an incorrect version, expected " + ExpectedNboxkrnlVersion + ", got " + FoundNboxkrnlVersion).c_str()));
 			}

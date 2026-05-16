@@ -25,20 +25,11 @@ endif()
 
 find_package(Vulkan REQUIRED COMPONENTS glslc)
 
-find_package(Git)
-if(Git_FOUND)
- execute_process(
-  COMMAND git ls-remote https://github.com/ergo720/nboxkrnl HEAD
-  OUTPUT_VARIABLE _NBOXKRNL_HEAD_REF
-  OUTPUT_STRIP_TRAILING_WHITESPACE
- )
- configure_file(
-  "${NXBX_ROOT_DIR}/src/nxbx/kernel_head_ref.hpp.in" "${NXBX_ROOT_DIR}/src/nxbx/kernel_head_ref.hpp" @ONLY
-  NEWLINE_STYLE LF
- )
-else()
- message(FATAL_ERROR "Git was not found")
-endif()
+find_package(Git REQUIRED)
+find_package(Python REQUIRED COMPONENTS Interpreter)
+add_custom_target(fetch_kernel_git_hash ALL
+ COMMAND ${Python_EXECUTABLE} ${NXBX_ROOT_DIR}/scripts/fetch_kernel_git_hash.py
+)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -130,7 +121,6 @@ set(HEADERS
  "${NXBX_ROOT_DIR}/src/nxbx/console.hpp"
  "${NXBX_ROOT_DIR}/src/nxbx/io.hpp"
  "${NXBX_ROOT_DIR}/src/nxbx/kernel.hpp"
- "${NXBX_ROOT_DIR}/src/nxbx/kernel_head_ref.hpp"
  "${NXBX_ROOT_DIR}/src/nxbx/paths.hpp"
  "${NXBX_ROOT_DIR}/src/nxbx/pe.hpp"
  "${NXBX_ROOT_DIR}/src/nxbx/urls.hpp"
@@ -224,7 +214,8 @@ source_group(TREE ${NXBX_ROOT_DIR} PREFIX header FILES ${HEADERS})
 source_group(TREE ${NXBX_ROOT_DIR} PREFIX source FILES ${SOURCES})
 
 add_executable(nxbx ${HEADERS} ${SOURCES})
-add_dependencies(nxbx Shaders)
+add_dependencies(nxbx Shaders fetch_kernel_git_hash)
+
 target_link_libraries(nxbx
 	PRIVATE cpu
 	PRIVATE Qt6::Core
