@@ -28,7 +28,7 @@
 class cpu::Impl
 {
 public:
-	void init(const boot_params &params, machine *machine);
+	void init(const BootParams &params, machine *machine);
 	void deinit();
 	void reset();
 	void start();
@@ -92,7 +92,7 @@ void cpu::Impl::reset()
 	// TODO: lib86cpu doesn't support resetting the cpu yet
 }
 
-void cpu::Impl::init(const boot_params &params, machine *machine)
+void cpu::Impl::init(const BootParams &params, machine *machine)
 {
 	m_pic = machine->getPic(0);
 	m_pit = machine->getPit();
@@ -416,7 +416,7 @@ void cpu::Impl::deinit()
 }
 
 /** Public interface implementation **/
-void cpu::init(const boot_params &params, machine *machine)
+void cpu::init(const BootParams &params, machine *machine)
 {
 	m_impl->init(params, machine);
 }

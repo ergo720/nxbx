@@ -107,11 +107,12 @@ void MainWindow::doStartFile(const QString& path)
 {
 	if (const auto exp = Host::validate_input_file(path.toStdString()); exp) {
 		emu_path::update_after_reboot(exp.value(), path.toStdString());
-		boot_params params = g_console->get_boot_params();
 		s_valid_machine = false;
-		g_console->exit(true);
-		delete g_console;
-		g_console = new console(params);
+		if (g_console) { // g_console is nullptr on first startup, unless a title was launched from the command line
+			g_console->exit(true);
+			delete g_console;
+		}
+		g_console = new console();
 		if (g_console->get_state() == console_state::shut_down) {
 			delete g_console;
 			g_console = nullptr;

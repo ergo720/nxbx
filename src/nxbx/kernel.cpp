@@ -19,8 +19,7 @@ namespace kernel
 {
 	static uint64_t s_lost_clock_increment, s_last_us, s_curr_us;
 
-	static uint64_t
-	calculate_clock_increment()
+	static uint64_t calculate_clock_increment()
 	{
 		// NOTE: a clock interrupt is generated at every ms, so ideally the increment should always be 10000 -> 10000 * 100ns units = 1ms
 		s_curr_us = timer::get_now();
@@ -42,7 +41,7 @@ namespace kernel
 		switch (addr)
 		{
 		case MACHINE_TYPE:
-			value = std::to_underlying<console_t>(g_console->get_boot_params().console_type);
+			value = std::to_underlying<console_t>(Host::GetBootParams().console_type);
 			break;
 
 		case CLOCK_INCREMENT_LOW:

@@ -22,7 +22,7 @@
 class machine::Impl
 {
 public:
-	bool init(const boot_params &params, machine *machine);
+	bool init(const BootParams &params, machine *machine);
 	void deinit();
 	void start();
 	void exit();
@@ -60,7 +60,7 @@ private:
 	std::unique_ptr<usb0> m_usb0;
 };
 
-bool machine::Impl::init(const boot_params &params, machine *machine)
+bool machine::Impl::init(const BootParams &params, machine *machine)
 {
 	m_cpu = std::make_unique<cpu>();
 	m_pit = std::make_unique<pit>();
@@ -165,7 +165,7 @@ usb0 *machine::Impl::getUsb(uint32_t N) { return m_usb0.get(); }
 nv2a *machine::Impl::getGpu() { return m_nv2a.get(); }
 
 /** Public interface implementation **/
-bool machine::init(const boot_params &params)
+bool machine::init(const BootParams &params)
 {
 	return m_impl->init(params, this);
 }

@@ -21,14 +21,14 @@ class smc;
 class adm1032;
 class conexant;
 class usb0;
-struct boot_params;
+struct BootParams;
 
 class machine
 {
 public:
 	machine();
 	~machine();
-	bool init(const boot_params &params);
+	bool init(const BootParams &params);
 	void deinit();
 	void start();
 	void exit();

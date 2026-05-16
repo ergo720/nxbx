@@ -23,6 +23,7 @@ static bool s_nogui_mode = false;
 
 static std::fstream s_qt_log_file;
 static std::mutex s_qt_log_mtx;
+static BootParams s_boot_params;
 
 static void print_help()
 {
@@ -190,6 +191,11 @@ bool Host::InNoGUIMode()
 	return s_nogui_mode;
 }
 
+BootParams Host::GetBootParams()
+{
+	return s_boot_params;
+}
+
 class NxbxMainApplication : public QApplication
 {
 public:
@@ -318,18 +324,11 @@ main(int argc, char **argv)
 	// Set theme before creating any windows.
 	QtHost::UpdateApplicationTheme();
 
-	boot_params params;
-	params.console_type = init_info.console_type;
-	params.syntax = init_info.syntax;
-	params.use_dbg = init_info.use_dbg;
-	params.nxbx_dir = init_info.nxbx_dir;
-	params.vkdbg = init_info.vkdbg;
-
-	g_console = new console(params);
-	if (g_console->get_state() == console_state::shut_down) {
-		delete g_console;
-		return 1;
-	}
+	s_boot_params.console_type = init_info.console_type;
+	s_boot_params.syntax = init_info.syntax;
+	s_boot_params.use_dbg = init_info.use_dbg;
+	s_boot_params.nxbx_dir = init_info.nxbx_dir;
+	s_boot_params.vkdbg = init_info.vkdbg;
 
 	// Create all window objects
 	g_main_window = new MainWindow();
@@ -337,6 +336,11 @@ main(int argc, char **argv)
 
 	if (s_nogui_mode) {
 		// Start the emulation in the cpu thread
+		g_console = new console();
+		if (g_console->get_state() == console_state::shut_down) {
+			delete g_console;
+			return 1;
+		}
 		g_console->start();
 	}
 	else {
@@ -346,6 +350,11 @@ main(int argc, char **argv)
 
 		// Start the emulation if we have an input file
 		if (!init_info.input_path.empty()) {
+			g_console = new console();
+			if (g_console->get_state() == console_state::shut_down) {
+				delete g_console;
+				return 1;
+			}
 			g_console->start();
 		}
 	}

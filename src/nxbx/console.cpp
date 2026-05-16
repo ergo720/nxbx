@@ -16,10 +16,10 @@ static const std::string s_console_chihiro_string("chihiro");
 static const std::string s_console_devkit_string("devkit");
 static const std::string s_console_unknown_string("unknown");
 
-console::console(const boot_params &params)
+console::console()
 {
 	m_state = console_state::shut_down;
-	m_params = params;
+	BootParams params = Host::GetBootParams();
 
 	if (!((params.console_type == console_t::xbox) ||
 		(params.console_type == console_t::chihiro) ||

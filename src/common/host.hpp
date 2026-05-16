@@ -40,7 +40,7 @@ struct init_info_t {
 	int32_t sync_part;
 };
 
-struct boot_params {
+struct BootParams {
 	disas_syntax syntax;
 	uint32_t use_dbg;
 	console_t console_type;
@@ -77,4 +77,7 @@ namespace Host
 
 	// Checks if the user started in no gui mode
 	bool InNoGUIMode();
+
+	// Gets the boot parameters we should use to start the console with
+	BootParams GetBootParams();
 }

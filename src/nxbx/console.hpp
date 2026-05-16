@@ -27,13 +27,12 @@ enum class console_t : uint32_t {
 
 class console {
 public:
-	console(const boot_params &params);
+	console();
 
 	void start();
 	bool exit(bool wait = false);
 
 	console_state get_state() { return m_state; }
-	boot_params get_boot_params() { return m_params; }
 	void apply_log_settings();
 	void update_tray_state(tray_state state, bool do_int);
 	static const std::string &to_string(console_t type);
@@ -44,7 +43,6 @@ private:
 
 	machine m_machine;
 	std::atomic<console_state> m_state;
-	boot_params m_params;
 	std::jthread m_cpu_thr;
 	GraphicsAPI *m_renderer;
 };
