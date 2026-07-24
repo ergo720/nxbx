@@ -3,6 +3,7 @@
 
 #include "console.hpp"
 #include "io.hpp"
+#include "paths.hpp"
 #include "clock.hpp"
 #include "cpu.hpp"
 #include "vk/init.hpp"
@@ -61,6 +62,7 @@ void console::start()
 {
 	if (m_state == console_state::initialized) {
 		Host::SignalStartup();
+		update_tray_state(emu_path::g_dvd_dir == "" ? tray_state::no_media : tray_state::media_detect, false);
 		m_cpu_thr = std::jthread(std::bind_front(&console::cpu_thread, this));
 	}
 }

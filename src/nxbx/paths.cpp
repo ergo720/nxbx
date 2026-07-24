@@ -4,7 +4,6 @@
 #include "paths.hpp"
 #include "files.hpp"
 #include "io.hpp"
-#include "console.hpp"
 
 
 namespace emu_path
@@ -47,7 +46,6 @@ namespace emu_path
 					std::replace(xbox_remaining_hdd_dir.begin(), xbox_remaining_hdd_dir.end(), '/', '\\'); // convert to xbox path separator
 					emu_path::g_xbe_path_xbox = util::traits_cast<util::xbox_char_traits, char, std::char_traits<char>>(xbox_hdd_dir + xbox_remaining_hdd_dir + emu_path::g_xbe_name.c_str());
 					emu_path::g_dvd_dir = "";
-					g_console->update_tray_state(tray_state::no_media, false);
 				}
 			}
 		}

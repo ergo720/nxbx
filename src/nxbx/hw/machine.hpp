@@ -21,6 +21,7 @@ class smc;
 class adm1032;
 class conexant;
 class usb0;
+class lpcbridge;
 struct BootParams;
 
 class machine
@@ -45,6 +46,7 @@ public:
 	conexant *getVideoEncoder();
 	usb0 *getUsb(uint32_t N);
 	nv2a *getGpu();
+	lpcbridge *getLpcBridge();
 	cpu_t *get86cpu();
 	void raise_irq(uint8_t a);
 	void lower_irq(uint8_t a);

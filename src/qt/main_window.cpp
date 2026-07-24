@@ -118,7 +118,7 @@ void MainWindow::doStartFile(const QString& path)
 			g_console = nullptr;
 			QMessageBox::critical(this, tr("Error"), tr("Failed to create machine instance while launching file"));
 			QGuiApplication::quit();
-			g_main_window = nullptr;
+			return;
 		}
 		g_console->start();
 	}

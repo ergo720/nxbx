@@ -3,7 +3,8 @@
 
 #include "machine.hpp"
 #include "smc.hpp"
-#include"adm1032.hpp"
+#include "adm1032.hpp"
+#include "lpcbridge.hpp"
 #include "host.hpp"
 #include <cinttypes>
 #include <atomic>
@@ -22,11 +23,20 @@
 #define SMC_WRITE_SCRATCH               0x0E
 #define SMC_READ_SCRATCH                0x0F
 #define SMC_READ_FAN_SPEED              0x10
+#define SMC_INTERRUPT_REASON            0x11
 #define SMC_SCRATCH                     0x1B
 
 #define SMC_TRAY_STATE_OPEN             0x10
 #define SMC_TRAY_STATE_NO_MEDIA         0x40
 #define SMC_TRAY_STATE_MEDIA_DETECT     0x60
+
+#define SMC_INTERRUPT_REASON_SHUTDOWN       0x01
+#define SMC_INTERRUPT_REASON_TRAY_DETECTED  0x02
+#define SMC_INTERRUPT_REASON_TRAY_OPENED    0x04
+#define SMC_INTERRUPT_REASON_NEW_AV_PACK    0x08
+#define SMC_INTERRUPT_REASON_NO_AV_PACK     0x10
+#define SMC_INTERRUPT_REASON_TRAY_EJECT     0x20
+#define SMC_INTERRUPT_REASON_TRAY_CLOSED    0x40
 
 #define SMC_VIDEO_MODE_SCART            0x00
 #define SMC_VIDEO_MODE_HDTV             0x01
@@ -54,6 +64,7 @@ private:
 	std::atomic_uint8_t m_tray_state; // atomic because it can be updated by console::update_tray_state
 	// connected devices
 	adm1032 *m_adm1032;
+	lpcbridge *m_lpcbridge;
 	// registers
 	const std::unordered_map<uint32_t, const std::string> m_regs_info = {
 		{ SMC_VERSION_STR, "VERSION_STR" },
@@ -68,6 +79,7 @@ private:
 		{ SMC_WRITE_SCRATCH, "WRITE_SCRATCH" },
 		{ SMC_READ_SCRATCH, "READ_SCRATCH" },
 		{ SMC_READ_FAN_SPEED, "READ_FAN_SPEED" },
+		{ SMC_INTERRUPT_REASON, "INTERRUPT_REASON" },
 		{ SMC_SCRATCH, "SCRATCH" },
 	};
 };
@@ -87,6 +99,7 @@ uint8_t smc::Impl::read_byte(uint8_t addr)
 		break;
 
 	case SMC_VIDEO_MODE:
+	case SMC_INTERRUPT_REASON:
 	case SMC_SCRATCH:
 		value = m_regs[addr];
 		break;
@@ -150,10 +163,11 @@ void smc::Impl::write_byte(uint8_t addr, uint8_t value)
 
 void smc::Impl::update_tray_state(::tray_state state, bool do_int)
 {
+	m_regs[SMC_INTERRUPT_REASON] = state == ::tray_state::media_detect ? SMC_INTERRUPT_REASON_TRAY_DETECTED :
+		state == ::tray_state::no_media ? SMC_INTERRUPT_REASON_TRAY_CLOSED : SMC_INTERRUPT_REASON_TRAY_OPENED;
 	m_tray_state = (uint8_t)state;
 	if (do_int) {
-		// TODO: trigger interrupt
-		nxbx_fatal("Tray interrupts not supported yet");
+		m_lpcbridge->triggerInterrupt();
 	}
 }
 
@@ -167,8 +181,9 @@ void smc::Impl::reset()
 void smc::Impl::init(machine *machine)
 {
 	m_adm1032 = machine->getAdm1032();
+	m_lpcbridge = machine->getLpcBridge();
 	reset();
-	m_tray_state = SMC_TRAY_STATE_MEDIA_DETECT; // TODO: should change state when the user boots new XBEs/XISOs from the gui
+	m_tray_state = SMC_TRAY_STATE_NO_MEDIA;
 	m_regs[SMC_VIDEO_MODE] = SMC_VIDEO_MODE_HDTV; // TODO: make configurable
 }
 

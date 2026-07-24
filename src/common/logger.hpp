@@ -70,6 +70,7 @@ enum class log_module : int32_t
 	conexant,
 	usb0,
 	vulkan,
+	lpcbridge,
 	max,
 };
 
@@ -103,7 +104,8 @@ inline constexpr std::array module_to_str =
 	"ADM -> ",
 	"CONEXANT -> ",
 	"USB0 -> ",
-	"VULKAN -> "
+	"VULKAN -> ",
+	"LPCBRIDGE -> "
 };
 static_assert(module_to_str.size() == (uint32_t)(log_module::max));
 
