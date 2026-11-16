@@ -1783,18 +1783,19 @@ namespace fatx {
 			for (const auto &dir_entry : std::filesystem::recursive_directory_iterator(partition_dir)) {
 				std::error_code ec;
 				DIRENT io_dirent;
-				std::string file_name(dir_entry.path().filename().string());
+				std::filesystem::path dir_entry_path(to_slash_separator(dir_entry.path()));
+				std::string file_name(dir_entry_path.filename().string());
 				if (!is_name_valid(file_name)) {
 					logger_mod_en(warn, io, "File %s has characters not supported by FATX in its name, skipping it", file_name.c_str());
 					continue;
 				}
-				std::string file_path(dir_entry.path().string());
-				bool is_directory = dir_entry.is_directory();
+				std::string file_path(dir_entry_path.string());
+				bool is_directory = std::filesystem::is_directory(dir_entry_path);
 				if (is_directory) {
 					io_dirent.size = 0;
 				}
 				else {
-					std::uintmax_t file_size = dir_entry.file_size(ec);
+					std::uintmax_t file_size = std::filesystem::file_size(dir_entry_path, ec);
 					if (ec) {
 						logger_mod_en(warn, io, "Failed to determine the size of file %s, skipping it", file_path.c_str());
 						continue;
