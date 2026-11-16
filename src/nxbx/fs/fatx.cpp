@@ -1726,10 +1726,19 @@ namespace fatx {
 	driver::sync_partition_files()
 	{
 		// Reset the partition bin file to its default state
-		formatPartition();
+		std::filesystem::path partition_dir = combine_file_paths(emu_path::g_hdd_dir, ("Partition" + std::to_string(m_pt_num - DEV_PARTITION0)));
+		if (auto opt_metadata = create_file(partition_dir.string() + ".bin"), opt_table = create_file(m_ct_path); !opt_metadata || !opt_table) {
+			logger_mod_en(warn, io, "Failed to reset metadata bin files for partition %u during synchronization with host", m_pt_num - DEV_PARTITION0);
+			return;
+		}
+		else {
+			std::copy_n(&g_hdd_partitiong_table.table_entries[m_pt_num - DEV_PARTITION0 - 1], 1, &g_current_partition_table.table_entries[m_pt_num - DEV_PARTITION0 - 1]);
+			m_pt_fs = std::move(*opt_metadata);
+			m_ct_fs = std::move(*opt_table);
+			formatPartition();
+		}
 
 		// Now, enumerate all files in the partition folder, and create a dirent for each of them
-		std::filesystem::path partition_dir = combine_file_paths(emu_path::g_hdd_dir, ("Partition" + std::to_string(m_pt_num - DEV_PARTITION0)));
 		try {
 			for (const auto &dir_entry : std::filesystem::recursive_directory_iterator(partition_dir)) {
 				std::error_code ec;
