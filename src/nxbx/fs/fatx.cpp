@@ -1336,41 +1336,7 @@ namespace fatx {
 		return io::status_t::STATUS_SUCCESS;
 	}
 
-	bool
-	driver::format_partition(uint32_t cluster_size1)
-	{
-		m_cluster_size = cluster_size1 * XBOX_HDD_SECTOR_SIZE;
-		m_cluster_shift = std::countr_zero(m_cluster_size);
-		m_cluster_tot_num = ((g_current_partition_table.table_entries[m_pt_num - 1 - DEV_PARTITION0].lba_size * XBOX_HDD_SECTOR_SIZE) >> m_cluster_shift) + 1;
-		m_cluster_free_num = m_cluster_tot_num - 2;
-		m_metadata_fat_sizes = (m_cluster_tot_num * (IS_FATX16() ? 2 : 4) + 4095) & ~4095; // align the fat to a page boundary
-		m_metadata_file_size = METADATA_FAT_OFFSET + m_metadata_fat_sizes + m_cluster_size;
-		if (!create_fat()) {
-			return false;
-		}
-		if (!create_root_dirent()) {
-			return false;
-		}
-		CLUSTER_DATA_ENTRY cluster_data[CLUSTER_TABLE_ELEM_SIZE / sizeof(CLUSTER_DATA_ENTRY)];
-		std::fill_n((char *)cluster_data, sizeof(cluster_data), cluster_t::freed);
-		cluster_data[1].type = cluster_t::directory;
-		cluster_data[1].size = 0;
-		cluster_data[1].info = 0;
-		cluster_data[1].offset = METADATA_FAT_OFFSET + m_metadata_fat_sizes;
-		std::fstream *table_fs = &m_ct_fs;
-		table_fs->seekp(0, table_fs->end);
-		table_fs->write((const char *)cluster_data, CLUSTER_TABLE_ELEM_SIZE);
-		if (!table_fs->good()) {
-			return false;
-		}
-		m_cluster_table_file_size = CLUSTER_TABLE_ELEM_SIZE;
-		m_last_allocated_cluster = 1;
-
-		return true;
-	}
-
-	bool
-	driver::format_partition()
+	bool driver::formatPartition()
 	{
 		// NOTE: this overload should only be called at startup, because it resets the partition table and the superblock to their default states
 
@@ -1402,28 +1368,36 @@ namespace fatx {
 			if (!m_pt_fs.good()) {
 				return false;
 			}
-			return format_partition(superblock->cluster_size);
-		}
-	}
 
-	bool
-	driver::format_partition(const char *superblock1, uint32_t offset, uint32_t size)
-	{
-		assert(m_pt_num);
+			m_cluster_size = superblock->cluster_size * XBOX_HDD_SECTOR_SIZE;
+			m_cluster_shift = std::countr_zero(m_cluster_size);
+			m_cluster_tot_num = ((g_current_partition_table.table_entries[m_pt_num - 1 - DEV_PARTITION0].lba_size * XBOX_HDD_SECTOR_SIZE) >> m_cluster_shift) + 1;
+			m_cluster_free_num = m_cluster_tot_num - 2;
+			m_metadata_fat_sizes = (m_cluster_tot_num * (IS_FATX16() ? 2 : 4) + 4095) & ~4095; // align the fat to a page boundary
+			m_metadata_file_size = METADATA_FAT_OFFSET + m_metadata_fat_sizes + m_cluster_size;
+			if (!create_fat()) {
+				return false;
+			}
+			if (!create_root_dirent()) {
+				return false;
+			}
+			CLUSTER_DATA_ENTRY cluster_data[CLUSTER_TABLE_ELEM_SIZE / sizeof(CLUSTER_DATA_ENTRY)];
+			std::fill_n((char *)cluster_data, sizeof(cluster_data), cluster_t::freed);
+			cluster_data[1].type = cluster_t::directory;
+			cluster_data[1].size = 0;
+			cluster_data[1].info = 0;
+			cluster_data[1].offset = METADATA_FAT_OFFSET + m_metadata_fat_sizes;
+			std::fstream *table_fs = &m_ct_fs;
+			table_fs->seekp(0, table_fs->end);
+			table_fs->write((const char *)cluster_data, CLUSTER_TABLE_ELEM_SIZE);
+			if (!table_fs->good()) {
+				return false;
+			}
+			m_cluster_table_file_size = CLUSTER_TABLE_ELEM_SIZE;
+			m_last_allocated_cluster = 1;
 
-		char buffer[4096 * 2] = { 0 };
-		PUSER_DATA_AREA user_area = (PUSER_DATA_AREA)buffer;
-		user_area->last_cluster_used = 1;
-		user_area->is_corrupted = 1;
-		user_area->version = METADATA_VERSION_NUM;
-		PSUPERBLOCK superblock = (PSUPERBLOCK)&buffer[4096];
-		std::copy_n(superblock1 + offset, size, (char *)superblock);
-		m_pt_fs.seekp(0, m_pt_fs.beg);
-		m_pt_fs.write((char *)&buffer, sizeof(buffer));
-		if (!m_pt_fs.good()) {
-			return false;
+			return true;
 		}
-		return format_partition(superblock->cluster_size);
 	}
 
 	io::status_t
@@ -1516,15 +1490,6 @@ namespace fatx {
 				m_pt_fs.clear();
 				return io::status_t::STATUS_IO_DEVICE_ERROR;
 			}
-			if (util::in_range(offset, (uint64_t)0, (uint64_t)sizeof(XBOX_PARTITION_TABLE) - 1)) {
-				// If we have written to the partition table, reload our copy of it. We don't reformat all partitions because we expect the homebrew to do it
-				m_pt_fs.seekg(0, m_pt_fs.beg);
-				m_pt_fs.read((char *)&g_current_partition_table, sizeof(XBOX_PARTITION_TABLE));
-				if (!m_pt_fs.good()) {
-					m_pt_fs.clear();
-					return io::status_t::STATUS_IO_DEVICE_ERROR;
-				}
-			}
 		}
 		else {
 			uint32_t bytes_in_cluster = m_cluster_size;
@@ -1588,20 +1553,6 @@ namespace fatx {
 				buffer_offset += bytes_to_write;
 				cluster_offset = 0;
 				++cluster;
-			}
-
-			if (util::in_range(offset, (uint64_t)0, (uint64_t)sizeof(SUPERBLOCK) - 1)) {
-				// If we have written to the superblock, reformat the partition
-				std::fstream fs0(emu_path::g_hdd_dir / "Partition0.bin");
-				fs0.seekg(0, fs0.beg);
-				fs0.read((char *)&g_current_partition_table, sizeof(XBOX_PARTITION_TABLE));
-				if (!fs0.good()) {
-					for (unsigned i = DEV_PARTITION0; i < DEV_PARTITION6; ++i) {
-						get(i).metadata_set_corrupted_state();
-					}
-					return io::status_t::STATUS_IO_DEVICE_ERROR;
-				}
-				format_partition(buffer, offset, sizeof(SUPERBLOCK) - offset);
 			}
 		}
 
@@ -1682,7 +1633,7 @@ namespace fatx {
 						return false;
 					} else {
 						m_ct_fs = std::move(*opt_table);
-						return format_partition();
+						return formatPartition();
 					}
 				}
 				std::error_code ec;
@@ -1728,7 +1679,7 @@ namespace fatx {
 								std::copy_n(&g_hdd_partitiong_table.table_entries[m_pt_num - DEV_PARTITION0 - 1], 1, &g_current_partition_table.table_entries[m_pt_num - DEV_PARTITION0 - 1]);
 								m_pt_fs = std::move(*opt_metadata);
 								m_ct_fs = std::move(*opt_table);
-								return format_partition();
+								return formatPartition();
 							}
 						}
 						return setup_cluster_info(partition_dir);
@@ -1775,7 +1726,7 @@ namespace fatx {
 	driver::sync_partition_files()
 	{
 		// Reset the partition bin file to its default state
-		format_partition();
+		formatPartition();
 
 		// Now, enumerate all files in the partition folder, and create a dirent for each of them
 		std::filesystem::path partition_dir = combine_file_paths(emu_path::g_hdd_dir, ("Partition" + std::to_string(m_pt_num - DEV_PARTITION0)));

@@ -97,9 +97,7 @@ namespace fatx {
 		bool init(std::filesystem::path partition_dir, unsigned partition_num);
 		io::status_t is_dirent_stream_empty(uint32_t start_cluster);
 		io::status_t extend_dirent_stream(uint32_t cluster, char *cluster_buffer);
-		bool format_partition(const char *superblock1, uint32_t offset, uint32_t size);
-		bool format_partition(uint32_t cluster_size1);
-		bool format_partition();
+		bool formatPartition();
 		void flush_metadata_file();
 		template<bool check_is_empty>
 		io::status_t scan_dirent_stream(std::string_view remaining_path, DIRENT &io_dirent, uint64_t &dirent_offset, uint32_t start_cluster);
