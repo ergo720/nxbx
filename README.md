@@ -11,7 +11,7 @@ The only supported architecture is x86-64.
 
 * [Git](https://git-scm.com)
 * [Python](https://www.python.org/downloads/) version 2.6 or higher is required.
-* [Cmake](https://cmake.org) version 3.25 or higher is required.
+* [Cmake](https://cmake.org) version 4.2.3 or higher is required.
 * [Visual Studio 2022](https://visualstudio.microsoft.com/vs/older-downloads/) (Windows), [Visual Studio Code](https://visualstudio.microsoft.com/downloads/) (Linux, optional).
 * [Qt](https://www.qt.io/development/download-open-source) version 6.10.2
 * [Vulkan SDK](https://www.vulkan.org/tools#download-these-essential-development-tools) version 1.4.341
@@ -21,7 +21,7 @@ The only supported architecture is x86-64.
 1. `git clone --recurse-submodules https://github.com/ergo720/nxbx`
 2. `cd` to the directory of nxbx
 3. `mkdir build && cd build`
-4. `cmake .. -G "Visual Studio 17 2022" -A x64 -Thost=x64`
+4. `cmake .. -G "Visual Studio 17 2022" -A x64 -Thost=x64 -DCMAKE_POLICY_VERSION_MINIMUM="4.2.3"`
 5. Build the resulting solution file nxbx.sln with Visual Studio
 
 **On Linux:**
@@ -29,5 +29,5 @@ The only supported architecture is x86-64.
 1. `git clone --recurse-submodules https://github.com/ergo720/nxbx`
 2. `cd` to the directory of nxbx
 3. `mkdir build && cd build`
-4. `cmake .. -G "Unix Makefiles"`
+4. `cmake .. -G "Unix Makefiles" -DCMAKE_POLICY_VERSION_MINIMUM="4.2.3"`
 5. Build the resulting Makefile with make, or use Visual Studio Code

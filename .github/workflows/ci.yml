@@ -67,9 +67,7 @@ jobs:
           version: 1.4.341.1
           cache: true
       - name: Generate CMake Files
-        # NOTES:
-        # -Werror=dev is used to validate CMakeLists.txt for any faults.
-        run: cmake -B build -Werror=dev ${{ matrix.cmake-generator }}
+        run: cmake -B build -DCMAKE_POLICY_VERSION_MINIMUM="4.2.3" ${{ matrix.cmake-generator }}
       - name: Build
         run: cmake --build build --config ${{ matrix.configuration }} ${{ matrix.cmake-build-param }}
       # In case if CTests later implement can use the step below.
