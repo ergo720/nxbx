@@ -23,6 +23,7 @@
 #define mod_lv2str(lv, mod, msg) mod_lv_to_string<log_lv::lv, log_module::mod>(msg)
 #define lv2str(lv, msg) mod_lv_to_string<log_lv::lv, log_module::MODULE_NAME>(msg)
 #define highestlv2str(msg) mod_lv_to_string<log_lv::highest, log_module::MODULE_NAME>(msg)
+#define lv2str_arg(lv, msg, ...) mod_lv_to_string<log_lv::lv, log_module::MODULE_NAME>(0, msg __VA_OPT__(,) __VA_ARGS__)
 
 #define NUM_OF_LOG_MODULES32 std::to_underlying(log_module::max) / 32 + 1
 
@@ -71,6 +72,7 @@ enum class log_module : int32_t
 	usb0,
 	vulkan,
 	lpcbridge,
+	hostbridge,
 	max,
 };
 
@@ -105,7 +107,8 @@ inline constexpr std::array module_to_str =
 	"CONEXANT -> ",
 	"USB0 -> ",
 	"VULKAN -> ",
-	"LPCBRIDGE -> "
+	"LPCBRIDGE -> ",
+	"HOSTBRIDGE -> "
 };
 static_assert(module_to_str.size() == (uint32_t)(log_module::max));
 
@@ -166,6 +169,23 @@ inline constexpr std::string mod_lv_to_string(const char *msg)
 {
 	if constexpr (is_log_lv_in_range(lv) && is_log_module_in_range(name)) {
 		return std::string(lv_to_str[std::to_underlying(lv)]) + module_to_str[std::to_underlying(name)] + msg;
+	}
+	else {
+		throw std::logic_error("Out of range log_lv and/or log_module used");
+	}
+}
+
+template<log_lv lv, log_module name>
+inline constexpr std::string mod_lv_to_string([[maybe_used]] int dummy, const char *msg, ...)
+{
+	if constexpr (is_log_lv_in_range(lv) && is_log_module_in_range(name)) {
+		std::va_list args;
+		va_start(args, msg);
+		int n = std::vsnprintf(nullptr, 0, msg, args);
+		std::string str(n + 1, '\0');
+		std::vsnprintf(str.data(), str.size(), msg, args);
+		va_end(args);
+		return std::string(lv_to_str[std::to_underlying(lv)]) + module_to_str[std::to_underlying(name)] + str;
 	}
 	else {
 		throw std::logic_error("Out of range log_lv and/or log_module used");

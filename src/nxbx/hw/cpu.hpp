@@ -6,9 +6,6 @@
 #include "host.hpp"
 #include <memory>
 
-#define RAM_SIZE64 0x4000000 // = 64 MiB
-#define RAM_SIZE128 0x8000000 // = 128 MiB
-
 
 class machine;
 class cpu_t;

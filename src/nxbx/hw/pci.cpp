@@ -206,16 +206,13 @@ void pci::Impl::write32(uint32_t addr, const uint32_t value)
 void *pci::Impl::createDevice(uint32_t bus, uint32_t device, uint32_t function, pci_conf_write_cb cb, void *opaque)
 {
 	if (bus > 1) {
-		nxbx_fatal("Unsupported bus id=%" PRIu32, bus);
-		return nullptr;
+		throw std::runtime_error(lv2str_arg(highest, "Unsupported bus id=%" PRIu32, bus));
 	}
 	if (device > 31) {
-		nxbx_fatal("Unsupported device id=%" PRIu32, device);
-		return nullptr;
+		throw std::runtime_error(lv2str_arg(highest, "Unsupported device id=%" PRIu32, device));
 	}
 	if (function > 7) {
-		nxbx_fatal("Unsupported function id=%" PRIu32, function);
-		return nullptr;
+		throw std::runtime_error(lv2str_arg(highest, "Unsupported function id=%" PRIu32, function));
 	}
 
 	int bdf = (bus << 8) | (device << 3) | function;
@@ -233,16 +230,13 @@ void pci::Impl::copyDefaultConfiguration(void *confptr, void *area, size_t size)
 void *pci::Impl::get_configuration_ptr(uint32_t bus, uint32_t device, uint32_t function)
 {
 	if (bus > 1) {
-		nxbx_fatal("Unsupported bus id=%" PRIu32, bus);
-		return nullptr;
+		throw std::runtime_error(lv2str_arg(highest, "Unsupported bus id=%" PRIu32, bus));
 	}
 	if (device > 31) {
-		nxbx_fatal("Unsupported device id=%" PRIu32, device);
-		return nullptr;
+		throw std::runtime_error(lv2str_arg(highest, "Unsupported device id=%" PRIu32, device));
 	}
 	if (function > 7) {
-		nxbx_fatal("Unsupported function id=%" PRIu32, function);
-		return nullptr;
+		throw std::runtime_error(lv2str_arg(highest, "Unsupported function id=%" PRIu32, function));
 	}
 
 	return (configuration_address_spaces[(bus << 8) | (device << 3) | function]).get();

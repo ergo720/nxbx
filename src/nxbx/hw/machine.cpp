@@ -14,6 +14,7 @@
 #include "smc.hpp"
 #include "adm1032.hpp"
 #include "lpcbridge.hpp"
+#include "hostbridge.hpp"
 #include "usb/ohci.hpp"
 #include "video/conexant.hpp"
 #include "video/vga.hpp"
@@ -41,6 +42,7 @@ public:
 	usb0 *getUsb(uint32_t N);
 	nv2a *getGpu();
 	lpcbridge *getLpcBridge();
+	hostbridge *getHostBridge();
 	cpu_t *get86cpu();
 	void raise_irq(uint8_t a);
 	void lower_irq(uint8_t a);
@@ -61,6 +63,7 @@ private:
 	std::unique_ptr<conexant> m_conexant;
 	std::unique_ptr<usb0> m_usb0;
 	std::unique_ptr<lpcbridge> m_lpcbridge;
+	std::unique_ptr<hostbridge> m_hostbridge;
 };
 
 bool machine::Impl::init(const BootParams &params, machine *machine)
@@ -80,6 +83,7 @@ bool machine::Impl::init(const BootParams &params, machine *machine)
 	m_conexant = std::make_unique<conexant>();
 	m_usb0 = std::make_unique<usb0>();
 	m_lpcbridge = std::make_unique<lpcbridge>();
+	m_hostbridge = std::make_unique<hostbridge>();
 
 	try {
 		m_nv2a->allocEngines();
@@ -98,6 +102,7 @@ bool machine::Impl::init(const BootParams &params, machine *machine)
 		m_conexant->init(machine, log_module::conexant);
 		m_usb0->init(machine);
 		m_lpcbridge->init(machine);
+		m_hostbridge->init(machine);
 	}
 	catch (std::runtime_error e) {
 		logger(e.what());
@@ -170,6 +175,7 @@ conexant *machine::Impl::getVideoEncoder() { return m_conexant.get(); }
 usb0 *machine::Impl::getUsb(uint32_t N) { return m_usb0.get(); }
 nv2a *machine::Impl::getGpu() { return m_nv2a.get(); }
 lpcbridge *machine::Impl::getLpcBridge() { return m_lpcbridge.get(); }
+hostbridge *machine::Impl::getHostBridge() { return m_hostbridge.get(); }
 
 /** Public interface implementation **/
 bool machine::init(const BootParams &params)
@@ -222,6 +228,7 @@ conexant *machine::getVideoEncoder() { return m_impl->getVideoEncoder(); }
 usb0 *machine::getUsb(uint32_t N) { return m_impl->getUsb(N); }
 nv2a *machine::getGpu() { return m_impl->getGpu(); }
 lpcbridge *machine::getLpcBridge() { return m_impl->getLpcBridge(); }
+hostbridge *machine::getHostBridge() { return m_impl->getHostBridge(); }
 
 machine::machine() : m_impl{std::make_unique<machine::Impl>()} {}
 machine::~machine() {}
