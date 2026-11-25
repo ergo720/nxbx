@@ -55,13 +55,13 @@ private:
 	void updateIo(bool is_update);
 	void createDevice(uint32_t bus, uint32_t device, uint32_t function);
 
-	/// ignore: configuration_address_spaces
-	uint32_t configuration_address_register;
+	/// ignore: m_configuration_address_spaces
+	uint32_t m_configuration_address_register;
 	// Whether to generate a configuration cycle or not
-	int configuration_cycle;
+	int m_configuration_cycle;
 	// Device configuration address space and write callbacks
-	std::unordered_map<uint32_t, std::unique_ptr<uint8_t[]>> configuration_address_spaces;
-	std::unordered_set<uint32_t> configuration_modification;
+	std::unordered_map<uint32_t, std::unique_ptr<uint8_t[]>> m_configuration_address_spaces;
+	std::unordered_set<uint32_t> m_configuration_modification;
 	// connected devices
 	cpu_t *m_lc86cpu;
 	// registers
@@ -84,29 +84,29 @@ void pci::Impl::write8(uint32_t addr, const uint8_t value)
 	case PCI_CONFIG_ADDRESS: // PCI Configuration Address Register
 		offset *= 8;
 
-		configuration_address_register &= ~(0xFF << offset);
-		configuration_address_register |= value << offset;
+		m_configuration_address_register &= ~(0xFF << offset);
+		m_configuration_address_register |= value << offset;
 
-		if (configuration_address_register & 0x7F000003) {
+		if (m_configuration_address_register & 0x7F000003) {
 			logger_en(info, "Setting reserved bits of configuration address register");
 		}
-		configuration_address_register &= ~0x7F000003;
-		configuration_cycle = configuration_address_register >> 31;
+		m_configuration_address_register &= ~0x7F000003;
+		m_configuration_cycle = m_configuration_address_register >> 31;
 		break;
 
 	case PCI_CONFIG_DATA: // PCI Configuration Data Register
-		if (configuration_cycle) {
-			int bus = (configuration_address_register >> 16) & 0xFF;
-			int device = (configuration_address_register >> 11) & 0x1F;
-			int function = (configuration_address_register >> 8) & 7;
+		if (m_configuration_cycle) {
+			int bus = (m_configuration_address_register >> 16) & 0xFF;
+			int device = (m_configuration_address_register >> 11) & 0x1F;
+			int function = (m_configuration_address_register >> 8) & 7;
 			int bdf = (bus << 8) | (device << 3) | function;
-			int offset = (configuration_address_register & 0xFC) | (addr & 3);
+			int offset = (m_configuration_address_register & 0xFC) | (addr & 3);
 
-			const auto it = configuration_modification.find(bdf);
-			if (it == configuration_modification.end()) {
+			const auto it = m_configuration_modification.find(bdf);
+			if (it == m_configuration_modification.end()) {
 				return;
 			}
-			uint8_t *arr = configuration_address_spaces.find(bdf)->second.get(); // can't fail if above succeeded
+			uint8_t *arr = m_configuration_address_spaces.find(bdf)->second.get(); // can't fail if above succeeded
 			arr[offset] = value;
 		}
 		break;
@@ -124,18 +124,18 @@ uint8_t pci::Impl::read8(uint32_t addr)
 	switch (addr & ~3)
 	{
 	case PCI_CONFIG_ADDRESS: // PCI Status Register
-		value = configuration_address_register >> (offset * 8) & 0xFF;
+		value = m_configuration_address_register >> (offset * 8) & 0xFF;
 		break;
 
 	case PCI_CONFIG_DATA: { // TODO: Type 0 / Type 1 configuration cycles
-		if (configuration_cycle) {
-			int bus = configuration_address_register >> 16 & 0xFF;
-			int device = (configuration_address_register >> 11) & 0x1F;
-			int function = (configuration_address_register >> 8) & 7;
-			int offset = configuration_address_register & 0xFC;
+		if (m_configuration_cycle) {
+			int bus = m_configuration_address_register >> 16 & 0xFF;
+			int device = (m_configuration_address_register >> 11) & 0x1F;
+			int function = (m_configuration_address_register >> 8) & 7;
+			int offset = m_configuration_address_register & 0xFC;
 
-			const auto it = configuration_address_spaces.find((bus << 8) | (device << 3) | function);
-			if (it == configuration_address_spaces.end()) {
+			const auto it = m_configuration_address_spaces.find((bus << 8) | (device << 3) | function);
+			if (it == m_configuration_address_spaces.end()) {
 				value = -1;
 			}
 			else {
@@ -226,10 +226,10 @@ void pci::Impl::createDevice(uint32_t bus, uint32_t device, uint32_t function)
 	}
 
 	int bdf = (bus << 8) | (device << 3) | function;
-	configuration_modification.emplace(bdf);
+	m_configuration_modification.emplace(bdf);
 	logger_en(info, "Registering device at bus=%" PRIu32 " device=%" PRIu32 " function=%" PRIu32, bus, device, function);
 
-	configuration_address_spaces[bdf] = std::make_unique<uint8_t[]>(256);
+	m_configuration_address_spaces[bdf] = std::make_unique<uint8_t[]>(256);
 }
 
 uint8_t *pci::Impl::getConfigurationPtr(uint32_t bus, uint32_t device, uint32_t function)
@@ -244,7 +244,7 @@ uint8_t *pci::Impl::getConfigurationPtr(uint32_t bus, uint32_t device, uint32_t 
 		throw std::runtime_error(lv2str_arg(highest, "Unsupported function id=%" PRIu32, function));
 	}
 
-	return (configuration_address_spaces[(bus << 8) | (device << 3) | function]).get();
+	return (m_configuration_address_spaces[(bus << 8) | (device << 3) | function]).get();
 }
 
 void pci::Impl::updateIo(bool is_update)
@@ -266,11 +266,11 @@ void pci::Impl::updateIo(bool is_update)
 
 void pci::Impl::reset()
 {
-	configuration_address_register = 0;
-	configuration_cycle = 0;
+	m_configuration_address_register = 0;
+	m_configuration_cycle = 0;
 
-	configuration_address_spaces.clear();
-	configuration_modification.clear();
+	m_configuration_address_spaces.clear();
+	m_configuration_modification.clear();
 }
 
 void pci::Impl::init(machine *machine)
