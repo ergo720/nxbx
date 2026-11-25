@@ -1,5 +1,18 @@
-// SPDX-License-Identifier: GPL-3.0-only
-// SPDX-FileCopyrightText: 2024 ergo720
+/*
+* SPDX-License-Identifier: GPL-3.0-only
+*
+* ergo720                Copyright (c) 2024
+*
+*  This program is free software: you can redistribute it and/or modify it under the terms of the
+*  GNU General Public License as published by the Free Software Foundation, version 3.
+*
+*  This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+*  without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+*  See the GNU General Public License for more details.
+*
+*  You should have received a copy of the GNU General Public License along with this program.
+*  If not, see <https://www.gnu.org/licenses/>.
+*/
 
 #include "lib86cpu.hpp"
 #include "pci.hpp"
@@ -8,7 +21,6 @@
 // Must be included last because of the template functions nv2a_read/write, which require a complete definition for the engine objects
 #include "nv2a.hpp"
 #include <cinttypes>
-#include <cassert>
 
 #define MODULE_NAME pbus
 
@@ -117,11 +129,6 @@ static constexpr uint32_t s_default_pci_configuration[] = {
 	0x00000000,
 };
 
-static int nv2aPciWrite(uint8_t *ptr, uint8_t addr, uint8_t value, void *opaque)
-{
-	return 0; // pass-through the write
-}
-
 template<bool log>
 void pbus::Impl::write32(uint32_t addr, const uint32_t value)
 {
@@ -198,9 +205,8 @@ void pbus::Impl::pciLogWrite(uint32_t addr, uint32_t value)
 
 void pbus::Impl::pciInit()
 {
-	void *pci_conf = m_pci->createDevice(1, 0, 0, nv2aPciWrite, nullptr);
-	assert(pci_conf);
-	m_pci->copyDefaultConfiguration(pci_conf, (void *)s_default_pci_configuration, sizeof(s_default_pci_configuration));
+	void *pci_conf = m_pci->createDevice(1, 0, 0);
+	std::memcpy(pci_conf, (void *)s_default_pci_configuration, sizeof(s_default_pci_configuration));
 	m_pci_conf = pci_conf;
 }
 

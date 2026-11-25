@@ -114,11 +114,6 @@ static constexpr uint32_t s_default_pci_configuration[] = {
 	0x00000000,
 };
 
-static int hostBridgePciWrite(uint8_t *ptr, uint8_t addr, uint8_t value, void *opaque)
-{
-	return 0; // pass-through the write
-}
-
 void hostbridge::Impl::setMemorySize()
 {
 	uint32_t reg_off = CPU_MAX_MEM + 3;
@@ -128,15 +123,15 @@ void hostbridge::Impl::setMemorySize()
 
 void hostbridge::Impl::pciInit()
 {
-	void *pci_conf = m_pci->createDevice(0, 0, 0, hostBridgePciWrite, nullptr);
-	m_pci->copyDefaultConfiguration(pci_conf, (void *)s_default_pci_configuration, sizeof(s_default_pci_configuration));
+	void *pci_conf = m_pci->createDevice(0, 0, 0);
+	std::memcpy(pci_conf, (void *)s_default_pci_configuration, sizeof(s_default_pci_configuration));
 	m_pci_conf = static_cast<uint8_t *>(pci_conf);
 	setMemorySize();
 }
 
 void hostbridge::Impl::reset()
 {
-	m_pci->copyDefaultConfiguration(m_pci_conf, (void *)s_default_pci_configuration, sizeof(s_default_pci_configuration));
+	std::memcpy(m_pci_conf, (void *)s_default_pci_configuration, sizeof(s_default_pci_configuration));
 	setMemorySize();
 }
 

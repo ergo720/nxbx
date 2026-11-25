@@ -1,7 +1,19 @@
-// SPDX-License-Identifier: GPL-3.0-only
-// SPDX-FileCopyrightText: 2024 ergo720
-// SPDX-FileCopyrightText: 2020 Halfix devs
-// This code is derived from https://github.com/nepx/halfix/blob/master/src/hardware/pci.c
+/*
+* SPDX-License-Identifier: GPL-3.0-only
+*
+* ergo720                Copyright (c) 2024
+* Halfix devs            Copyright (c) 2020
+*
+*  This program is free software: you can redistribute it and/or modify it under the terms of the
+*  GNU General Public License as published by the Free Software Foundation, version 3.
+*
+*  This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+*  without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+*  See the GNU General Public License for more details.
+*
+*  You should have received a copy of the GNU General Public License along with this program.
+*  If not, see <https://www.gnu.org/licenses/>.
+*/
 
 #include "lib86cpu.hpp"
 #include "machine.hpp"
@@ -10,6 +22,7 @@
 #include "host.hpp"
 #include <cstring>
 #include <cinttypes>
+#include <unordered_set>
 
 #define MODULE_NAME pci
 
@@ -36,12 +49,10 @@ public:
 	void write16(uint32_t addr, const uint16_t value);
 	template<bool log = false>
 	void write32(uint32_t addr, const uint32_t value);
-	void *createDevice(uint32_t bus, uint32_t device, uint32_t function, pci_conf_write_cb cb, void *opaque);
-	void copyDefaultConfiguration(void *confptr, void *area, size_t size);
+	void *createDevice(uint32_t bus, uint32_t device, uint32_t function);
 
 private:
 	void updateIo(bool is_update);
-	void *get_configuration_ptr(uint32_t bus, uint32_t device, uint32_t function);
 
 	/// ignore: configuration_address_spaces
 	uint32_t configuration_address_register;
@@ -49,7 +60,7 @@ private:
 	int configuration_cycle;
 	// Device configuration address space and write callbacks
 	std::unordered_map<uint32_t, std::unique_ptr<uint8_t[]>> configuration_address_spaces;
-	std::unordered_map<uint32_t, std::pair<pci_conf_write_cb, void *>> configuration_modification;
+	std::unordered_set<uint32_t> configuration_modification;
 	// connected devices
 	cpu_t *m_lc86cpu;
 	// registers
@@ -95,9 +106,7 @@ void pci::Impl::write8(uint32_t addr, const uint8_t value)
 				return;
 			}
 			uint8_t *arr = configuration_address_spaces.find(bdf)->second.get(); // can't fail if above succeeded
-			if (!it->second.first(arr, offset, value, it->second.second)) {
-				arr[offset] = value;
-			}
+			arr[offset] = value;
 		}
 		break;
 
@@ -203,7 +212,7 @@ void pci::Impl::write32(uint32_t addr, const uint32_t value)
 	write8(addr + 3, value >> 24 & 0xFF);
 }
 
-void *pci::Impl::createDevice(uint32_t bus, uint32_t device, uint32_t function, pci_conf_write_cb cb, void *opaque)
+void *pci::Impl::createDevice(uint32_t bus, uint32_t device, uint32_t function)
 {
 	if (bus > 1) {
 		throw std::runtime_error(lv2str_arg(highest, "Unsupported bus id=%" PRIu32, bus));
@@ -216,30 +225,10 @@ void *pci::Impl::createDevice(uint32_t bus, uint32_t device, uint32_t function, 
 	}
 
 	int bdf = (bus << 8) | (device << 3) | function;
-	configuration_modification.emplace(bdf, std::make_pair(cb, opaque));
+	configuration_modification.emplace(bdf);
 	logger_en(info, "Registering device at bus=%" PRIu32 " device=%" PRIu32 " function=%" PRIu32, bus, device, function);
 
 	return (configuration_address_spaces[bdf] = std::make_unique<uint8_t[]>(256)).get();
-}
-
-void pci::Impl::copyDefaultConfiguration(void *confptr, void *area, size_t size)
-{
-	memcpy(confptr, area, size > 256 ? 256 : size);
-}
-
-void *pci::Impl::get_configuration_ptr(uint32_t bus, uint32_t device, uint32_t function)
-{
-	if (bus > 1) {
-		throw std::runtime_error(lv2str_arg(highest, "Unsupported bus id=%" PRIu32, bus));
-	}
-	if (device > 31) {
-		throw std::runtime_error(lv2str_arg(highest, "Unsupported device id=%" PRIu32, device));
-	}
-	if (function > 7) {
-		throw std::runtime_error(lv2str_arg(highest, "Unsupported function id=%" PRIu32, function));
-	}
-
-	return (configuration_address_spaces[(bus << 8) | (device << 3) | function]).get();
 }
 
 void pci::Impl::updateIo(bool is_update)
@@ -291,14 +280,9 @@ void pci::updateIoLogging()
 	m_impl->updateIoLogging();
 }
 
-void *pci::createDevice(uint32_t bus, uint32_t device, uint32_t function, pci_conf_write_cb cb, void *opaque)
+void *pci::createDevice(uint32_t bus, uint32_t device, uint32_t function)
 {
-	return m_impl->createDevice(bus, device, function, cb, opaque);
-}
-
-void pci::copyDefaultConfiguration(void *confptr, void *area, size_t size)
-{
-	m_impl->copyDefaultConfiguration(confptr, area, size);
+	return m_impl->createDevice(bus, device, function);
 }
 
 pci::pci() : m_impl{std::make_unique<pci::Impl>()} {}
