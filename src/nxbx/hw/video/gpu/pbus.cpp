@@ -21,6 +21,7 @@
 // Must be included last because of the template functions nv2a_read/write, which require a complete definition for the engine objects
 #include "nv2a.hpp"
 #include <cinttypes>
+#include <cstring>
 
 #define MODULE_NAME pbus
 
@@ -49,7 +50,7 @@ private:
 	auto getIoFunc(bool log, bool is_be);
 	void pciInit();
 
-	void *m_pci_conf;
+	uint8_t *m_pci_conf;
 	// connected devices
 	pmc *m_pmc;
 	pci *m_pci;
@@ -205,9 +206,8 @@ void pbus::Impl::pciLogWrite(uint32_t addr, uint32_t value)
 
 void pbus::Impl::pciInit()
 {
-	void *pci_conf = m_pci->createDevice(1, 0, 0);
-	std::memcpy(pci_conf, (void *)s_default_pci_configuration, sizeof(s_default_pci_configuration));
-	m_pci_conf = pci_conf;
+	m_pci_conf = m_pci->getConfigurationPtr(1, 0, 0);
+	std::memcpy(m_pci_conf, s_default_pci_configuration, sizeof(s_default_pci_configuration));
 }
 
 template<bool is_write, bool is_pci>

@@ -49,10 +49,11 @@ public:
 	void write16(uint32_t addr, const uint16_t value);
 	template<bool log = false>
 	void write32(uint32_t addr, const uint32_t value);
-	void *createDevice(uint32_t bus, uint32_t device, uint32_t function);
+	uint8_t *getConfigurationPtr(uint32_t bus, uint32_t device, uint32_t function);
 
 private:
 	void updateIo(bool is_update);
+	void createDevice(uint32_t bus, uint32_t device, uint32_t function);
 
 	/// ignore: configuration_address_spaces
 	uint32_t configuration_address_register;
@@ -212,7 +213,7 @@ void pci::Impl::write32(uint32_t addr, const uint32_t value)
 	write8(addr + 3, value >> 24 & 0xFF);
 }
 
-void *pci::Impl::createDevice(uint32_t bus, uint32_t device, uint32_t function)
+void pci::Impl::createDevice(uint32_t bus, uint32_t device, uint32_t function)
 {
 	if (bus > 1) {
 		throw std::runtime_error(lv2str_arg(highest, "Unsupported bus id=%" PRIu32, bus));
@@ -228,7 +229,22 @@ void *pci::Impl::createDevice(uint32_t bus, uint32_t device, uint32_t function)
 	configuration_modification.emplace(bdf);
 	logger_en(info, "Registering device at bus=%" PRIu32 " device=%" PRIu32 " function=%" PRIu32, bus, device, function);
 
-	return (configuration_address_spaces[bdf] = std::make_unique<uint8_t[]>(256)).get();
+	configuration_address_spaces[bdf] = std::make_unique<uint8_t[]>(256);
+}
+
+uint8_t *pci::Impl::getConfigurationPtr(uint32_t bus, uint32_t device, uint32_t function)
+{
+	if (bus > 1) {
+		throw std::runtime_error(lv2str_arg(highest, "Unsupported bus id=%" PRIu32, bus));
+	}
+	if (device > 31) {
+		throw std::runtime_error(lv2str_arg(highest, "Unsupported device id=%" PRIu32, device));
+	}
+	if (function > 7) {
+		throw std::runtime_error(lv2str_arg(highest, "Unsupported function id=%" PRIu32, function));
+	}
+
+	return (configuration_address_spaces[(bus << 8) | (device << 3) | function]).get();
 }
 
 void pci::Impl::updateIo(bool is_update)
@@ -262,6 +278,8 @@ void pci::Impl::init(machine *machine)
 	m_lc86cpu = machine->get86cpu();
 	updateIo(false);
 	reset();
+	createDevice(0, 0, 0); // host bridge
+	createDevice(1, 0, 0); // GPU
 }
 
 /** Public interface implementation **/
@@ -280,9 +298,9 @@ void pci::updateIoLogging()
 	m_impl->updateIoLogging();
 }
 
-void *pci::createDevice(uint32_t bus, uint32_t device, uint32_t function)
+uint8_t *pci::getConfigurationPtr(uint32_t bus, uint32_t device, uint32_t function)
 {
-	return m_impl->createDevice(bus, device, function);
+	return m_impl->getConfigurationPtr(bus, device, function);
 }
 
 pci::pci() : m_impl{std::make_unique<pci::Impl>()} {}

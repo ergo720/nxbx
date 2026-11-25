@@ -19,6 +19,7 @@
 #include "cpu.hpp"
 #include "pci.hpp"
 #include <cinttypes>
+#include <cstring>
 
 #define MODULE_NAME hostbridge
 
@@ -123,9 +124,8 @@ void hostbridge::Impl::setMemorySize()
 
 void hostbridge::Impl::pciInit()
 {
-	void *pci_conf = m_pci->createDevice(0, 0, 0);
-	std::memcpy(pci_conf, (void *)s_default_pci_configuration, sizeof(s_default_pci_configuration));
-	m_pci_conf = static_cast<uint8_t *>(pci_conf);
+	m_pci_conf = m_pci->getConfigurationPtr(0, 0, 0);
+	std::memcpy(m_pci_conf, s_default_pci_configuration, sizeof(s_default_pci_configuration));
 	setMemorySize();
 }
 

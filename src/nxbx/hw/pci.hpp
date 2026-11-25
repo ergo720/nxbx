@@ -30,7 +30,7 @@ public:
 	void init(machine *machine);
 	void reset();
 	void updateIoLogging();
-	void *createDevice(uint32_t bus, uint32_t device, uint32_t function);
+	uint8_t *getConfigurationPtr(uint32_t bus, uint32_t device, uint32_t function);
 
 private:
 	class Impl;
