@@ -24,6 +24,7 @@
 #define SMC_READ_SCRATCH                0x0F
 #define SMC_READ_FAN_SPEED              0x10
 #define SMC_INTERRUPT_REASON            0x11
+#define SMC_INTERRUPT_ENABLE            0x1A
 #define SMC_SCRATCH                     0x1B
 
 #define SMC_TRAY_STATE_OPEN             0x10
@@ -55,7 +56,7 @@ public:
 	void reset();
 	uint8_t read_byte(uint8_t addr);
 	void write_byte(uint8_t addr, uint8_t value);
-	void update_tray_state(tray_state state, bool do_int);
+	void update_tray_state(tray_state state);
 
 private:
 	static constexpr uint8_t m_version[3] = { 'P', '0', '5' };
@@ -80,6 +81,7 @@ private:
 		{ SMC_READ_SCRATCH, "READ_SCRATCH" },
 		{ SMC_READ_FAN_SPEED, "READ_FAN_SPEED" },
 		{ SMC_INTERRUPT_REASON, "INTERRUPT_REASON" },
+		{ SMC_INTERRUPT_ENABLE, "INTERRUPT_ENABLE" },
 		{ SMC_SCRATCH, "SCRATCH" },
 	};
 };
@@ -100,6 +102,7 @@ uint8_t smc::Impl::read_byte(uint8_t addr)
 
 	case SMC_VIDEO_MODE:
 	case SMC_INTERRUPT_REASON:
+	case SMC_INTERRUPT_ENABLE:
 	case SMC_SCRATCH:
 		value = m_regs[addr];
 		break;
@@ -156,17 +159,21 @@ void smc::Impl::write_byte(uint8_t addr, uint8_t value)
 		m_regs[addr] = value;
 		break;
 
+	case SMC_INTERRUPT_ENABLE:
+		m_regs[addr] |= value;
+		break;
+
 	default:
 		nxbx_fatal("Unhandled write with command 0x%" PRIX8 " and value 0x%" PRIX8, addr, value);
 	}
 }
 
-void smc::Impl::update_tray_state(::tray_state state, bool do_int)
+void smc::Impl::update_tray_state(::tray_state state)
 {
 	m_regs[SMC_INTERRUPT_REASON] = state == ::tray_state::media_detect ? SMC_INTERRUPT_REASON_TRAY_DETECTED :
 		state == ::tray_state::no_media ? SMC_INTERRUPT_REASON_TRAY_CLOSED : SMC_INTERRUPT_REASON_TRAY_OPENED;
 	m_tray_state = (uint8_t)state;
-	if (do_int) {
+	if (m_regs[SMC_INTERRUPT_ENABLE]) {
 		m_lpcbridge->triggerInterrupt();
 	}
 }
@@ -209,9 +216,9 @@ void smc::write_byte(uint8_t command, uint8_t value)
 	m_impl->write_byte(command, value);
 }
 
-void smc::update_tray_state(tray_state state, bool do_int)
+void smc::update_tray_state(tray_state state)
 {
-	m_impl->update_tray_state(state, do_int);
+	m_impl->update_tray_state(state);
 }
 
 smc::smc() : m_impl{std::make_unique<smc::Impl>()} {}

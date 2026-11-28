@@ -72,7 +72,7 @@ void console::start()
 {
 	if (m_state == console_state::initialized) {
 		Host::SignalStartup();
-		update_tray_state(emu_path::g_dvd_dir == "" ? tray_state::no_media : tray_state::media_detect, false);
+		update_tray_state(emu_path::g_dvd_dir == "" ? tray_state::no_media : tray_state::media_detect);
 		m_cpu_thr = std::jthread(std::bind_front(&console::cpu_thread, this));
 	}
 }
@@ -112,10 +112,10 @@ void console::apply_log_settings()
 	}
 }
 
-void console::update_tray_state(tray_state state, bool do_int)
+void console::update_tray_state(tray_state state)
 {
 	if ((m_state == console_state::running) || (m_state == console_state::initialized)) {
-		m_machine.getSmc()->update_tray_state(state, do_int);
+		m_machine.getSmc()->update_tray_state(state);
 	}
 }
 

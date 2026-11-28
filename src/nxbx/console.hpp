@@ -34,7 +34,7 @@ public:
 
 	console_state get_state() { return m_state; }
 	void apply_log_settings();
-	void update_tray_state(tray_state state, bool do_int);
+	void update_tray_state(tray_state state);
 	static const std::string &to_string(console_t type);
 
 private:
