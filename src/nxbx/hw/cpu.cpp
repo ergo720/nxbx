@@ -20,6 +20,7 @@
 #include <fstream>
 #include <cinttypes>
 #include <cstring>
+#include <chrono>
 
 #define MODULE_NAME cpu
 
@@ -342,9 +343,16 @@ uint64_t cpu::Impl::checkPeriodicEvents()
 	return checkPeriodicEvents(timer::get_now());
 }
 
+#define ENABLE_CLOCK_PROFILING
+
 void cpu::Impl::start()
 {
 	cpu_sync_state(m_lc86cpu);
+
+#ifdef ENABLE_CLOCK_PROFILING
+	using clock = std::chrono::steady_clock;
+	clock::time_point start = clock::now();
+#endif
 
 	lc86_status code;
 	while (true) {
@@ -354,7 +362,13 @@ void cpu::Impl::start()
 		}
 	}
 
+#ifdef ENABLE_CLOCK_PROFILING
+	;
+	logger<log_lv::highest, log_module::nxbx, false>("Emulation terminated with status %" PRId32 ". The error was \"%s\". Elapsed time: %" PRId64 " nanoseconds.",
+		static_cast<int32_t>(code), get_last_error().c_str(), std::chrono::duration_cast<std::chrono::nanoseconds>(clock::now() - start).count());
+#else
 	logger<log_lv::highest, log_module::nxbx, false>("Emulation terminated with status %" PRId32 ". The error was \"%s\"", static_cast<int32_t>(code), get_last_error().c_str());
+#endif
 }
 
 void cpu::Impl::exit()
