@@ -100,7 +100,7 @@ void cpu::Impl::init(const BootParams &params, machine *machine)
 	m_ptimer = machine->getGpu()->getPtimer();
 	m_pcrtc = machine->getGpu()->getPcrtc();
 	m_usb0 = machine->getUsb(0);
-	m_ramsize = params.console_type == console_t::xbox ? RAM_SIZE64 : RAM_SIZE128;
+	m_ramsize = params.ramsize;
 
 	// Load the nboxkrnl exe file
 	std::ifstream ifs(emu_path::g_krnl_path.c_str(), std::ios_base::in | std::ios_base::binary);
@@ -211,13 +211,12 @@ void cpu::Impl::init(const BootParams &params, machine *machine)
 
 	mem_fill_block_virt(m_lc86cpu, 0xF000, 0x1000, 0);
 	uint32_t pde = 0xE3; // large, dirty, accessed, r/w, present
-	mem_write_block_virt(m_lc86cpu, 0xFF000, 4, &pde);
-	for (int i = 0; i < 16; ++i) {
+	for (int i = 0; i < 64; ++i) {
 		mem_write_block_virt(m_lc86cpu, 0xF000 + (i * 4), 4, &pde); // this identity maps all physical memory
 		pde += 0x400000;
 	}
 	pde = 0x800000E3;
-	for (int i = 0; i < 16; ++i) {
+	for (int i = 0; i < 64; ++i) {
 		mem_write_block_virt(m_lc86cpu, 0xF800 + (i * 4), 4, &pde); // this identity maps all contiguous memory
 		pde += 0x400000;
 	}

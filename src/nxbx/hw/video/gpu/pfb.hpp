@@ -12,8 +12,11 @@
 #define NV_PFB_SIZE 0x1000
 #define REGS_PFB_idx(x) ((x - NV_PFB_BASE) >> 2)
 
-#define NV_PFB_CFG0 (NV2A_REGISTER_BASE + 0x00100200) // Appears to contain info about the ram modules
-#define NV_PFB_CFG1 (NV2A_REGISTER_BASE + 0x00100204) // Appears to contain info about the ram modules
+#define NV_PFB_CFG0 (NV2A_REGISTER_BASE + 0x00100200) // Ram configuration 0
+#define NV_PFB_CFG1 (NV2A_REGISTER_BASE + 0x00100204) // Ram configuration 1
+#define NV_PFB_CFG1_APA (7 << 4) // which pin is used for auto-precharge A, 0/1/2/3/4 -> A8/A9/A10/A11/A12
+#define NV_PFB_CFG1_APB (7 << 8) // which pin is used for auto-precharge B, 0/1/2/3/4 -> A8/A9/A10/A11/A12
+#define NV_PFB_CFG1_COL (15 << 12) // number of column address bits, 7/8/9/10
 #define NV_PFB_CSTATUS (NV2A_REGISTER_BASE + 0x0010020C) // Returns the size of the framebuffer in MiB in the bits 20-31. Bit 0 is a flag that indicates > 4 GiB of fb when set
 #define NV_PFB_NVM (NV2A_REGISTER_BASE + 0x00100214) // FIXME: unknown what this does
 #define NV_PFB_WBC (NV2A_REGISTER_BASE + 0x00100410) // related to the write combine cache

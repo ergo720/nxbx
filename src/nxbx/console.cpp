@@ -28,6 +28,16 @@ console::console()
 		logger_mod_en(error, nxbx, "Attempted to create unrecognized machine of type %" PRIu32, std::to_underlying<console_t>(params.console_type));
 		return;
 	}
+	if ((params.console_type == console_t::xbox) && (params.ramsize == RAM_SIZE128)) {
+		params.ramsize = RAM_SIZE64; // xbox with 128 MiB not allowed
+	}
+	else if ((params.console_type == console_t::chihiro) && (params.ramsize == RAM_SIZE64)) {
+		params.ramsize = RAM_SIZE128; // chihiro with 64 MiB not allowed
+	}
+	else if (params.ramsize == -1u) {
+		params.ramsize = 1 << (26 + std::to_underlying(params.console_type)); // use standard size according to the console type
+	}
+	logger_mod_en(info, nxbx, "Constructing %s console with %u MiB of RAM", to_string(params.console_type).c_str(), params.ramsize / (1024 * 1024));
 	timer::init();
 	if (!m_machine.init(params)) {
 		m_machine.deinit();

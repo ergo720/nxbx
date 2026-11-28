@@ -133,10 +133,11 @@ void pfb::Impl::updateIo(bool is_update)
 void pfb::Impl::reset()
 {
 	// Values dumped from a Retail 1.0 xbox
+	uint32_t ramsize = m_cpu->getRamsize();
 	std::fill(std::begin(m_regs), std::end(m_regs), 0);
 	m_regs[REGS_PFB_idx(NV_PFB_CFG0)] = 0x03070003;
-	m_regs[REGS_PFB_idx(NV_PFB_CFG1)] = 0x11448000;
-	m_regs[REGS_PFB_idx(NV_PFB_CSTATUS)] = m_cpu->getRamsize();
+	m_regs[REGS_PFB_idx(NV_PFB_CFG1)] = ramsize == NV2A_VRAM_SIZE256 ? 0x11449110 : 0x11448000;
+	m_regs[REGS_PFB_idx(NV_PFB_CSTATUS)] = ramsize;
 }
 
 void pfb::Impl::init(cpu *cpu, nv2a *gpu)

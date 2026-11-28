@@ -39,6 +39,7 @@ options:\n\
 -no_gui         Start with no gui\n\
 -debug          Start with debugger\n\
 -vkdbg          Activate Vulkan validation layers\n\
+-ram            Specify the RAM size of the console\n\
 -help           Print this message";
 
 	logger("%s", help);
@@ -127,6 +128,35 @@ static std::optional<int> parse_cmd_line_opt(const QStringList &args, init_info_
 							log_init_failure("Unknown console type specified by option \"-machine\"");
 							return 1;
 						}
+					}
+				}
+				else if (*it == QStringLiteral("-ram")) {
+					if (check_missing_arg(it)) {
+						return 1;
+					}
+					std::string ramsize = qPrintable(*it);
+					switch (init_info.ramsize = std::stoul(ramsize, nullptr, 0))
+					{
+					case RAM_SIZE64: // size in bytes
+					case RAM_SIZE128:
+					case RAM_SIZE256:
+						break;
+
+					case RAM_SIZE64 / 1024: // size in KiB
+					case RAM_SIZE128 / 1024:
+					case RAM_SIZE256 / 1024:
+						init_info.ramsize *= 1024;
+						break;
+
+					case RAM_SIZE64 / (1024 * 1024): // size in MiB
+					case RAM_SIZE128 / (1024 * 1024):
+					case RAM_SIZE256 / (1024 * 1024):
+						init_info.ramsize *= (1024 * 1024);
+						break;
+
+					default:
+						log_init_failure("Invalid RAM size specified (must be 64, 128 or 256 MiB)");
+						return 1;
 					}
 				}
 				else if (*it == QStringLiteral("-no_gui")) {
@@ -294,6 +324,7 @@ main(int argc, char **argv)
 	init_info.use_dbg = 0;
 	init_info.vkdbg = 0;
 	init_info.sync_part = -1; // -1=don't sync, 0=sync all partitions, [1-7]=sync that partition
+	init_info.ramsize = -1u;
 
 	// Parameter parsing
 	if (const auto &opt = parse_cmd_line_opt(app.arguments(), init_info); opt) {
@@ -329,6 +360,7 @@ main(int argc, char **argv)
 	s_boot_params.use_dbg = init_info.use_dbg;
 	s_boot_params.nxbx_dir = init_info.nxbx_dir;
 	s_boot_params.vkdbg = init_info.vkdbg;
+	s_boot_params.ramsize = init_info.ramsize;
 
 	// Create all window objects
 	g_main_window = new MainWindow();
